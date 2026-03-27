@@ -1,10 +1,18 @@
 "use client";
 
 import React, { useState } from 'react';
-import { UploadCloud, FileText, Loader2, Cpu } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, Cpu, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import TopNav from '@/components/TopNav';
 import { ANYROR_DATASET } from '@/lib/anyrorData';
+
+// AnyROR Record Types (exact match from https://anyror.gujarat.gov.in)
+const RECORD_TYPES = [
+  { value: "VF7", label: "VF-7 Survey No. Details (ગામ નમૂના નંબર ૭)" },
+  { value: "VF8A", label: "VF-8A Khata Details (ગામ નમૂના નંબર ૮-અ)" },
+  { value: "VF6", label: "VF-6 Entry Details (ગામ નમૂના નંબર ૬ નોંધ)" },
+  { value: "OLD_SCAN", label: "Old Scanned VF-7/12 (જૂની સ્કેન )" },
+];
 
 export default function DocumentUpload() {
   const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('auto');
@@ -14,11 +22,12 @@ export default function DocumentUpload() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<any>(null);
 
-  // Automation State
+  // Automation State — mirrors AnyROR exactly
+  const [recordType, setRecordType] = useState('VF7');
   const [district, setDistrict] = useState('Ahmedabad');
-  const [taluka, setTaluka] = useState('Sanand');
-  const [village, setVillage] = useState('Shela');
-  const [surveyNo, setSurveyNo] = useState('25');
+  const [taluka, setTaluka] = useState('Ahmedabad_City');
+  const [village, setVillage] = useState('Navrangpura');
+  const [surveyNo, setSurveyNo] = useState('1');
   const [autoResult, setAutoResult] = useState<any>(null);
 
   // Cascading Handlers
@@ -46,21 +55,13 @@ export default function DocumentUpload() {
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
-
     setIsAnalyzing(true);
     setResult(null);
-
     const formData = new FormData();
     formData.append("file", file);
-
     try {
-      const res = await fetch("http://localhost:8000/analyze-record", {
-        method: "POST",
-        body: formData,
-      });
-      
+      const res = await fetch("http://localhost:8000/analyze-record", { method: "POST", body: formData });
       if (!res.ok) throw new Error("Analysis Failed");
-      
       const data = await res.json();
       setResult(data);
     } catch (error) {
@@ -75,16 +76,13 @@ export default function DocumentUpload() {
     e.preventDefault();
     setIsAnalyzing(true);
     setAutoResult(null);
-
     try {
       const res = await fetch("http://localhost:8000/fetch-anyror", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ district, taluka, village, survey_no: surveyNo })
+        body: JSON.stringify({ record_type: recordType, district, taluka, village, survey_no: surveyNo })
       });
-      
       if (!res.ok) throw new Error("Automation Failed");
-      
       const data = await res.json();
       setAutoResult(data);
     } catch (error) {
@@ -95,20 +93,22 @@ export default function DocumentUpload() {
     }
   };
 
+  const selectClass = "w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-[#00f0ff] transition-colors cursor-pointer";
+
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] pt-24 pb-10 px-10 flex flex-col items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] pt-20 pb-10 px-6 flex flex-col items-center relative overflow-hidden">
       <TopNav />
 
-      <div className="z-10 w-full max-w-[600px] flex flex-col gap-6">
+      <div className="z-10 w-full max-w-[640px] flex flex-col gap-6 mt-4">
         <div className="text-center mb-0">
-           <h1 className="text-4xl font-display uppercase tracking-tight mb-2">Initialize Forensic Scan</h1>
+           <h1 className="text-3xl md:text-4xl font-display uppercase tracking-tight mb-2">Initialize Forensic Scan</h1>
            <p className="text-[#849495] font-sans text-xs tracking-widest uppercase">
-              Upload Title Deed OR Deploy automated AnyROR Playwright bot.
+              Upload Title Deed OR Deploy Automated AnyROR RPA Bot
            </p>
         </div>
 
         {/* Tab Controls */}
-        <div className="flex bg-[#1c1b1b]/80 border border-[#3b494b]/40 rounded-sm mb-2 p-1">
+        <div className="flex bg-[#1c1b1b]/80 border border-[#3b494b]/40 mb-2 p-1">
           <button 
             onClick={() => setActiveTab('auto')}
             className={`flex-1 py-3 text-xs uppercase tracking-widest font-bold transition-all ${activeTab === 'auto' ? 'bg-[#00f0ff] text-[#002022]' : 'text-[#849495] hover:text-[#00f0ff]'}`}
@@ -148,31 +148,74 @@ export default function DocumentUpload() {
           </form>
         ) : (
           <form onSubmit={handleAutomate} className="glass-panel p-8 border border-[#3b494b]/40 flex flex-col gap-5">
+            
+            {/* AnyROR Record Type — exact match from govt site */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] uppercase tracking-widest font-bold text-[#00f0ff]">
+                Record Type (કોઇ એક પસંદ કરો)
+              </label>
+              <select 
+                value={recordType} 
+                onChange={e => setRecordType(e.target.value)} 
+                style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+                className={selectClass}
+              >
+                {RECORD_TYPES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs uppercase tracking-widest font-bold text-[#849495]">District (જિલ્લો)</label>
-                <select value={district} onChange={e => handleDistrictChange(e.target.value)} className="bg-[#1c1b1b] border border-[#3b494b] text-[#dbfcff] p-2 font-mono text-sm outline-none appearance-auto">
-                  {Object.keys(ANYROR_DATASET).map(d => <option key={d} value={d} className="bg-[#1c1b1b] text-white">{d}</option>)}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">District (જીલ્લો)</label>
+                <select 
+                  value={district} 
+                  onChange={e => handleDistrictChange(e.target.value)} 
+                  style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+                  className={selectClass}
+                >
+                  {Object.keys(ANYROR_DATASET).map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
                 </select>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs uppercase tracking-widest font-bold text-[#849495]">Taluka (તાલુકો)</label>
-                <select value={taluka} onChange={e => handleTalukaChange(e.target.value)} className="bg-[#1c1b1b] border border-[#3b494b] text-[#dbfcff] p-2 font-mono text-sm outline-none appearance-auto">
-                  {Object.keys(ANYROR_DATASET[district] || {}).map(t => <option key={t} value={t} className="bg-[#1c1b1b] text-white">{t}</option>)}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Taluka (તાલુકો)</label>
+                <select 
+                  value={taluka} 
+                  onChange={e => handleTalukaChange(e.target.value)} 
+                  style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+                  className={selectClass}
+                >
+                  {Object.keys(ANYROR_DATASET[district] || {}).map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
                 </select>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs uppercase tracking-widest font-bold text-[#849495]">Village (ગામ)</label>
-                <select value={village} onChange={e => handleVillageChange(e.target.value)} className="bg-[#1c1b1b] border border-[#3b494b] text-[#dbfcff] p-2 font-mono text-sm outline-none appearance-auto">
-                  {Object.keys(ANYROR_DATASET[district]?.[taluka] || {}).map(v => <option key={v} value={v} className="bg-[#1c1b1b] text-white">{v}</option>)}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Village (ગામ)</label>
+                <select 
+                  value={village} 
+                  onChange={e => handleVillageChange(e.target.value)} 
+                  style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+                  className={selectClass}
+                >
+                  {Object.keys(ANYROR_DATASET[district]?.[taluka] || {}).map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs uppercase tracking-widest font-bold text-[#849495]">Survey No. (સર્વે નંબર)</label>
-                <select value={surveyNo} onChange={e => setSurveyNo(e.target.value)} className="bg-[#1c1b1b] border border-[#3b494b] text-[#dbfcff] p-2 font-mono text-sm outline-none appearance-auto">
-                  {(ANYROR_DATASET[district]?.[taluka]?.[village] || []).map(s => <option key={s} value={s} className="bg-[#1c1b1b] text-white">{s}</option>)}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">
+                  {recordType === 'VF8A' ? 'Khata No. (ખાતા નંબર)' : 'Survey No. (સર્વે નંબર)'}
+                </label>
+                <select 
+                  value={surveyNo} 
+                  onChange={e => setSurveyNo(e.target.value)} 
+                  style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+                  className={selectClass}
+                >
+                  {(ANYROR_DATASET[district]?.[taluka]?.[village] || []).map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
+            </div>
+
+            {/* Info about CAPTCHA */}
+            <div className="text-[10px] text-[#849495] bg-[#1c1b1b]/60 p-3 border border-[#3b494b]/30">
+              <span className="text-[#eab308] font-bold">⚠ CAPTCHA:</span> The RPA bot will auto-solve the government CAPTCHA using Gemini Vision AI. This may take 10-20 seconds.
             </div>
 
              <button 
@@ -187,7 +230,7 @@ export default function DocumentUpload() {
 
         {/* Results Block */}
         {(result || autoResult) && (
-           <div className="glass-panel p-6 border-l-4 border-l-[#4edea3] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4">
+           <div className="glass-panel p-6 border-l-4 border-l-[#4edea3] flex flex-col gap-4">
               <div className="flex items-center justify-between">
                  <div className="flex items-center gap-2 text-[#4edea3] font-bold tracking-widest uppercase text-xs">
                     <FileText size={16}/> Operation Successful

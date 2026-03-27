@@ -1,7 +1,30 @@
+# Dependencies
 node_modules/
-.next/
-.env*
 .venv/
 __pycache__/
+
+# Next.js
+.next/
+out/
+
+# Environment
+.env
+.env.local
+.env*.local
+backend/.env
+
+# Build
 build/
+dist/
+
+# Debug
 *.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

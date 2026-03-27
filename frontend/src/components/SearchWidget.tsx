@@ -11,7 +11,6 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
     e.preventDefault();
     if (!surveyNo) return;
     
-    // Find plot in mock data
     const plot = mockData.features.find((f: any) => 
       f.properties.type === 'plot' && f.properties.survey_number === surveyNo
     );
@@ -24,7 +23,7 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
   };
 
   return (
-    <div className="glass-panel w-[320px] absolute top-8 left-8 z-40 p-6 flex flex-col gap-5">
+    <div className="glass-panel w-[320px] p-6 flex flex-col gap-5">
       <div className="flex flex-col gap-1 mb-2">
          <h1 className="text-[#dbfcff] font-display font-medium text-[28px] uppercase tracking-tight leading-none">Satya-Lekh</h1>
          <span className="text-[#00f0ff] uppercase tracking-[0.2em] text-[10px] font-bold">Title Intelligence HUD</span>

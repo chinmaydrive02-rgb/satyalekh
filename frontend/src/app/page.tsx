@@ -10,13 +10,10 @@ export default function Home() {
   const [selectedPlot, setSelectedPlot] = useState<any>(null);
 
   const handlePlotSelect = (plotOrFeature: any) => {
-    // Determine if it passed the full geojson feature or just properties
     if (!plotOrFeature) {
       setSelectedPlot(null);
       return;
     }
-    
-    // Check if what got passed is the full feature object from mockData
     if (plotOrFeature.properties) {
        setSelectedPlot(plotOrFeature.properties);
     } else {
@@ -30,13 +27,13 @@ export default function Home() {
       {/* Background Map layer */}
       <Map onPlotSelect={handlePlotSelect} />
 
-      {/* Floating UI Elements */}
-      <div className="absolute left-8 top-24 z-40">
+      {/* Floating UI Elements - pushed below fixed TopNav */}
+      <div className="absolute left-6 top-[72px] z-40">
          <SearchWidget onPlotSelect={handlePlotSelect} />
       </div>
 
       {/* Selected Plot HUD */}
-      <div className="absolute right-8 top-24 z-40">
+      <div className="absolute right-6 top-[72px] z-40">
         {selectedPlot && (
           <RiskCard 
             plot={selectedPlot} 
@@ -45,8 +42,8 @@ export default function Home() {
         )}
       </div>
 
-      {/* Scanline Overlay for Cyberpunk Feel */}
-      <div className="pointer-events-none absolute inset-0 z-50 opacity-[0.03] bg-[linear-gradient(rgba(0,0,0,0)_50%,_rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]"></div>
+      {/* Scanline Overlay — z-30 so it doesn't block map or UI */}
+      <div className="pointer-events-none absolute inset-0 z-30 opacity-[0.03] bg-[linear-gradient(rgba(0,0,0,0)_50%,_rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]"></div>
     </main>
   );
 }
