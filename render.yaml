@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: satyalekh-api
+    env: docker
+    region: singapore
+    plan: free
+    dockerCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SUPABASE_URL
+        value: "https://uvvwqugljoritqbjcryg.supabase.co"
+      - key: SUPABASE_KEY
+        value: "sb_publishable_Cv3AzDyBhpa1YUInu796MQ_v-0QHxOR"
+      - key: GOOGLE_API_KEY
+        sync: false # Requires manual insertion in dashboard
