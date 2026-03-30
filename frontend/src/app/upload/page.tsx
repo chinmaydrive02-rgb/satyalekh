@@ -161,29 +161,10 @@ export default function DocumentUpload() {
 
     } catch (error) {
       clearInterval(progressTimerRef.current);
-      
-      // Simulate successful result for demo (since backend may not be running in production)
-      setProgressPct(100);
-      setProgressLabel("Record retrieved successfully!");
-      
-      setTimeout(() => {
-        setShowProgress(false);
-        setAutoResult({
-          message: "VF-7/12 Record Successfully Retrieved & Translated",
-          owner_name: "Patel Rameshbhai Kantilal",
-          survey_no: surveyNo,
-          village: village,
-          district: district,
-          taluka: taluka,
-          area: "14,500 sq.m (3.58 acres)",
-          tenure_type: "Old Tenure (Juna Kabja)",
-          cultivation: "Non-Agricultural (NA)",
-          mutation_entries: "3 entries (1998, 2005, 2021)",
-          encumbrances: "Bank Lien — ICICI Bank Ltd. (₹45,00,000)",
-          jantri_rate: "₹8,500/sq.m",
-          last_sale: "12 May 2021 — ₹1,85,00,000"
-        });
-      }, 1500);
+      setProgressPct(0);
+      setProgressLabel("");
+      setShowProgress(false);
+      alert("Could not connect to the RPA backend at localhost:8000. Please ensure the backend server is running.");
     }
   };
 

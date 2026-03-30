@@ -1,17 +1,14 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Database, TrendingUp, AlertTriangle, CheckCircle2, Crosshair, Plus, Loader2, X } from 'lucide-react';
+import { Database, TrendingUp, AlertTriangle, CheckCircle2, Crosshair, Plus, Loader2, X, FolderOpen } from 'lucide-react';
 import TopNav from '@/components/TopNav';
 import Link from 'next/link';
 import { ANYROR_DATASET } from '@/lib/anyrorData';
 
 export default function Dashboard() {
-  const [holdings, setHoldings] = useState([
-    { id: "SURVEY-25", village: "Shela", type: "R1 Residential", size: "14,500 sq.m", status: "CLEARED" },
-    { id: "SURVEY-88", village: "Bopal", type: "Commercial", size: "8,200 sq.m", status: "ENCUMBERED" },
-    { id: "SURVEY-12", village: "Sanand", type: "Industrial", size: "45,000 sq.m", status: "CLEARED" }
-  ]);
+  // Start with empty portfolio — no fake holdings
+  const [holdings, setHoldings] = useState<any[]>([]);
 
   const [showIngest, setShowIngest] = useState(false);
   const [district, setDistrict] = useState('Ahmedabad');
@@ -46,37 +43,38 @@ export default function Dashboard() {
     setIsFetching(true);
     
     try {
-      // Try real backend first, fall back to simulated
-      try {
-        const res = await fetch("http://localhost:8000/fetch-anyror", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ district, taluka, village, survey_no: surveyNo })
-        });
-        await res.json();
-      } catch {
-        // Backend may not be running — still add the asset
-      }
+      const res = await fetch("http://localhost:8000/fetch-anyror", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ district, taluka, village, survey_no: surveyNo })
+      });
       
-      const newAsset = {
-         id: `SURVEY-${surveyNo}`,
-         village: village,
-         type: "Verified Record",
-         size: (Math.floor(Math.random() * 20000 + 5000)).toLocaleString() + " sq.m",
-         status: parseInt(surveyNo) % 3 === 0 ? "ENCUMBERED" : "CLEARED"
-      };
-
-      setHoldings(prev => [newAsset, ...prev]);
-      setShowIngest(false);
-
+      if (res.ok) {
+        const data = await res.json();
+        // Use real data from backend
+        const newAsset = {
+          id: `SURVEY-${surveyNo}`,
+          village: data.village || village,
+          type: data.tenure_type || "Fetched Record",
+          size: data.area || "—",
+          status: data.encumbrances && data.encumbrances !== "None" ? "ENCUMBERED" : "CLEARED"
+        };
+        setHoldings(prev => [newAsset, ...prev]);
+        setShowIngest(false);
+      } else {
+        alert("Backend returned an error. Please ensure the RPA backend is running.");
+      }
     } catch (error) {
-      alert("Failed to connect to RPA Scraper.");
+      alert("Could not connect to the RPA backend at localhost:8000. Please start the backend server.");
     } finally {
       setIsFetching(false);
     }
   };
 
   const selectClass = "w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-mono text-xs focus:outline-none focus:border-[#00f0ff] transition-colors cursor-pointer";
+
+  const totalCleared = holdings.filter(h => h.status === 'CLEARED').length;
+  const totalRisks = holdings.filter(h => h.status === 'ENCUMBERED').length;
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] flex flex-col pt-20 pb-12 px-6 relative overflow-hidden">
@@ -157,7 +155,7 @@ export default function Dashboard() {
                 disabled={isFetching}
                 className="mt-4 w-full md:w-auto self-end py-3 px-8 text-[#0a0a0a] font-bold text-xs tracking-widest uppercase bg-gradient-to-r from-[#de4ced] to-[#ff00f0] disabled:opacity-50 hover:brightness-110 flex items-center justify-center gap-2"
               >
-                 {isFetching ? <><Loader2 size={14} className="animate-spin"/> Translating Record...</> : "Fetch & Ingest Asset"}
+                 {isFetching ? <><Loader2 size={14} className="animate-spin"/> Fetching from AnyROR...</> : "Fetch & Ingest Asset"}
               </button>
            </form>
         )}
@@ -165,16 +163,16 @@ export default function Dashboard() {
         {/* Global Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
            <div className="glass-panel p-6 border-l-2 border-l-[#00f0ff] flex flex-col justify-between h-[120px]">
-              <span className="text-xs text-[#849495] font-sans tracking-widest uppercase">Total Valuation</span>
-              <span className="text-3xl font-display text-[#dbfcff]">₹18.4<span className="text-[#00f0ff]">Cr</span></span>
+              <span className="text-xs text-[#849495] font-sans tracking-widest uppercase">Total Assets</span>
+              <span className="text-3xl font-display text-[#dbfcff]">{holdings.length}</span>
            </div>
            <div className="glass-panel p-6 border-l-2 border-l-[#4edea3] flex flex-col justify-between h-[120px]">
               <span className="text-xs text-[#849495] font-sans tracking-widest uppercase">Verified Assets</span>
-              <span className="text-3xl font-display text-[#dbfcff]">{holdings.filter(h => h.status === 'CLEARED').length}</span>
+              <span className="text-3xl font-display text-[#dbfcff]">{totalCleared}</span>
            </div>
            <div className="glass-panel p-6 border-l-2 border-l-[#ba1b24] flex flex-col justify-between h-[120px] bg-[#ba1b24]/5">
               <span className="text-xs text-[#849495] font-sans tracking-widest uppercase">Active Risks</span>
-              <span className="text-3xl font-display text-[#ba1b24]">{holdings.filter(h => h.status === 'ENCUMBERED').length}</span>
+              <span className="text-3xl font-display text-[#ba1b24]">{totalRisks}</span>
            </div>
         </div>
 
@@ -213,8 +211,16 @@ export default function Dashboard() {
                  ))}
                  {holdings.length === 0 && (
                     <tr>
-                       <td colSpan={5} className="p-8 text-center text-[#849495] font-sans text-xs uppercase tracking-widest">
-                          No Active Holdings. Initialize a Target Retrieval.
+                       <td colSpan={5} className="p-12 text-center">
+                          <div className="flex flex-col items-center gap-4">
+                             <FolderOpen size={40} className="text-[#3b494b]" />
+                             <div className="text-[#849495] font-sans text-xs uppercase tracking-widest">
+                                No Active Holdings
+                             </div>
+                             <div className="text-[#3b494b] font-sans text-xs">
+                                Click "Add Custom Asset" to fetch real land records from AnyROR
+                             </div>
+                          </div>
                        </td>
                     </tr>
                  )}

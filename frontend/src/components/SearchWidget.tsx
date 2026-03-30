@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
-import { mockData } from '@/lib/mockData';
 import { ANYROR_DATASET } from '@/lib/anyrorData';
 
 export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: any) => void }) {
@@ -35,17 +34,8 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!surveyNo) return;
-    
-    const plot = mockData.features.find((f: any) => 
-      f.properties.type === 'plot' && f.properties.survey_number === surveyNo
-    );
-    
-    if (plot) {
-      onPlotSelect(plot);
-    } else {
-      // If not in mock data, still navigate to property page
-      window.location.href = `/property/SURVEY-${surveyNo}`;
-    }
+    // Navigate to property detail page — real data comes from backend
+    window.location.href = `/property/SURVEY-${surveyNo}?district=${district}&taluka=${taluka}&village=${village}`;
   };
 
   const selectClass = "w-full px-4 py-3 bg-[#1c1b1b] border-b-2 border-[#3b494b] text-[#dbfcff] text-sm font-sans uppercase focus:outline-none focus:border-[#00f0ff] transition-colors cursor-pointer";

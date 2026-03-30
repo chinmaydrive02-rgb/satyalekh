@@ -2,18 +2,13 @@
 
 import React, { useState } from 'react';
 import TopNav from '@/components/TopNav';
-import { Shield, FileText, AlertTriangle, Cpu, Terminal, ChevronRight, Hash, CheckCircle2 } from 'lucide-react';
+import { Shield, FileText, AlertTriangle, Cpu, Terminal, ChevronRight, Hash, CheckCircle2, FolderOpen, Search } from 'lucide-react';
+import Link from 'next/link';
 
 export default function ComplianceTerminal() {
-  const [activeHash, setActiveHash] = useState('7f4...91e');
-
-  const registryDocs = [
-    { title: "Land Parcel #784/BK", hash: "0x7f4...91e", status: "VERIFIED" },
-    { title: "Conveyance - Satya-Lekh Corp", hash: "0xa42...3cc", status: "VERIFIED" },
-    { title: "Safety Clearance #102", hash: "0x981...ff0", status: "PENDING" },
-    { title: "Certificate of Allotment", hash: "0x3d2...11b", status: "VERIFIED" },
-    { title: "FY 2023-24 Clearance", hash: "0xbb0...45a", status: "VERIFIED" },
-  ];
+  // No hardcoded fake documents — data comes from scanned records
+  const [registryDocs] = useState<any[]>([]);
+  const [activeHash, setActiveHash] = useState<string | null>(null);
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] flex flex-col pt-24 pb-12 px-6 relative overflow-hidden">
@@ -31,7 +26,7 @@ export default function ComplianceTerminal() {
                  </span>
               </div>
               <p className="text-[#849495] font-sans text-xs tracking-widest uppercase flex items-center gap-2">
-                 <Terminal size={14} className="text-[#4edea3]"/> Immutable Blockchain Record & Autonomic Legal Counsel Active
+                 <Terminal size={14} className="text-[#4edea3]"/> Blockchain-Immutable Record Verification & Autonomic Legal Counsel
               </p>
            </div>
            
@@ -45,107 +40,86 @@ export default function ComplianceTerminal() {
            </div>
         </div>
 
+        {/* Main Content */}
         <div className="flex flex-col lg:flex-row gap-6 h-full overflow-hidden">
            
-           {/* Left Column - Hashes & Registry */}
+           {/* Left Column - Registry Tokens */}
            <div className="w-full lg:w-[400px] flex flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar shrink-0">
               <div className="text-xs font-bold text-[#849495] uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
                  <Hash size={14}/> Encrypted Registry Tokens
               </div>
               
-              <div className="flex flex-col gap-3">
-                 {registryDocs.map((doc, i) => (
-                    <div 
-                      key={i}
-                      onClick={() => setActiveHash(doc.hash)}
-                      className={`p-5 border cursor-pointer transition-all flex flex-col gap-3 relative group
-                        ${activeHash === doc.hash 
-                           ? 'bg-[#00f0ff]/10 border-[#00f0ff] border-l-4 shadow-[0_0_15px_rgba(0,240,255,0.1)]' 
-                           : 'bg-[#1c1b1b]/50 border-[#3b494b]/40 hover:border-[#00f0ff]/50'
-                        }
-                      `}
-                    >
-                       <div className="flex justify-between items-start">
-                          <span className={`text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 border ${doc.status === 'VERIFIED' ? 'text-[#4edea3] bg-[#4edea3]/10 border-[#4edea3]/30' : 'text-[#ba1b24] bg-[#ba1b24]/10 border-[#ba1b24]/30'}`}>
-                             {doc.status}
-                          </span>
-                          {doc.status === 'VERIFIED' ? <CheckCircle2 size={16} className="text-[#4edea3]"/> : <AlertTriangle size={16} className="text-[#ba1b24] animate-pulse"/>}
-                       </div>
-                       <div>
-                         <h3 className="text-md font-display text-[#dbfcff] uppercase">{doc.title}</h3>
-                         <span className="text-[10px] mt-1 font-mono text-[#849495] group-hover:text-[#00f0ff]/70 transition-colors flex items-center gap-1">
-                            SHA-256: {doc.hash}
-                         </span>
-                       </div>
-                    </div>
-                 ))}
-              </div>
+              {registryDocs.length === 0 ? (
+                <div className="flex flex-col items-center gap-6 py-16 text-center">
+                  <FolderOpen size={48} className="text-[#3b494b]" />
+                  <div>
+                    <h3 className="text-sm font-display uppercase text-[#849495] mb-2">No Verified Documents</h3>
+                    <p className="text-[10px] text-[#3b494b] max-w-[280px] mx-auto">
+                      Scan land records via the Title Scanner to generate compliance tokens and blockchain verification hashes.
+                    </p>
+                  </div>
+                  <Link 
+                    href="/upload"
+                    className="px-6 py-3 bg-gradient-to-r from-[#de4ced] to-[#ff00f0] text-[#002022] text-xs font-bold tracking-widest uppercase hover:brightness-110 transition-all flex items-center gap-2"
+                  >
+                    <Search size={12}/> Go to Title Scanner
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                   {registryDocs.map((doc: any, i: number) => (
+                      <div 
+                        key={i}
+                        onClick={() => setActiveHash(doc.hash)}
+                        className={`p-5 border cursor-pointer transition-all flex flex-col gap-3 relative group
+                          ${activeHash === doc.hash 
+                             ? 'bg-[#00f0ff]/10 border-[#00f0ff] border-l-4 shadow-[0_0_15px_rgba(0,240,255,0.1)]' 
+                             : 'bg-[#1c1b1b]/50 border-[#3b494b]/40 hover:border-[#00f0ff]/50'
+                          }
+                        `}
+                      >
+                         <div className="flex justify-between items-start">
+                            <span className={`text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 border ${doc.status === 'VERIFIED' ? 'text-[#4edea3] bg-[#4edea3]/10 border-[#4edea3]/30' : 'text-[#ba1b24] bg-[#ba1b24]/10 border-[#ba1b24]/30'}`}>
+                               {doc.status}
+                            </span>
+                            {doc.status === 'VERIFIED' ? <CheckCircle2 size={16} className="text-[#4edea3]"/> : <AlertTriangle size={16} className="text-[#ba1b24] animate-pulse"/>}
+                         </div>
+                         <div>
+                           <h3 className="text-md font-display text-[#dbfcff] uppercase">{doc.title}</h3>
+                           <span className="text-[10px] mt-1 font-mono text-[#849495] group-hover:text-[#00f0ff]/70 transition-colors flex items-center gap-1">
+                              SHA-256: {doc.hash}
+                           </span>
+                         </div>
+                      </div>
+                   ))}
+                </div>
+              )}
            </div>
 
-           {/* Right Column - Matrix Viewer & AI Counsel */}
+           {/* Right Column - AI Counsel Overview */}
            <div className="flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar">
               
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-full">
                  
-                 {/* Raw Title Matrix */}
+                 {/* Matrix Viewer - Empty State */}
                  <div className="glass-panel p-8 border border-[#3b494b]/40 bg-[#0a0f0f]/90 relative h-full min-h-[500px] flex flex-col shadow-[inset_0_0_30px_rgba(0,240,255,0.03)]">
                     <div className="absolute inset-0 z-0 bg-[linear-gradient(transparent_50%,rgba(0,240,255,0.02)_50%)] bg-[length:100%_4px] pointer-events-none"></div>
 
                     <div className="relative z-10 flex flex-col h-full">
                        <div className="flex items-center justify-between border-b border-[#3b494b]/40 pb-4 mb-6">
                           <h2 className="text-xl font-display uppercase tracking-wider text-[#dbfcff] flex items-center gap-2">
-                             <FileText size={20} className="text-[#00f0ff]"/> INTELLIGENCE_MATRIX_784.DAT
+                             <FileText size={20} className="text-[#00f0ff]"/> INTELLIGENCE_MATRIX.DAT
                           </h2>
-                          <span className="text-[10px] tracking-widest uppercase text-[#00f0ff] bg-[#00f0ff]/10 px-3 py-1 border border-[#00f0ff]/30">
-                             DECODED PAYLOAD
+                          <span className="text-[10px] tracking-widest uppercase text-[#849495] bg-[#1c1b1b] px-3 py-1 border border-[#3b494b]/30">
+                             AWAITING DATA
                           </span>
                        </div>
 
-                       <div className="font-mono text-sm leading-relaxed text-[#dbfcff]/80 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
-                          
-                          <div className="border border-[#4edea3]/30 bg-[#4edea3]/5 p-4 relative">
-                             <div className="absolute top-0 left-0 w-2 h-full bg-[#4edea3]"></div>
-                             <p className="text-[#4edea3] font-bold uppercase tracking-widest text-xs mb-2">Validated Ownership Node</p>
-                             <div className="flex justify-between items-end border-b border-[#3b494b] pb-2 mb-2">
-                                <span className="text-[#849495] text-[10px] uppercase tracking-widest">Entity Signature</span>
-                                <span className="text-[#dbfcff]">SATYA-LEKH INFRASTRUCTURE PVT LTD</span>
-                             </div>
-                             <div className="flex justify-between items-end">
-                                <span className="text-[#849495] text-[10px] uppercase tracking-widest">Aquisition Epoch</span>
-                                <span className="text-[#4edea3]">12 MAY 2021 [BLOCK 4492910]</span>
-                             </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                             <div className="bg-black/60 p-4 border border-[#3b494b]/40">
-                                <span className="text-[10px] text-[#849495] uppercase tracking-widest block mb-1">Vector Coordinates</span>
-                                <div className="text-sm text-[#00f0ff]">23.0225° N, 72.5714° E</div>
-                             </div>
-                             <div className="bg-black/60 p-4 border border-[#3b494b]/40">
-                                <span className="text-[10px] text-[#849495] uppercase tracking-widest block mb-1">Spatial Extent (SQ.M)</span>
-                                <div className="text-sm text-[#dbfcff]">14,500.00</div>
-                             </div>
-                          </div>
-
-                          <div className="border border-[#ba1b24]/30 bg-[#ba1b24]/5 p-4 relative">
-                             <div className="absolute top-0 left-0 w-2 h-full bg-[#ba1b24]"></div>
-                             <p className="text-[#ba1b24] font-bold uppercase tracking-widest text-xs mb-2 flex items-center gap-2">
-                                <AlertTriangle size={14}/> Active Encumbrance Warning
-                             </p>
-                             <p className="text-xs">
-                                Registered collateral lien detected by node [ICICI_BANK_LTD]. 
-                                <br/><span className="text-[#849495] mt-1 block">Value: INR 450,000,000. Discharge pending.</span>
-                             </p>
-                          </div>
-                          
-                          <div className="border border-[#eab308]/30 bg-[#eab308]/5 p-4 relative">
-                             <div className="absolute top-0 left-0 w-2 h-full bg-[#eab308]"></div>
-                             <p className="text-[#eab308] font-bold uppercase tracking-widest text-xs mb-2">Zoning Directive</p>
-                             <p className="text-xs">
-                                Classified R-1 Residential under AUDA Masterplan 2032. Commercial development strictly prohibited without supplementary premium conversion.
-                             </p>
-                          </div>
-                          
+                       <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
+                          <Cpu size={48} className="text-[#3b494b]" />
+                          <p className="text-xs text-[#849495] uppercase tracking-widest max-w-[300px]">
+                            No compliance data loaded. Use the Title Scanner to fetch and verify a land record first.
+                          </p>
                        </div>
                     </div>
                  </div>
@@ -154,47 +128,30 @@ export default function ComplianceTerminal() {
                  <div className="flex flex-col gap-6 h-full">
                     
                     {/* Integrity Score */}
-                    <div className="glass-panel p-8 border-t-2 border-[#de4ced] flex flex-col justify-center bg-gradient-to-b from-[#de4ced]/5 to-transparent flex-shrink-0">
+                    <div className="glass-panel p-8 border-t-2 border-[#3b494b] flex flex-col justify-center flex-shrink-0">
                        <h3 className="text-xs font-bold tracking-[0.2em] uppercase text-[#849495] mb-2">Autonomic Risk Assessment</h3>
-                       <div className="text-4xl font-display text-[#de4ced] mb-1">
-                          MODERATE YIELD RISK
+                       <div className="text-4xl font-display text-[#849495] mb-1">
+                          NO DATA
                        </div>
-                       <span className="text-xs text-[#dbfcff]/60 uppercase tracking-widest">
-                          Clearance Coefficient: 68.4%
+                       <span className="text-xs text-[#dbfcff]/40 uppercase tracking-widest">
+                          Clearance Coefficient: —
                        </span>
                        <div className="w-full bg-black/50 h-3 mt-6 border border-[#3b494b]/40 overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-[#4edea3] via-[#de4ced] to-[#ba1b24] w-[68.4%] relative">
-                             <div className="absolute top-0 right-0 bottom-0 w-1 bg-white shadow-[0_0_10px_white]"></div>
-                          </div>
+                          <div className="h-full bg-[#3b494b]/30 w-0"></div>
                        </div>
                     </div>
 
-                    {/* AI Directives */}
-                    <div className="glass-panel p-8 border border-[#3b494b]/40 bg-[#00f0ff]/5 flex flex-col gap-5 flex-1 shadow-[0_0_30px_rgba(0,240,255,0.03)]">
-                       <h3 className="text-sm font-display tracking-[0.1em] uppercase text-[#00f0ff] flex items-center gap-3 border-b border-[#00f0ff]/20 pb-3">
+                    {/* AI Counsel - Empty */}
+                    <div className="glass-panel p-8 border border-[#3b494b]/40 bg-[#111]/50 flex flex-col gap-5 flex-1">
+                       <h3 className="text-sm font-display tracking-[0.1em] uppercase text-[#849495] flex items-center gap-3 border-b border-[#3b494b]/20 pb-3">
                           <Cpu size={18}/> Project Counsel Directives
                        </h3>
                        
-                       <div className="flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2 mt-2">
-                          <div className="group">
-                             <p className="flex items-start gap-3 text-sm font-mono text-[#dbfcff]/90">
-                                <ChevronRight size={16} className="text-[#00f0ff] mt-0.5 shrink-0 group-hover:translate-x-1 transition-transform"/>
-                                AI detected spatial anomaly comparing Survey Boundaries (Record #102) against live Mapbox Satellite Vectors. 1.2% variance observed.
-                             </p>
-                          </div>
-                          <div className="group">
-                             <p className="flex items-start gap-3 text-sm font-mono text-[#dbfcff]/90">
-                                <ChevronRight size={16} className="text-[#00f0ff] mt-0.5 shrink-0 group-hover:translate-x-1 transition-transform"/>
-                                Lien discharge timeline misaligned with Project Alpha launch window. Expedited noc required from ICICI.
-                             </p>
-                          </div>
-                          <div className="mt-4 p-4 border border-[#de4ced]/40 bg-[#de4ced]/10 relative overflow-hidden">
-                             <div className="absolute top-0 right-0 w-16 h-16 bg-[#de4ced]/20 blur-xl"></div>
-                             <p className="text-[#de4ced] font-bold uppercase tracking-widest text-xs mb-2">▶ TACTICAL ACTION REQUIRED</p>
-                             <p className="text-sm font-mono text-[#dbfcff]">
-                                Initiate immediate Heritage Noc protocol via ASI Terminal. Proximity to Sarkhej Roza mandates Tier-2 Archaeological clearance within 14 days to prevent construction injunction.
-                             </p>
-                          </div>
+                       <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
+                          <ChevronRight size={32} className="text-[#3b494b]" />
+                          <p className="text-xs text-[#3b494b] max-w-[280px]">
+                            AI counsel directives will appear here once a land record has been scanned and verified through the system.
+                          </p>
                        </div>
                     </div>
 
