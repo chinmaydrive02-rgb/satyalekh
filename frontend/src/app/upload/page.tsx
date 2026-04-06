@@ -5,6 +5,7 @@ import { UploadCloud, FileText, Loader2, Cpu, ShieldCheck, AlertTriangle, MapPin
 import Link from 'next/link';
 import TopNav from '@/components/TopNav';
 import { ANYROR_DATASET } from '@/lib/anyrorData';
+import { API_BASE_URL } from '@/lib/api';
 
 // Exact AnyROR Record Types from https://anyror.gujarat.gov.in/LandRecordRural.aspx
 const RECORD_TYPES = [
@@ -102,7 +103,7 @@ export default function DocumentUpload() {
     const formData = new FormData();
     formData.append("file", file);
     try {
-      const res = await fetch("http://localhost:8000/analyze-record", { method: "POST", body: formData });
+      const res = await fetch(`${API_BASE_URL}/analyze-record`, { method: "POST", body: formData });
       if (!res.ok) throw new Error("Analysis Failed");
       const data = await res.json();
       setResult(data);
@@ -135,7 +136,7 @@ export default function DocumentUpload() {
     simulateProgress();
     
     try {
-      const res = await fetch("http://localhost:8000/fetch-anyror", {
+      const res = await fetch(`${API_BASE_URL}/fetch-anyror`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -148,23 +149,32 @@ export default function DocumentUpload() {
       });
       
       clearInterval(progressTimerRef.current);
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ detail: "Unknown error" }));
+        setProgressPct(0);
+        setProgressLabel("");
+        setShowProgress(false);
+        alert(`RPA Error: ${errData.detail || "Backend returned an error"}`);
+        return;
+      }
+      
+      const data = await res.json();
+      
       setProgressPct(100);
       setProgressLabel("Record retrieved successfully!");
-      
-      if (!res.ok) throw new Error("Automation Failed");
-      const data = await res.json();
       
       setTimeout(() => {
         setShowProgress(false);
         setAutoResult(data);
-      }, 1500);
+      }, 1200);
 
     } catch (error) {
       clearInterval(progressTimerRef.current);
       setProgressPct(0);
       setProgressLabel("");
       setShowProgress(false);
-      alert("Could not connect to the RPA backend at localhost:8000. Please ensure the backend server is running.");
+      alert("Could not connect to the RPA backend. Please ensure the backend server is running.");
     }
   };
 

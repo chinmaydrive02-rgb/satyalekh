@@ -3,12 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import json
 from pydantic import BaseModel
+from typing import Optional
 from google import genai
 from google.genai import types
 
 app = FastAPI(title="Satya-Lekh API")
 
-# Allow CORS for Next.js app
+# Allow CORS for Next.js app (local + Vercel)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,6 +17,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ─── Manual OCR Upload Endpoint ───────────────────────────────────────────
 
 class AnalysisResult(BaseModel):
     owner_name: str
@@ -29,7 +33,7 @@ class AnalysisResult(BaseModel):
 @app.post("/analyze-record", response_model=AnalysisResult)
 async def analyze_record(file: UploadFile = File(...)):
     """
-    Analyzes an uploaded 7/12 Land Record property document using Gemini 1.5 Flash Vision.
+    Analyzes an uploaded 7/12 Land Record using Gemini Vision.
     Extracts key information and assigns a risk label.
     """
     if not file.content_type.startswith("image/") and file.content_type != "application/pdf":
@@ -37,9 +41,6 @@ async def analyze_record(file: UploadFile = File(...)):
         
     try:
         contents = await file.read()
-        
-        # Initialize Gemini Client
-        # Requires GOOGLE_API_KEY environment variable to be set
         client = genai.Client()
 
         prompt = (
@@ -56,8 +57,6 @@ async def analyze_record(file: UploadFile = File(...)):
             "}"
         )
         
-        # We need to construct the document part
-        # Gemini expects the mime_type and the raw bytes
         document = types.Part.from_bytes(
             data=contents,
             mime_type=file.content_type,
@@ -68,7 +67,6 @@ async def analyze_record(file: UploadFile = File(...)):
             contents=[prompt, document]
         )
         
-        # Clean markdown if provided
         json_text = response.text
         if json_text.startswith("```json"):
             json_text = json_text[7:-3]
@@ -77,7 +75,7 @@ async def analyze_record(file: UploadFile = File(...)):
             
         data = json.loads(json_text)
         
-        # Risk Logic Assessment
+        # Risk Logic
         tenure = data.get("tenure_type", "").lower()
         encum = data.get("encumbrances", "").strip()
         
@@ -88,7 +86,7 @@ async def analyze_record(file: UploadFile = File(...)):
             risk_level = "YELLOW"
             risk_reason = "Restricted Development / New Tenure"
         
-        if encum and encum.lower() not in ["none", "null", "", "n/a", "no", "nil"]:
+        if encum and encum.lower() not in ["none", "null", "", "n/a", "no", "nil", "—"]:
             risk_level = "RED"
             risk_reason = "Mortgaged or Encumbered"
             
@@ -108,6 +106,9 @@ async def analyze_record(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
+
+# ─── Automated AnyROR RPA Endpoint ────────────────────────────────────────
+
 from scraper import scrape_anyror_data
 
 class AnyRORRequest(BaseModel):
@@ -115,23 +116,29 @@ class AnyRORRequest(BaseModel):
     taluka: str
     village: str
     survey_no: str
+    record_type: Optional[str] = "OLD_SCAN_712"
 
 @app.post("/fetch-anyror")
 async def fetch_anyror_endpoint(request: AnyRORRequest):
     """
     Automated RPA endpoint to scrape AnyROR 7/12 Land Records.
+    Uses Playwright + Gemini Vision for CAPTCHA solving and data extraction.
     """
     result = await scrape_anyror_data(
         district=request.district,
         taluka=request.taluka,
         village=request.village,
-        survey_number=request.survey_no
+        survey_number=request.survey_no,
+        record_type=request.record_type or "OLD_SCAN_712"
     )
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     
     return result
 
+
+# ─── Health Check ──────────────────────────────────────────────────────────
+
 @app.get("/")
 def read_root():
-    return {"status": "Satya-Lekh API is running"}
+    return {"status": "Satya-Lekh API is running", "version": "2.0"}

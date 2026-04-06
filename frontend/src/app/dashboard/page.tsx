@@ -5,6 +5,7 @@ import { Database, TrendingUp, AlertTriangle, CheckCircle2, Crosshair, Plus, Loa
 import TopNav from '@/components/TopNav';
 import Link from 'next/link';
 import { ANYROR_DATASET } from '@/lib/anyrorData';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function Dashboard() {
   // Start with empty portfolio — no fake holdings
@@ -43,7 +44,7 @@ export default function Dashboard() {
     setIsFetching(true);
     
     try {
-      const res = await fetch("http://localhost:8000/fetch-anyror", {
+      const res = await fetch(`${API_BASE_URL}/fetch-anyror`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ district, taluka, village, survey_no: surveyNo })
@@ -65,7 +66,7 @@ export default function Dashboard() {
         alert("Backend returned an error. Please ensure the RPA backend is running.");
       }
     } catch (error) {
-      alert("Could not connect to the RPA backend at localhost:8000. Please start the backend server.");
+      alert("Could not connect to the RPA backend. Please start the backend server.");
     } finally {
       setIsFetching(false);
     }

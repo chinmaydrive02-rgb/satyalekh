@@ -1,32 +1,48 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, MapPin, Activity, AlertCircle, FileText, Share2, Database, Loader2, Search } from 'lucide-react';
+import { ChevronLeft, MapPin, Activity, AlertCircle, FileText, Share2, Database, Loader2, Search, User } from 'lucide-react';
 import Link from 'next/link';
 import TopNav from '@/components/TopNav';
+import { API_BASE_URL } from '@/lib/api';
+import { useSearchParams } from 'next/navigation';
 
 export default function PropertyDetail({ params }: { params: { id?: string } }) {
   const propertyId = (params?.id || 'SURVEY-XX').toUpperCase();
+  const searchParams = useSearchParams();
+  
+  // Extract location context from URL params (set by SearchWidget)
+  const urlDistrict = searchParams.get('district') || 'Ahmedabad';
+  const urlTaluka = searchParams.get('taluka') || 'Ahmedabad_City';
+  const urlVillage = searchParams.get('village') || 'Navrangpura';
+  
   const [record, setRecord] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Try to fetch real data from backend on mount
   useEffect(() => {
     const fetchPropertyData = async () => {
       setIsLoading(true);
+      setError(null);
       try {
         const surveyNum = propertyId.replace('SURVEY-', '');
-        const res = await fetch(`http://localhost:8000/fetch-anyror`, {
+        const res = await fetch(`${API_BASE_URL}/fetch-anyror`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ survey_no: surveyNum, district: 'Ahmedabad', taluka: 'Ahmedabad_City', village: 'Navrangpura' })
+          body: JSON.stringify({
+            survey_no: surveyNum,
+            district: urlDistrict,
+            taluka: urlTaluka,
+            village: urlVillage,
+            record_type: 'OLD_SCAN_712'
+          })
         });
         if (res.ok) {
           const data = await res.json();
           setRecord(data);
         } else {
-          setError("Could not fetch record from backend.");
+          const errData = await res.json().catch(() => ({ detail: "Unknown error" }));
+          setError(errData.detail || "Could not fetch record from backend.");
         }
       } catch {
         setError("Backend not available. Start the RPA server to view real property data.");
@@ -34,8 +50,19 @@ export default function PropertyDetail({ params }: { params: { id?: string } }) 
         setIsLoading(false);
       }
     };
-    fetchPropertyData();
-  }, [propertyId]);
+    
+    // Only auto-fetch if we have a real survey number
+    const surveyNum = propertyId.replace('SURVEY-', '');
+    if (surveyNum && surveyNum !== 'XX') {
+      fetchPropertyData();
+    } else {
+      setError("No survey number specified. Use the Title Scanner to search for a record.");
+    }
+  }, [propertyId, urlDistrict, urlTaluka, urlVillage]);
+
+  const hasEncumbrances = record?.encumbrances && 
+    record.encumbrances.toLowerCase() !== 'none' && 
+    record.encumbrances !== '—';
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] flex flex-col pt-24 pb-12 px-6 relative overflow-hidden">
@@ -52,9 +79,18 @@ export default function PropertyDetail({ params }: { params: { id?: string } }) 
            <div>
               <div className="flex items-center gap-3 mb-2">
                  <h1 className="text-5xl font-display uppercase tracking-tight">{propertyId}</h1>
+                 {record && (
+                   <span className={`px-3 py-1 text-xs uppercase font-bold tracking-widest border ${
+                     hasEncumbrances 
+                       ? 'bg-[#ba1b24]/10 text-[#ba1b24] border-[#ba1b24]/50' 
+                       : 'bg-[#4edea3]/10 text-[#4edea3] border-[#4edea3]/50'
+                   }`}>
+                     {hasEncumbrances ? 'ENCUMBERED' : 'CLEAR TITLE'}
+                   </span>
+                 )}
               </div>
               <p className="text-[#849495] font-sans text-sm tracking-widest uppercase flex items-center gap-2">
-                 <MapPin size={14} className="text-[#00f0ff]"/> {record?.village || '—'}, {record?.district || '—'}
+                 <MapPin size={14} className="text-[#00f0ff]"/> {record?.village || urlVillage}, {record?.taluka?.replace(/_/g, ' ') || urlTaluka.replace(/_/g, ' ')}, {record?.district || urlDistrict}
               </p>
            </div>
            
@@ -72,7 +108,8 @@ export default function PropertyDetail({ params }: { params: { id?: string } }) 
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <Loader2 size={32} className="text-[#00f0ff] animate-spin" />
-            <span className="text-xs text-[#849495] uppercase tracking-widest">Querying Backend for Real Property Data...</span>
+            <span className="text-xs text-[#849495] uppercase tracking-widest">Fetching Real Data from AnyROR Government Portal...</span>
+            <span className="text-[10px] text-[#3b494b]">This may take 30-90 seconds (CAPTCHA solving + data extraction)</span>
           </div>
         )}
 
@@ -82,9 +119,7 @@ export default function PropertyDetail({ params }: { params: { id?: string } }) 
             <Database size={48} className="text-[#3b494b]" />
             <div>
               <h2 className="text-xl font-display uppercase mb-2 text-[#849495]">No Record Data Available</h2>
-              <p className="text-xs text-[#3b494b] max-w-md">
-                {error}
-              </p>
+              <p className="text-xs text-[#3b494b] max-w-md">{error}</p>
             </div>
             <Link 
               href="/upload"
@@ -106,9 +141,9 @@ export default function PropertyDetail({ params }: { params: { id?: string } }) 
                 <div className="glass-panel p-8 border border-[#3b494b]/40 bg-[#1c1b1b]/50">
                    <h2 className="text-xl font-display uppercase text-[#00f0ff] mb-6 border-b border-[#3b494b]/40 pb-2">Core Land Intelligence</h2>
                    
-                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                      <div className="flex flex-col gap-1">
-                         <span className="text-[10px] text-[#849495] tracking-[0.2em] font-bold uppercase">Owner Name</span>
+                   <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                      <div className="flex flex-col gap-1 col-span-2 md:col-span-3">
+                         <span className="text-[10px] text-[#849495] tracking-[0.2em] font-bold uppercase flex items-center gap-1"><User size={10}/> Owner Name</span>
                          <span className="text-lg font-display text-[#dbfcff]">{record.owner_name || '—'}</span>
                       </div>
                       <div className="flex flex-col gap-1">
@@ -153,15 +188,15 @@ export default function PropertyDetail({ params }: { params: { id?: string } }) 
                          <span className="text-[10px] text-[#849495] tracking-widest uppercase font-bold">Mutation Entries</span>
                          <span className="text-sm font-mono text-[#dbfcff]">{record.mutation_entries || 'No mutation data'}</span>
                       </div>
-                      <div className="flex flex-col gap-2 p-4 bg-[#111111]/80 border-l-2 border-[#ba1b24]">
-                         <span className="text-[10px] text-[#ba1b24] tracking-widest uppercase font-bold">Encumbrances</span>
-                         <span className="text-sm font-mono text-[#ba1b24]">{record.encumbrances || 'None detected'}</span>
+                      <div className={`flex flex-col gap-2 p-4 bg-[#111111]/80 border-l-2 ${hasEncumbrances ? 'border-[#ba1b24]' : 'border-[#4edea3]'}`}>
+                         <span className={`text-[10px] tracking-widest uppercase font-bold ${hasEncumbrances ? 'text-[#ba1b24]' : 'text-[#4edea3]'}`}>Encumbrances</span>
+                         <span className={`text-sm font-mono ${hasEncumbrances ? 'text-[#ba1b24]' : 'text-[#4edea3]'}`}>{record.encumbrances || 'None detected'}</span>
                       </div>
                    </div>
                 </div>
              </div>
 
-             {/* Right Column - Location & Actions */}
+             {/* Right Column */}
              <div className="flex flex-col gap-6">
                 <div className="glass-panel p-6 border border-[#3b494b]/40 sticky top-24">
                    <h2 className="text-lg font-display uppercase text-[#dbfcff] flex items-center gap-2 mb-6">
@@ -185,6 +220,16 @@ export default function PropertyDetail({ params }: { params: { id?: string } }) 
                          <span className="text-[#849495] text-xs uppercase tracking-widest">Taluka</span>
                          <span className="text-[#dbfcff]">{record.taluka?.replace(/_/g, ' ') || '—'}</span>
                       </div>
+                      <div className="flex justify-between border-b border-[#3b494b]/20 pb-2">
+                         <span className="text-[#849495] text-xs uppercase tracking-widest">Record</span>
+                         <span className="text-[#00f0ff] text-xs">{record.message || '—'}</span>
+                      </div>
+                      <div className="flex justify-between pb-2">
+                         <span className="text-[#849495] text-xs uppercase tracking-widest">Status</span>
+                         <span className={`text-xs font-bold uppercase ${record.status === 'SUCCESS' ? 'text-[#4edea3]' : 'text-[#ba1b24]'}`}>
+                           {record.status || '—'}
+                         </span>
+                      </div>
                    </div>
 
                    <div className="mt-6 flex flex-col gap-3">
@@ -192,7 +237,7 @@ export default function PropertyDetail({ params }: { params: { id?: string } }) 
                         href="/upload"
                         className="w-full py-3 text-center text-[#0a0a0a] bg-[#4edea3] hover:bg-[#dbfcff] text-[10px] font-bold tracking-[0.2em] uppercase transition-colors"
                       >
-                        Re-fetch via Title Scanner
+                        Search Another Record
                       </Link>
                       <Link 
                         href="/compliance"
@@ -203,7 +248,6 @@ export default function PropertyDetail({ params }: { params: { id?: string } }) 
                    </div>
                 </div>
              </div>
-             
           </div>
         )}
       </div>
