@@ -13,7 +13,7 @@ export default function Dashboard() {
 
   const [showIngest, setShowIngest] = useState(false);
   const [district, setDistrict] = useState('Ahmedabad');
-  const [taluka, setTaluka] = useState('Ahmedabad_City');
+  const [taluka, setTaluka] = useState('CITY');
   const [village, setVillage] = useState('Navrangpura');
   const [surveyNo, setSurveyNo] = useState('1');
   const [isFetching, setIsFetching] = useState(false);

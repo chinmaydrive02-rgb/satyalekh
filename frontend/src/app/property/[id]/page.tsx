@@ -13,7 +13,7 @@ export default function PropertyDetail({ params }: { params: { id?: string } }) 
   
   // Extract location context from URL params (set by SearchWidget)
   const urlDistrict = searchParams.get('district') || 'Ahmedabad';
-  const urlTaluka = searchParams.get('taluka') || 'Ahmedabad_City';
+  const urlTaluka = searchParams.get('taluka') || 'CITY';
   const urlVillage = searchParams.get('village') || 'Navrangpura';
   
   const [record, setRecord] = useState<any>(null);

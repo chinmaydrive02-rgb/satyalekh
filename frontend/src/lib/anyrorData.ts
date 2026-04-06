@@ -3,7 +3,7 @@
 
 export const ANYROR_DATASET: Record<string, Record<string, Record<string, string[]>>> = {
   Ahmedabad: {
-    Ahmedabad_City: { "Navrangpura": ["1", "5", "8"], "Ellisbridge": ["10", "15"], "Paldi": ["22", "33"] },
+    CITY: { "Navrangpura": ["1", "5", "8"], "Ellisbridge": ["10", "15"], "Paldi": ["22", "33"] },
     Daskroi: { "Bopal": ["88", "92", "110", "145"], "Ghuma": ["14", "19", "27"], "Aslali": ["50", "60"] },
     Sanand: { "Sanand Rural": ["12", "45", "88", "102"], "Chekhla": ["5", "18", "22", "39"], "Shela": ["25", "30", "41", "55"] },
     Dholera: { "Dholera SIR": ["101", "102"], "Bavaliyari": ["12", "14"], "Pipali": ["5"] },

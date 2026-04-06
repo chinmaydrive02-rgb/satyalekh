@@ -45,7 +45,7 @@ export default function DocumentUpload() {
   // Automation State — mirrors AnyROR exactly
   const [recordType, setRecordType] = useState('OLD_SCAN_712');
   const [district, setDistrict] = useState('Ahmedabad');
-  const [taluka, setTaluka] = useState('Ahmedabad_City');
+  const [taluka, setTaluka] = useState('CITY');
   const [village, setVillage] = useState('Navrangpura');
   const [surveyNo, setSurveyNo] = useState('1');
   const [ownerName, setOwnerName] = useState('');

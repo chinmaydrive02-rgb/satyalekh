@@ -6,7 +6,7 @@ import { ANYROR_DATASET } from '@/lib/anyrorData';
 
 export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: any) => void }) {
   const [district, setDistrict] = useState('Ahmedabad');
-  const [taluka, setTaluka] = useState('Ahmedabad_City');
+  const [taluka, setTaluka] = useState('CITY');
   const [village, setVillage] = useState('Navrangpura');
   const [surveyNo, setSurveyNo] = useState('');
 
