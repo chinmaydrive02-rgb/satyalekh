@@ -5,10 +5,6 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  // Suppress ESLint errors during build (allows Vercel deployment)
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   // Suppress TypeScript errors during build
   typescript: {
     ignoreBuildErrors: true,
