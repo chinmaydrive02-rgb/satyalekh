@@ -2,43 +2,22 @@
 
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
-import { ANYROR_DATASET } from '@/lib/anyrorData';
 
 export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: any) => void }) {
-  const [district, setDistrict] = useState('Ahmedabad');
-  const [taluka, setTaluka] = useState('CITY');
-  const [village, setVillage] = useState('Navrangpura');
+  const [district, setDistrict] = useState('');
+  const [taluka, setTaluka] = useState('');
+  const [village, setVillage] = useState('');
   const [surveyNo, setSurveyNo] = useState('');
-
-  const handleDistrictChange = (d: string) => {
-    setDistrict(d);
-    const firstTaluka = Object.keys(ANYROR_DATASET[d] || {})[0] || "";
-    setTaluka(firstTaluka);
-    const firstVillage = Object.keys(ANYROR_DATASET[d]?.[firstTaluka] || {})[0] || "";
-    setVillage(firstVillage);
-    setSurveyNo('');
-  };
-
-  const handleTalukaChange = (t: string) => {
-    setTaluka(t);
-    const firstVillage = Object.keys(ANYROR_DATASET[district]?.[t] || {})[0] || "";
-    setVillage(firstVillage);
-    setSurveyNo('');
-  };
-
-  const handleVillageChange = (v: string) => {
-    setVillage(v);
-    setSurveyNo('');
-  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!surveyNo.trim()) return;
-    // Navigate to property detail page — real data comes from backend
-    window.location.href = `/property/SURVEY-${surveyNo.trim()}?district=${district}&taluka=${taluka}&village=${village}`;
+    if (!surveyNo.trim() || !district.trim() || !taluka.trim() || !village.trim()) return;
+    // Navigate to property detail page â real data comes from backend
+    window.location.href = `/property/SURVEY-${surveyNo.trim()}?district=${encodeURIComponent(district.trim())}&taluka=${encodeURIComponent(taluka.trim())}&village=${encodeURIComponent(village.trim())}`;
   };
 
-  const selectClass = "w-full px-4 py-3 bg-[#1c1b1b] border-b-2 border-[#3b494b] text-[#dbfcff] text-sm font-sans uppercase focus:outline-none focus:border-[#00f0ff] transition-colors cursor-pointer";
+  const isFormValid = district.trim() && taluka.trim() && village.trim() && surveyNo.trim();
+
   const inputClass = "w-full px-4 py-3 bg-[#1c1b1b] border-b-2 border-[#3b494b] text-[#dbfcff] text-sm font-mono focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]";
 
   return (
@@ -53,46 +32,43 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
       <form onSubmit={handleSearch} className="flex flex-col gap-4">
         {/* District */}
         <div className="flex flex-col gap-2">
-           <label className="text-[#849495] text-[10px] font-bold tracking-widest uppercase">District (જીલ્લો)</label>
-           <select 
-             value={district} 
-             onChange={e => handleDistrictChange(e.target.value)}
-             style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }}
-             className={selectClass}
-           >
-             {Object.keys(ANYROR_DATASET).map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
-           </select>
+           <label className="text-[#849495] text-[10px] font-bold tracking-widest uppercase">District (àªà«àª²à«àª²à«)</label>
+           <input 
+             type="text"
+             value={district}
+             onChange={e => setDistrict(e.target.value)}
+             placeholder="e.g. Ahmedabad"
+             className={inputClass}
+           />
         </div>
 
         {/* Taluka */}
         <div className="flex flex-col gap-2">
-           <label className="text-[#849495] text-[10px] font-bold tracking-widest uppercase">Taluka (તાલુકો)</label>
-           <select 
-             value={taluka} 
-             onChange={e => handleTalukaChange(e.target.value)}
-             style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }}
-             className={selectClass}
-           >
-             {Object.keys(ANYROR_DATASET[district] || {}).map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-           </select>
+           <label className="text-[#849495] text-[10px] font-bold tracking-widest uppercase">Taluka (àª¤àª¾àª²à«àªà«)</label>
+           <input 
+             type="text"
+             value={taluka}
+             onChange={e => setTaluka(e.target.value)}
+             placeholder="e.g. Daskroi"
+             className={inputClass}
+           />
         </div>
 
         {/* Village */}
         <div className="flex flex-col gap-2">
-           <label className="text-[#849495] text-[10px] font-bold tracking-widest uppercase">Village (ગામ)</label>
-           <select 
-             value={village} 
-             onChange={e => handleVillageChange(e.target.value)}
-             style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }}
-             className={selectClass}
-           >
-             {Object.keys(ANYROR_DATASET[district]?.[taluka] || {}).map(v => <option key={v} value={v}>{v}</option>)}
-           </select>
+           <label className="text-[#849495] text-[10px] font-bold tracking-widest uppercase">Village (àªàª¾àª®)</label>
+           <input 
+             type="text"
+             value={village}
+             onChange={e => setVillage(e.target.value)}
+             placeholder="e.g. Bopal"
+             className={inputClass}
+           />
         </div>
 
-        {/* Survey No — Free text input */}
+        {/* Survey No â Free text input */}
         <div className="flex flex-col gap-2">
-           <label className="text-[#849495] text-[10px] font-bold tracking-widest uppercase">Survey / Block No. (સર્વે નંબર)</label>
+           <label className="text-[#849495] text-[10px] font-bold tracking-widest uppercase">Survey / Block No. (àª¸àª°à«àªµà« àª¨àªàª¬)</label>
            <input 
              type="text"
              value={surveyNo}
@@ -104,7 +80,7 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
 
         <button 
           type="submit"
-          disabled={!surveyNo.trim()}
+          disabled={!isFormValid}
           className="mt-2 w-full h-[48px] bg-gradient-to-br from-[#0bd9e4] to-[#00f0ff] hover:brightness-110 active:brightness-90 text-[#002022] font-bold text-sm uppercase tracking-[0.15em] transition-all relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <span className="relative z-10 flex items-center justify-center gap-2"><Search size={14}/> Initialize Vector</span>
