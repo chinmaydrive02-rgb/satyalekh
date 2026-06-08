@@ -6,10 +6,13 @@ from pydantic import BaseModel
 from typing import Optional
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="Satya-Lekh API")
 
-# Allow CORS for Next.js app (local + Vercel)
+# Allow CORS for Next.js app (local + Vercel + Render)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -124,15 +127,25 @@ async def fetch_anyror_endpoint(request: AnyRORRequest):
     Automated RPA endpoint to scrape AnyROR 7/12 Land Records.
     Uses Playwright + Gemini Vision for CAPTCHA solving and data extraction.
     """
+    # Validate inputs
+    if not request.district or not request.district.strip():
+        raise HTTPException(status_code=400, detail="District is required")
+    if not request.taluka or not request.taluka.strip():
+        raise HTTPException(status_code=400, detail="Taluka is required")
+    if not request.village or not request.village.strip():
+        raise HTTPException(status_code=400, detail="Village is required")
+    if not request.survey_no or not request.survey_no.strip():
+        raise HTTPException(status_code=400, detail="Survey number is required")
+
     result = await scrape_anyror_data(
-        district=request.district,
-        taluka=request.taluka,
-        village=request.village,
-        survey_number=request.survey_no,
+        district=request.district.strip(),
+        taluka=request.taluka.strip(),
+        village=request.village.strip(),
+        survey_number=request.survey_no.strip(),
         record_type=request.record_type or "OLD_SCAN_712"
     )
     if "error" in result:
-        raise HTTPException(status_code=500, detail=result["error"])
+        raise HTTPException(status_code=422, detail=result["error"])
     
     return result
 
@@ -141,4 +154,33 @@ async def fetch_anyror_endpoint(request: AnyRORRequest):
 
 @app.get("/")
 def read_root():
-    return {"status": "Satya-Lekh API is running", "version": "2.0"}
+    return {"status": "Satya-Lekh API is running", "version": "2.1"}
+
+@app.get("/health")
+async def health_check():
+    """Comprehensive health check — verifies Playwright, Gemini, and env vars."""
+    checks = {}
+    
+    # Check env vars
+    checks["google_api_key"] = "SET" if os.getenv("GOOGLE_API_KEY") else "MISSING"
+    
+    # Check Playwright
+    try:
+        from playwright.async_api import async_playwright
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            await browser.close()
+        checks["playwright"] = "OK"
+    except Exception as e:
+        checks["playwright"] = f"ERROR: {str(e)[:100]}"
+    
+    # Check Gemini
+    try:
+        from scraper import get_gemini_client
+        client = get_gemini_client()
+        checks["gemini"] = "OK"
+    except Exception as e:
+        checks["gemini"] = f"ERROR: {str(e)[:100]}"
+    
+    all_ok = all(v in ("OK", "SET") for v in checks.values())
+    return {"healthy": all_ok, "checks": checks}
