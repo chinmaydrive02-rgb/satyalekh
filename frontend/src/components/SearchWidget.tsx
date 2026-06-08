@@ -33,12 +33,13 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!surveyNo) return;
+    if (!surveyNo.trim()) return;
     // Navigate to property detail page — real data comes from backend
-    window.location.href = `/property/SURVEY-${surveyNo}?district=${district}&taluka=${taluka}&village=${village}`;
+    window.location.href = `/property/SURVEY-${surveyNo.trim()}?district=${district}&taluka=${taluka}&village=${village}`;
   };
 
   const selectClass = "w-full px-4 py-3 bg-[#1c1b1b] border-b-2 border-[#3b494b] text-[#dbfcff] text-sm font-sans uppercase focus:outline-none focus:border-[#00f0ff] transition-colors cursor-pointer";
+  const inputClass = "w-full px-4 py-3 bg-[#1c1b1b] border-b-2 border-[#3b494b] text-[#dbfcff] text-sm font-mono focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]";
 
   return (
     <div className="glass-panel w-[320px] p-6 flex flex-col gap-5">
@@ -56,7 +57,7 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
            <select 
              value={district} 
              onChange={e => handleDistrictChange(e.target.value)}
-             style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+             style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }}
              className={selectClass}
            >
              {Object.keys(ANYROR_DATASET).map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
@@ -69,7 +70,7 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
            <select 
              value={taluka} 
              onChange={e => handleTalukaChange(e.target.value)}
-             style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+             style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }}
              className={selectClass}
            >
              {Object.keys(ANYROR_DATASET[district] || {}).map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
@@ -82,30 +83,28 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
            <select 
              value={village} 
              onChange={e => handleVillageChange(e.target.value)}
-             style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+             style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }}
              className={selectClass}
            >
              {Object.keys(ANYROR_DATASET[district]?.[taluka] || {}).map(v => <option key={v} value={v}>{v}</option>)}
            </select>
         </div>
 
-        {/* Survey No */}
+        {/* Survey No — Free text input */}
         <div className="flex flex-col gap-2">
            <label className="text-[#849495] text-[10px] font-bold tracking-widest uppercase">Survey / Block No. (સર્વે નંબર)</label>
-           <select 
-             value={surveyNo} 
+           <input 
+             type="text"
+             value={surveyNo}
              onChange={e => setSurveyNo(e.target.value)}
-             style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
-             className={selectClass}
-           >
-             <option value="">-- Select --</option>
-             {(ANYROR_DATASET[district]?.[taluka]?.[village] || []).map(s => <option key={s} value={s}>{s}</option>)}
-           </select>
+             placeholder="Enter survey number (e.g. 123)"
+             className={inputClass}
+           />
         </div>
 
         <button 
           type="submit"
-          disabled={!surveyNo}
+          disabled={!surveyNo.trim()}
           className="mt-2 w-full h-[48px] bg-gradient-to-br from-[#0bd9e4] to-[#00f0ff] hover:brightness-110 active:brightness-90 text-[#002022] font-bold text-sm uppercase tracking-[0.15em] transition-all relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <span className="relative z-10 flex items-center justify-center gap-2"><Search size={14}/> Initialize Vector</span>

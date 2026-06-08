@@ -47,7 +47,7 @@ export default function DocumentUpload() {
   const [district, setDistrict] = useState('Ahmedabad');
   const [taluka, setTaluka] = useState('CITY');
   const [village, setVillage] = useState('Navrangpura');
-  const [surveyNo, setSurveyNo] = useState('1');
+  const [surveyNo, setSurveyNo] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [autoResult, setAutoResult] = useState<any>(null);
 
@@ -64,19 +64,16 @@ export default function DocumentUpload() {
     setTaluka(firstTaluka);
     const firstVillage = Object.keys(ANYROR_DATASET[d]?.[firstTaluka] || {})[0] || "";
     setVillage(firstVillage);
-    setSurveyNo(ANYROR_DATASET[d]?.[firstTaluka]?.[firstVillage]?.[0] || "");
   };
 
   const handleTalukaChange = (t: string) => {
     setTaluka(t);
     const firstVillage = Object.keys(ANYROR_DATASET[district]?.[t] || {})[0] || "";
     setVillage(firstVillage);
-    setSurveyNo(ANYROR_DATASET[district]?.[t]?.[firstVillage]?.[0] || "");
   };
 
   const handleVillageChange = (v: string) => {
     setVillage(v);
-    setSurveyNo(ANYROR_DATASET[district]?.[taluka]?.[v]?.[0] || "");
   };
 
   // Get dynamic label for the last field based on record type
@@ -313,7 +310,7 @@ export default function DocumentUpload() {
               <select 
                 value={recordType} 
                 onChange={e => setRecordType(e.target.value)} 
-                style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+                style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }}
                 className={selectClass}
               >
                 {RECORD_TYPES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
@@ -326,7 +323,7 @@ export default function DocumentUpload() {
                 <select 
                   value={district} 
                   onChange={e => handleDistrictChange(e.target.value)} 
-                  style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+                  style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }}
                   className={selectClass}
                 >
                   {Object.keys(ANYROR_DATASET).map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
@@ -337,7 +334,7 @@ export default function DocumentUpload() {
                 <select 
                   value={taluka} 
                   onChange={e => handleTalukaChange(e.target.value)} 
-                  style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+                  style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }}
                   className={selectClass}
                 >
                   {Object.keys(ANYROR_DATASET[district] || {}).map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
@@ -348,7 +345,7 @@ export default function DocumentUpload() {
                 <select 
                   value={village} 
                   onChange={e => handleVillageChange(e.target.value)} 
-                  style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
+                  style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }}
                   className={selectClass}
                 >
                   {Object.keys(ANYROR_DATASET[district]?.[taluka] || {}).map(v => <option key={v} value={v}>{v}</option>)}
@@ -373,14 +370,13 @@ export default function DocumentUpload() {
                   <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">
                     {getEntryFieldLabel()}
                   </label>
-                  <select 
-                    value={surveyNo} 
-                    onChange={e => setSurveyNo(e.target.value)} 
-                    style={{ appearance: 'auto', WebkitAppearance: 'auto' }}
-                    className={selectClass}
-                  >
-                    {(ANYROR_DATASET[district]?.[taluka]?.[village] || []).map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <input 
+                    type="text"
+                    value={surveyNo}
+                    onChange={e => setSurveyNo(e.target.value)}
+                    placeholder="Enter survey/block number (e.g. 123)"
+                    className="w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]"
+                  />
                 </div>
               )}
             </div>
