@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import json
+import asyncio
 from pydantic import BaseModel
 from typing import Optional
 from google import genai
@@ -21,8 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# ─── Manual OCR Upload Endpoint ───────────────────────────────────────────
+# âââ Manual OCR Upload Endpoint âââââââââââââââââââââââââââââââââââââââââââ
 
 class AnalysisResult(BaseModel):
     owner_name: str
@@ -41,7 +41,7 @@ async def analyze_record(file: UploadFile = File(...)):
     """
     if not file.content_type.startswith("image/") and file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Only image or PDF files are supported.")
-        
+
     try:
         contents = await file.read()
         client = genai.Client()
@@ -52,14 +52,14 @@ async def analyze_record(file: UploadFile = File(...)):
             "Translate the content to English and return ONLY valid JSON in the "
             "following format:\n"
             "{\n"
-            "  \"owner_name\": \"...\",\n"
-            "  \"survey_no\": \"...\",\n"
-            "  \"total_area\": \"...\",\n"
-            "  \"tenure_type\": \"...\",\n"
-            "  \"encumbrances\": \"...\"\n"
+            " \"owner_name\": \"...\",\n"
+            " \"survey_no\": \"...\",\n"
+            " \"total_area\": \"...\",\n"
+            " \"tenure_type\": \"...\",\n"
+            " \"encumbrances\": \"...\"\n"
             "}"
         )
-        
+
         document = types.Part.from_bytes(
             data=contents,
             mime_type=file.content_type,
@@ -69,33 +69,33 @@ async def analyze_record(file: UploadFile = File(...)):
             model='gemini-2.5-flash',
             contents=[prompt, document]
         )
-        
+
         json_text = response.text
         if json_text.startswith("```json"):
             json_text = json_text[7:-3]
         elif json_text.startswith("```"):
             json_text = json_text[3:-3]
-            
+
         data = json.loads(json_text)
-        
+
         # Risk Logic
         tenure = data.get("tenure_type", "").lower()
         encum = data.get("encumbrances", "").strip()
-        
+
         risk_level = "GREEN"
         risk_reason = "Clear Title"
-        
+
         if "new" in tenure or "navi" in tenure:
             risk_level = "YELLOW"
             risk_reason = "Restricted Development / New Tenure"
-        
-        if encum and encum.lower() not in ["none", "null", "", "n/a", "no", "nil", "—"]:
+
+        if encum and encum.lower() not in ["none", "null", "", "n/a", "no", "nil", "â"]:
             risk_level = "RED"
             risk_reason = "Mortgaged or Encumbered"
-            
+
         if ("new" in tenure or "navi" in tenure) and risk_level == "RED":
             risk_reason = "Restricted & Mortgaged"
-        
+
         return {
             "owner_name": data.get("owner_name", "Unknown"),
             "survey_no": data.get("survey_no", "Unknown"),
@@ -109,8 +109,7 @@ async def analyze_record(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
-
-# ─── Automated AnyROR RPA Endpoint ────────────────────────────────────────
+# âââ Automated AnyROR RPA Endpoint ââââââââââââââââââââââââââââââââââââââââ
 
 from scraper import scrape_anyror_data
 
@@ -127,7 +126,6 @@ async def fetch_anyror_endpoint(request: AnyRORRequest):
     Automated RPA endpoint to scrape AnyROR 7/12 Land Records.
     Uses Playwright + Gemini Vision for CAPTCHA solving and data extraction.
     """
-    # Validate inputs
     if not request.district or not request.district.strip():
         raise HTTPException(status_code=400, detail="District is required")
     if not request.taluka or not request.taluka.strip():
@@ -146,25 +144,67 @@ async def fetch_anyror_endpoint(request: AnyRORRequest):
     )
     if "error" in result:
         raise HTTPException(status_code=422, detail=result["error"])
-    
+
     return result
 
+# âââ Location Cascade Endpoints âââââââââââââââââââââââââââââââââââââââââââ
+# These mirror the AnyROR dropdown hierarchy so the frontend can show
+# exact government-portal options instead of free-text guessing.
 
-# ─── Health Check ──────────────────────────────────────────────────────────
+from gujarat_data import get_districts as _get_districts, get_talukas as _get_talukas
+from scraper import fetch_villages_from_anyror as _fetch_villages
+
+@app.get("/districts")
+def list_districts():
+    """Return all 33 Gujarat districts (sorted)."""
+    return {"districts": _get_districts()}
+
+@app.get("/talukas/{district}")
+def list_talukas(district: str):
+    """Return talukas for a given district (from static data)."""
+    talukas = _get_talukas(district)
+    if not talukas:
+        raise HTTPException(status_code=404, detail=f"No talukas found for district '{district}'")
+    return {"talukas": talukas}
+
+@app.get("/villages")
+async def list_villages(district: str, taluka: str, record_type: str = "OLD_SCAN_712"):
+    """
+    Fetch village list directly from the live AnyROR portal via Playwright.
+    Returns village names exactly as they appear in the government dropdown â
+    so the frontend can pass them back verbatim for a guaranteed match.
+    """
+    try:
+        villages = await asyncio.wait_for(
+            _fetch_villages(district, taluka, record_type),
+            timeout=60.0
+        )
+        if not villages:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No villages found for '{taluka}', '{district}'. Check district/taluka spelling."
+            )
+        return {"villages": villages}
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="AnyROR portal timed out fetching villages. Try again.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# âââ Health Check ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 @app.get("/")
 def read_root():
-    return {"status": "Satya-Lekh API is running", "version": "2.1"}
+    return {"status": "Satya-Lekh API is running", "version": "2.2"}
 
 @app.get("/health")
 async def health_check():
-    """Comprehensive health check — verifies Playwright, Gemini, and env vars."""
+    """Comprehensive health check â verifies Playwright, Gemini, and env vars."""
     checks = {}
-    
-    # Check env vars
+
     checks["google_api_key"] = "SET" if os.getenv("GOOGLE_API_KEY") else "MISSING"
-    
-    # Check Playwright
+
     try:
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
@@ -173,14 +213,13 @@ async def health_check():
         checks["playwright"] = "OK"
     except Exception as e:
         checks["playwright"] = f"ERROR: {str(e)[:100]}"
-    
-    # Check Gemini
+
     try:
         from scraper import get_gemini_client
         client = get_gemini_client()
         checks["gemini"] = "OK"
     except Exception as e:
         checks["gemini"] = f"ERROR: {str(e)[:100]}"
-    
+
     all_ok = all(v in ("OK", "SET") for v in checks.values())
     return {"healthy": all_ok, "checks": checks}
