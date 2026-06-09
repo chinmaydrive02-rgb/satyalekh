@@ -18,9 +18,9 @@ def get_gemini_client():
     return _gemini_client
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# AnyROR Page Element IDs — verified from https://anyror.gujarat.gov.in/LandRecordRural.aspx
-# ──────────────────────────────────────────────────────────────────────────────
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# AnyROR Page Element IDs â verified from https://anyror.gujarat.gov.in/LandRecordRural.aspx
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 ELEMENTS = {
     "record_type":    "#ContentPlaceHolder1_drpLandRecord",
     "district":       "#ContentPlaceHolder1_ddlDistrict",
@@ -37,27 +37,24 @@ ELEMENTS = {
     "refresh_captcha": "#ContentPlaceHolder1_lb_refresh_1",
 }
 
-# Record type dropdown values — verified from live portal HTML
-# The values are the <option value="..."> attributes
+# Record type dropdown values â verified from live portal HTML
 RECORD_TYPE_MAP = {
-    "VF7":           "1",   # VF-7 SURVEY NO DETAILS
-    "VF8A":          "2",   # VF-8A KHATA DETAILS
-    "VF6":           "3",   # VF-6 ENTRY DETAILS
-    "135D":          "4",   # 135-D NOTICE FOR MUTATION
-    "NEW_FROM_OLD":  "5",   # NEW SURVEY NO FROM OLD FOR PROMULGATED VILLAGE
-    "OLD_SCAN_6":    "6",   # OLD SCANNED VF-6 ENTRY DETAILS
-    "ENTRY_LIST":    "7",   # ENTRY LIST BY MONTH-YEAR
-    "INTEGRATED":    "8",   # INTEGRATED SURVEY NO DETAILS
-    "REVENUE_CASE":  "9",   # REVENUE CASE DETAILS
-    "OWNER_NAME":    "10",  # KNOW KHATA BY OWNER NAME
-    "OLD_SCAN_712":  "11",  # OLD SCANNED VF-7/12 DETAILS
-    "E_CHAVDI":      "13",  # e-CHAVDI
-    "CLOSED_SURVEY": "15",  # KNOW CLOSED SURVEY NO DETAIL
-    "OTHER_LANG":    "16",  # KNOW OWNER DETAILS IN OTHER LANGUAGE
+    "VF7":           "1",
+    "VF8A":          "2",
+    "VF6":           "3",
+    "135D":          "4",
+    "NEW_FROM_OLD":  "5",
+    "OLD_SCAN_6":    "6",
+    "ENTRY_LIST":    "7",
+    "INTEGRATED":    "8",
+    "REVENUE_CASE":  "9",
+    "OWNER_NAME":    "10",
+    "OLD_SCAN_712":  "11",
+    "E_CHAVDI":      "13",
+    "CLOSED_SURVEY": "15",
+    "OTHER_LANG":    "16",
 }
 
-# Which field type each record type uses for its search parameter
-# "dropdown" = ddlSurveyNo, "text" = txtNo, "owner" = txtownername
 FIELD_TYPE_MAP = {
     "VF7":           "dropdown",
     "VF8A":          "text",
@@ -75,49 +72,47 @@ FIELD_TYPE_MAP = {
     "OTHER_LANG":    "owner",
 }
 
-# District name mapping: English -> Gujarati (as they appear in the AnyROR dropdown)
 DISTRICT_MAP = {
-    "kutch": "કચ્છ", "kachchh": "કચ્છ",
-    "banaskantha": "બનાસકાંઠા",
-    "patan": "પાટણ",
-    "mehsana": "મહેસાણા",
-    "sabarkantha": "સાબરકાંઠા",
-    "gandhinagar": "ગાંધીનગર",
-    "ahmedabad": "અમદાવાદ", "amdavad": "અમદાવાદ",
-    "surendranagar": "સુરેન્દ્રનગર",
-    "rajkot": "રાજકોટ",
-    "jamnagar": "જામનગર",
-    "porbandar": "પોરબંદર",
-    "junagadh": "જુનાગઢ",
-    "amreli": "અમરેલી",
-    "bhavnagar": "ભાવનગર",
-    "anand": "આણંદ",
-    "kheda": "ખેડા",
-    "panchmahal": "પંચમહાલ",
-    "dahod": "દાહોદ",
-    "vadodara": "વડોદરા", "baroda": "વડોદરા",
-    "narmada": "નર્મદા",
-    "bharuch": "ભરુચ",
-    "surat": "સુરત",
-    "dang": "ડાંગ", "dangs": "ડાંગ",
-    "navsari": "નવસારી",
-    "valsad": "વલસાડ",
-    "tapi": "તાપી",
-    "devbhumi dwarka": "દેવભુમિ દ્વારકા", "dwarka": "દેવભુમિ દ્વારકા",
-    "morbi": "મોરબી",
-    "gir somnath": "ગીર સોમનાથ",
-    "botad": "બોટાદ",
-    "aravalli": "અરવલ્લી",
-    "mahisagar": "મહિસાગર",
-    "chhota udaipur": "છોટાઉદેપુર", "chhotaudepur": "છોટાઉદેપુર",
-    "vav tharad": "વાવ-થરાદ",
+    "kutch": "àªàªà«àª", "kachchh": "àªàªà«àª",
+    "banaskantha": "àª¬àª¨àª¾àª¸àªàª¾àªàª àª¾",
+    "patan": "àªªàª¾àªàª£",
+    "mehsana": "àª®àª¹à«àª¸àª¾àª£àª¾",
+    "sabarkantha": "àª¸àª¾àª¬àª°àªàª¾àªàª àª¾",
+    "gandhinagar": "àªàª¾àªàª§à«àª¨àªàª°",
+    "ahmedabad": "àªàª®àª¦àª¾àªµàª¾àª¦", "amdavad": "àªàª®àª¦àª¾àªµàª¾àª¦",
+    "surendranagar": "àª¸à«àª°à«àª¨à«àª¦à«àª°àª¨àªàª°",
+    "rajkot": "àª°àª¾àªàªà«àª",
+    "jamnagar": "àªàª¾àª®àª¨àªàª°",
+    "porbandar": "àªªà«àª°àª¬àªàª¦àª°",
+    "junagadh": "àªà«àª¨àª¾àªàª¢",
+    "amreli": "àªàª®àª°à«àª²à«",
+    "bhavnagar": "àª­àª¾àªµàª¨àªàª°",
+    "anand": "àªàª£àªàª¦",
+    "kheda": "àªà«àª¡àª¾",
+    "panchmahal": "àªªàªàªàª®àª¹àª¾àª²",
+    "dahod": "àª¦àª¾àª¹à«àª¦",
+    "vadodara": "àªµàª¡à«àª¦àª°àª¾", "baroda": "àªµàª¡à«àª¦àª°àª¾",
+    "narmada": "àª¨àª°à«àª®àª¦àª¾",
+    "bharuch": "àª­àª°à«àª",
+    "surat": "àª¸à«àª°àª¤",
+    "dang": "àª¡àª¾àªàª", "dangs": "àª¡àª¾àªàª",
+    "navsari": "àª¨àªµàª¸àª¾àª°à«",
+    "valsad": "àªµàª²àª¸àª¾àª¡",
+    "tapi": "àª¤àª¾àªªà«",
+    "devbhumi dwarka": "àª¦à«àªµàª­à«àª®àª¿ àª¦à«àªµàª¾àª°àªàª¾", "dwarka": "àª¦à«àªµàª­à«àª®àª¿ àª¦à«àªµàª¾àª°àªàª¾",
+    "morbi": "àª®à«àª°àª¬à«",
+    "gir somnath": "àªà«àª° àª¸à«àª®àª¨àª¾àª¥",
+    "botad": "àª¬à«àªàª¾àª¦",
+    "aravalli": "àªàª°àªµàª²à«àª²à«",
+    "mahisagar": "àª®àª¹àª¿àª¸àª¾àªàª°",
+    "chhota udaipur": "àªà«àªàª¾àªàª¦à«àªªà«àª°", "chhotaudepur": "àªà«àªàª¾àªàª¦à«àªªà«àª°",
+    "vav tharad": "àªµàª¾àªµ-àª¥àª°àª¾àª¦",
 }
 
-# Gujarati error phrases that appear in AnyROR when something goes wrong
 GUJARATI_ERROR_PHRASES = [
-    "માહિતી મળી નથી",   # No information found
-    "ઉપલબ્ધ નથી",       # Not available
-    "ડેટા મળ્યો નથી",   # Data not found
+    "àª®àª¾àª¹àª¿àª¤à« àª®àª³à« àª¨àª¥à«",
+    "àªàªªàª²àª¬à«àª§ àª¨àª¥à«",
+    "àª¡à«àªàª¾ àª®àª³à«àª¯à« àª¨àª¥à«",
     "invalid captcha",
     "wrong captcha",
     "no record found",
@@ -126,8 +121,8 @@ GUJARATI_ERROR_PHRASES = [
 ]
 
 GUJARATI_NO_RECORD_PHRASES = [
-    "માહિતી મળી નથી",
-    "ડેટા મળ્યો નથી",
+    "àª®àª¾àª¹àª¿àª¤à« àª®àª³à« àª¨àª¥à«",
+    "àª¡à«àªàª¾ àª®àª³à«àª¯à« àª¨àª¥à«",
     "no record found",
     "record not found",
 ]
@@ -141,7 +136,7 @@ async def solve_captcha_with_gemini(screenshot_bytes: bytes) -> str:
             model='gemini-2.5-flash',
             contents=[
                 "Read the exact text in this CAPTCHA image. "
-                "The CAPTCHA may contain digits, letters, or both — read it exactly as shown. "
+                "The CAPTCHA may contain digits, letters, or both â read it exactly as shown. "
                 "Reply ONLY with the characters you see, with no spaces, no extra words, no punctuation. "
                 "Common patterns: 5-6 digit numbers like '38291', or mixed like 'A3B7C'. "
                 "Output ONLY the CAPTCHA characters.",
@@ -149,7 +144,6 @@ async def solve_captcha_with_gemini(screenshot_bytes: bytes) -> str:
             ]
         )
         solved = response.text.strip().replace(" ", "")
-        # Strip any stray markdown or explanation
         solved = re.sub(r'[`"\']', '', solved).strip()
         print(f"  Gemini CAPTCHA solution: '{solved}'")
         return solved
@@ -160,11 +154,7 @@ async def solve_captcha_with_gemini(screenshot_bytes: bytes) -> str:
 
 async def parse_result_with_gemini_vision(screenshot_bytes: bytes, district: str, taluka: str,
                                            village: str, survey_number: str) -> dict:
-    """
-    Parse AnyROR result using Gemini Vision (screenshot-based).
-    Used for OLD_SCAN_712 and any record type where the result is an image.
-    Also used as a fallback when HTML parsing returns mostly empty fields.
-    """
+    """Parse AnyROR result using Gemini Vision (screenshot-based)."""
     try:
         document = types.Part.from_bytes(data=screenshot_bytes, mime_type="image/png")
         response = get_gemini_client().models.generate_content(
@@ -173,19 +163,10 @@ async def parse_result_with_gemini_vision(screenshot_bytes: bytes, district: str
                 f"""This is a screenshot of a Gujarat government land record (7/12 extract) from the AnyROR portal.
 The user searched for: District={district}, Taluka={taluka}, Village={village}, Survey No={survey_number}.
 
-The document may contain Gujarati (ગુજરાતી) text in a scanned form or table layout.
+The document may contain Gujarati text in a scanned form or table layout.
 Extract ALL visible land record information. Translate Gujarati text to English.
 
-Standard 7/12 (Satbara) fields to look for:
-- Survey number (સર્વે નં / ભૂ.ન.)
-- Owner/cultivator name (ખેડૂત/ધારક નામ)
-- Area (ક્ષેત્ર / વિઘા-ચાલ)
-- Tenure type (ભોગવટ)
-- Land classification / cultivation (ખેતી / ઉઘ.પ.)
-- Mutation entries (ફેરફારો)
-- Encumbrances / liabilities (બોજો)
-
-Return ONLY valid JSON with these fields (use "—" if not visible):
+Return ONLY valid JSON with these fields (use "â" if not visible):
 {{
   "message": "Record found via scanned document",
   "owner_name": "Owner full name in English",
@@ -212,17 +193,16 @@ Return ONLY valid JSON with these fields (use "—" if not visible):
             json_text = json_text[3:]
         if json_text.endswith("```"):
             json_text = json_text[:-3]
-        json_text = json_text.strip()
-        return json.loads(json_text)
+        return json.loads(json_text.strip())
 
     except Exception as e:
         print(f"  Gemini Vision Parse Error: {e}")
         return {
             "message": "Record retrieved (image) but parsing failed",
-            "owner_name": "—", "survey_no": survey_number, "village": village,
-            "district": district, "taluka": taluka, "area": "—",
-            "tenure_type": "—", "cultivation": "—", "mutation_entries": "—",
-            "encumbrances": "—", "jantri_rate": "—", "last_sale": "—"
+            "owner_name": "â", "survey_no": survey_number, "village": village,
+            "district": district, "taluka": taluka, "area": "â",
+            "tenure_type": "â", "cultivation": "â", "mutation_entries": "â",
+            "encumbrances": "â", "jantri_rate": "â", "last_sale": "â"
         }
 
 
@@ -237,13 +217,10 @@ async def parse_result_with_gemini(html: str, district: str, taluka: str, villag
         response = get_gemini_client().models.generate_content(
             model='gemini-2.5-flash',
             contents=[
-                f"""You are analyzing a Gujarat government land record (7/12 extract) HTML page from AnyROR.
+                f"""You are analyzing a Gujarat government land record HTML page from AnyROR.
 The user searched for: District={district}, Taluka={taluka}, Village={village}, Survey No={survey_number}.
 
-Extract ALL available land record information from the HTML below and return as JSON.
-Translate any Gujarati text to English.
-
-Return ONLY valid JSON with these fields (use "—" if a field is not found):
+Return ONLY valid JSON with these fields (use "â" if not found):
 {{
   "message": "Record type description",
   "owner_name": "Owner full name in English",
@@ -272,24 +249,23 @@ HTML content:
             json_text = json_text[3:]
         if json_text.endswith("```"):
             json_text = json_text[:-3]
-        json_text = json_text.strip()
-        return json.loads(json_text)
+        return json.loads(json_text.strip())
 
     except Exception as e:
         print(f"  Gemini Parse Error: {e}")
         return {
             "message": "Record retrieved but parsing failed",
-            "owner_name": "—", "survey_no": survey_number, "village": village,
-            "district": district, "taluka": taluka, "area": "—",
-            "tenure_type": "—", "cultivation": "—", "mutation_entries": "—",
-            "encumbrances": "—", "jantri_rate": "—", "last_sale": "—"
+            "owner_name": "â", "survey_no": survey_number, "village": village,
+            "district": district, "taluka": taluka, "area": "â",
+            "tenure_type": "â", "cultivation": "â", "mutation_entries": "â",
+            "encumbrances": "â", "jantri_rate": "â", "last_sale": "â"
         }
 
 
 def _count_populated_fields(parsed: dict) -> int:
-    """Count how many meaningful fields were actually extracted (not "—")."""
+    """Count how many meaningful fields were actually extracted (not "â")."""
     meaningful_keys = ["owner_name", "area", "tenure_type", "cultivation", "mutation_entries"]
-    return sum(1 for k in meaningful_keys if parsed.get(k, "—") not in ("—", "", None))
+    return sum(1 for k in meaningful_keys if parsed.get(k, "â") not in ("â", "", None))
 
 
 from typing import Optional as Opt
@@ -297,32 +273,27 @@ from typing import Optional as Opt
 def _find_best_option(options_texts: list, target: str) -> Opt[str]:
     """Fuzzy-match a target string against a list of (value, text) tuples."""
     target_lower = target.lower().strip()
-    target_digits = re.sub(r'\D', '', target)  # numeric-only version
+    target_digits = re.sub(r'\D', '', target)
 
-    # 1. Exact match
     for val, text in options_texts:
         if text.lower().strip() == target_lower:
             return val
 
-    # 2. Contains match (target in text, or text in target)
     for val, text in options_texts:
         t = text.lower().strip()
         if target_lower in t or t in target_lower:
             return val
 
-    # 3. Numeric-only match (handles zero-padding: "0123" vs "123", or "123/A" vs "123")
     if target_digits:
         for val, text in options_texts:
             text_digits = re.sub(r'\D', '', text)
             if text_digits == target_digits:
                 return val
-        # Numeric prefix match: survey "123" matches "123 P", "123/A" etc.
         for val, text in options_texts:
             text_digits = re.sub(r'\D', '', text)
             if text_digits and (text_digits.startswith(target_digits) or target_digits.startswith(text_digits)):
                 return val
 
-    # 4. Gujarati district map
     gujarati = DISTRICT_MAP.get(target_lower)
     if gujarati:
         for val, text in options_texts:
@@ -352,56 +323,46 @@ async def _translate_to_gujarati(english_name: str) -> str:
 
 
 async def _wait_for_dropdown_options(page, css_selector: str, min_options: int = 2, timeout_ms: int = 20000):
-    """Wait until a dropdown has at least min_options options (reliable post-ASP.NET-postback wait)."""
+    """Wait until a dropdown has at least min_options options."""
     try:
         escaped = css_selector.replace("'", "\\'")
         await page.wait_for_function(
             f"document.querySelectorAll('{escaped} option').length >= {min_options}",
             timeout=timeout_ms
         )
-        print(f"    ✓ {css_selector} populated with options")
+        print(f"    {css_selector} populated with options")
     except Exception:
-        # Timeout — give a final grace period
-        print(f"    ⚠ Timeout waiting for {css_selector}, adding grace wait...")
+        print(f"    Timeout waiting for {css_selector}, adding grace wait...")
         await page.wait_for_timeout(3000)
 
 
 async def _select_cascading_option(page, selector: str, target: str, field_name: str,
                                     next_selector: str = None) -> bool:
-    """
-    Select an option from a cascading dropdown with fuzzy matching + Gemini translation.
-
-    next_selector: CSS selector of the NEXT dropdown in the cascade.
-                   When provided, waits for that dropdown to have options after selection.
-                   This is more reliable than wait_for_load_state("networkidle") for
-                   ASP.NET __doPostBack partial page updates.
-    """
+    """Select an option from a cascading dropdown with fuzzy matching + Gemini translation."""
     el = page.locator(selector)
     if await el.count() == 0:
-        print(f"    ✗ {field_name} dropdown not found")
+        print(f"    {field_name} dropdown not found")
         return False
 
-    # Gather all current options
     options = await el.locator("option").all()
     options_texts = []
     for opt in options:
         text = (await opt.text_content() or "").strip()
         val = await opt.get_attribute("value") or ""
-        if val and val != "0":  # Skip placeholder
+        if val and val != "0":
             options_texts.append((val, text))
 
     if not options_texts:
-        print(f"    ✗ {field_name} dropdown has no options yet")
+        print(f"    {field_name} dropdown has no options yet")
         return False
 
     best = _find_best_option(options_texts, target)
     if best:
         await el.select_option(value=best)
-        print(f"    ✓ {field_name}: matched value={best}")
+        print(f"    {field_name}: matched value={best}")
         if next_selector:
             await _wait_for_dropdown_options(page, next_selector)
         else:
-            # Final step in cascade — wait for networkidle + grace period
             try:
                 await page.wait_for_load_state("networkidle", timeout=15000)
             except Exception:
@@ -409,8 +370,7 @@ async def _select_cascading_option(page, selector: str, target: str, field_name:
             await page.wait_for_timeout(2500)
         return True
 
-    # Fallback: translate English name to Gujarati using Gemini
-    print(f"    ⚡ {field_name}: no direct match for '{target}', trying Gemini translation...")
+    print(f"    {field_name}: no direct match for '{target}', trying Gemini translation...")
     gujarati_name = await _translate_to_gujarati(target)
     if gujarati_name:
         import difflib
@@ -418,16 +378,11 @@ async def _select_cascading_option(page, selector: str, target: str, field_name:
         highest_ratio = 0.0
 
         for val, text in options_texts:
-            # Strip district annotations like "(અમદાવાદ)" and village codes like " - 123"
             clean_text = text.split('(')[0].split('-')[0].strip()
-
-            # Direct partial match
             if gujarati_name in clean_text or clean_text in gujarati_name:
                 best_match = val
                 highest_ratio = 1.0
                 break
-
-            # Fuzzy match
             ratio = difflib.SequenceMatcher(None, gujarati_name, clean_text).ratio()
             if ratio > highest_ratio:
                 highest_ratio = ratio
@@ -435,7 +390,7 @@ async def _select_cascading_option(page, selector: str, target: str, field_name:
 
         if best_match and highest_ratio > 0.6:
             await el.select_option(value=best_match)
-            print(f"    ✓ {field_name}: Gemini-translated fuzzy match value={best_match} (ratio: {highest_ratio:.2f})")
+            print(f"    {field_name}: Gemini-translated match value={best_match} (ratio: {highest_ratio:.2f})")
             if next_selector:
                 await _wait_for_dropdown_options(page, next_selector)
             else:
@@ -446,9 +401,87 @@ async def _select_cascading_option(page, selector: str, target: str, field_name:
                 await page.wait_for_timeout(2500)
             return True
 
-    print(f"    ✗ {field_name}: no match for '{target}' (even after translation)")
+    print(f"    {field_name}: no match for '{target}' (even after translation)")
     print(f"      Available: {[t for _, t in options_texts[:10]]}")
     return False
+
+
+async def fetch_villages_from_anyror(district: str, taluka: str, record_type: str = "OLD_SCAN_712") -> list:
+    """
+    Navigates AnyROR to populate the village dropdown for a given district+taluka.
+    Returns village names exactly as they appear on the government portal so the
+    frontend can present them verbatim - eliminating all fuzzy-matching errors.
+    """
+    record_val = RECORD_TYPE_MAP.get(record_type, "11")
+    print(f"\n Fetching villages: {district} > {taluka} (record={record_type})")
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--single-process",
+                "--no-zygote",
+            ]
+        )
+        context = await browser.new_context(
+            viewport={"width": 1280, "height": 900},
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            )
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(
+                "https://anyror.gujarat.gov.in/LandRecordRural.aspx",
+                wait_until="domcontentloaded",
+                timeout=45000
+            )
+            await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=20000)
+
+            await page.select_option(ELEMENTS["record_type"], value=record_val)
+            await page.wait_for_timeout(1000)
+
+            if not await _select_cascading_option(
+                page, ELEMENTS["district"], district, "District",
+                next_selector=ELEMENTS["taluka"]
+            ):
+                print(f"  District '{district}' not matched")
+                return []
+
+            if not await _select_cascading_option(
+                page, ELEMENTS["taluka"], taluka.replace("_", " "), "Taluka",
+                next_selector=ELEMENTS["village"]
+            ):
+                print(f"  Taluka '{taluka}' not matched")
+                return []
+
+            village_el = page.locator(ELEMENTS["village"])
+            options = await village_el.locator("option").all()
+            villages = []
+            for opt in options:
+                text = (await opt.text_content() or "").strip()
+                val = (await opt.get_attribute("value") or "").strip()
+                if val and val not in ("0", "") and text:
+                    villages.append(text)
+
+            print(f"  Found {len(villages)} villages for {district} > {taluka}")
+            return villages
+
+        finally:
+            try:
+                await context.close()
+            except Exception:
+                pass
+            try:
+                await browser.close()
+            except Exception:
+                pass
 
 
 async def scrape_anyror_data(
@@ -462,15 +495,6 @@ async def scrape_anyror_data(
     """
     Automates fetching Land Records from AnyROR Gujarat using Playwright.
     Uses Gemini Vision to solve CAPTCHAs and parse results.
-
-    Key improvements over v1:
-    - Screenshot-based Gemini Vision parsing for OLD_SCAN_712 (scanned images)
-    - Explicit cascade dropdown population waits (more reliable than networkidle)
-    - Better survey number matching (numeric normalization, prefix/suffix handling)
-    - Improved CAPTCHA solving prompt (handles alphanumeric)
-    - Gujarati error message detection
-    - Vision parsing fallback when HTML parsing yields sparse results
-    - 120-second overall timeout guard
     """
     print(f"\n{'='*60}")
     print(f"  AnyROR Scraper: {record_type}")
@@ -507,7 +531,6 @@ async def scrape_anyror_data(
                     pass
                 return result
 
-            # ── Step 1: Navigate ──────────────────────────────────────────────
             print("  [1/8] Navigating to AnyROR...")
             nav_ok = False
             for nav_attempt in range(1, 4):
@@ -529,18 +552,13 @@ async def scrape_anyror_data(
                     {"error": "AnyROR portal is not reachable. Check your internet connection."}
                 )
 
-            # Wait for the district dropdown to be populated (page fully loaded)
             await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=20000)
 
-            # ── Step 2: Select Record Type ────────────────────────────────────
             record_val = RECORD_TYPE_MAP.get(record_type, "11")
             print(f"  [2/8] Selecting record type: {record_type} (value={record_val})")
             await page.select_option(ELEMENTS["record_type"], value=record_val)
-            # Record type selection usually doesn't change the district dropdown,
-            # but give the page a moment to respond
             await page.wait_for_timeout(1500)
 
-            # ── Step 3: Select District (Gujarati labels) ─────────────────────
             print(f"  [3/8] Selecting district: {district}")
             if not await _select_cascading_option(
                 page, ELEMENTS["district"], district, "District",
@@ -550,7 +568,6 @@ async def scrape_anyror_data(
                     {"error": f"District '{district}' not found in AnyROR. Try an English name like 'Ahmedabad'."}
                 )
 
-            # ── Step 4: Select Taluka ─────────────────────────────────────────
             print(f"  [4/8] Selecting taluka: {taluka}")
             taluka_clean = taluka.replace("_", " ")
             if not await _select_cascading_option(
@@ -561,10 +578,8 @@ async def scrape_anyror_data(
                     {"error": f"Taluka '{taluka}' not found. Check spelling."}
                 )
 
-            # ── Step 5: Select Village ────────────────────────────────────────
             print(f"  [5/8] Selecting village: {village}")
             field_type = FIELD_TYPE_MAP.get(record_type, "dropdown")
-            # After village, wait for the appropriate input field to appear
             next_sel = ELEMENTS["survey_dropdown"] if field_type == "dropdown" else None
             if not await _select_cascading_option(
                 page, ELEMENTS["village"], village, "Village",
@@ -574,14 +589,12 @@ async def scrape_anyror_data(
                     {"error": f"Village '{village}' not found under taluka '{taluka}'."}
                 )
 
-            # ── Step 6: Enter Survey/Block/Khata/Owner Number ─────────────────
             print(f"  [6/8] Entering search value: {survey_number} (field_type={field_type})")
 
             if field_type == "owner":
                 owner_el = page.locator(ELEMENTS["owner_input"])
                 if await owner_el.count() > 0 and await owner_el.is_visible():
                     await owner_el.fill(survey_number)
-                    print(f"    ✓ Owner name entered")
                 else:
                     entry_el = page.locator(ELEMENTS["entry_input"])
                     if await entry_el.count() > 0:
@@ -591,15 +604,12 @@ async def scrape_anyror_data(
                 entry_el = page.locator(ELEMENTS["entry_input"])
                 if await entry_el.count() > 0 and await entry_el.is_visible():
                     await entry_el.fill(survey_number)
-                    print(f"    ✓ Entry/khata number entered")
                 else:
-                    print(f"    ✗ Text input not found")
+                    print(f"    Text input not found")
 
             else:
-                # Dropdown for survey number — use the same fuzzy matching as other fields
                 survey_el = page.locator(ELEMENTS["survey_dropdown"])
                 if await survey_el.count() > 0 and await survey_el.is_visible():
-                    # Collect all survey options
                     options = await survey_el.locator("option").all()
                     options_texts = []
                     for opt in options:
@@ -611,7 +621,7 @@ async def scrape_anyror_data(
                     best = _find_best_option(options_texts, survey_number)
                     if best:
                         await survey_el.select_option(value=best)
-                        print(f"    ✓ Survey matched")
+                        print(f"    Survey matched")
                     else:
                         avail = [t for _, t in options_texts[:15]]
                         return await _cleanup_and_return(
@@ -619,14 +629,13 @@ async def scrape_anyror_data(
                                       f"Available options (first 15): {avail}"}
                         )
                 else:
-                    print(f"    ✗ Survey dropdown not visible, trying text input fallback")
+                    print(f"    Survey dropdown not visible, trying text input fallback")
                     entry_el = page.locator(ELEMENTS["entry_input"])
                     if await entry_el.count() > 0 and await entry_el.is_visible():
                         await entry_el.fill(survey_number)
 
             await page.wait_for_timeout(500)
 
-            # ── Step 7: CAPTCHA solving loop ──────────────────────────────────
             result_html = ""
             captcha_accepted = False
 
@@ -645,7 +654,6 @@ async def scrape_anyror_data(
                     solved_text = await solve_captcha_with_gemini(captcha_bytes)
 
                     if not solved_text:
-                        print(f"    CAPTCHA solve returned empty, retrying...")
                         continue
 
                     captcha_input = page.locator(ELEMENTS["captcha_input"])
@@ -657,7 +665,6 @@ async def scrape_anyror_data(
                 submit_btn = page.locator(ELEMENTS["submit_btn"])
                 if await submit_btn.count() > 0:
                     await submit_btn.click()
-                    # Wait for page response after submit
                     try:
                         await page.wait_for_load_state("networkidle", timeout=20000)
                     except Exception:
@@ -667,24 +674,22 @@ async def scrape_anyror_data(
                 result_html = await page.content()
                 lower = result_html.lower()
 
-                # Detect CAPTCHA rejection (English and Gujarati)
                 captcha_rejected = (
                     ("invalid" in lower and "captcha" in lower) or
                     ("wrong" in lower and "captcha" in lower) or
                     "invalid captcha" in lower or
-                    "ખોટો captcha" in result_html or
-                    "captcha ખોટો" in result_html
+                    "àªà«àªà« captcha" in result_html or
+                    "captcha àªà«àªà«" in result_html
                 )
 
                 if captcha_rejected:
                     print(f"    CAPTCHA rejected on attempt {attempt}")
                     continue
                 else:
-                    print(f"    ✓ CAPTCHA accepted on attempt {attempt}!")
+                    print(f"    CAPTCHA accepted on attempt {attempt}!")
                     captcha_accepted = True
                     break
 
-            # ── Step 8: Parse result ──────────────────────────────────────────
             if not result_html:
                 return await _cleanup_and_return({"error": "No response from AnyROR portal"})
 
@@ -694,8 +699,6 @@ async def scrape_anyror_data(
                 )
 
             lower_html = result_html.lower()
-
-            # Check for "no record found" (English + Gujarati)
             for phrase in GUJARATI_NO_RECORD_PHRASES:
                 if phrase.lower() in lower_html:
                     return await _cleanup_and_return(
@@ -705,19 +708,15 @@ async def scrape_anyror_data(
             print("  [8/8] Parsing result with Gemini AI...")
 
             if record_type == "OLD_SCAN_712":
-                # The result is a SCANNED IMAGE embedded in the page.
-                # HTML parsing won't capture scanned image content — use vision.
                 print("    Using Gemini Vision for scanned document (OLD_SCAN_712)...")
                 screenshot = await page.screenshot(full_page=True, type="png")
                 parsed = await parse_result_with_gemini_vision(
                     screenshot, district, taluka, village, survey_number
                 )
             else:
-                # For structured records (VF7, VF8A, etc.), try HTML parsing first
                 parsed = await parse_result_with_gemini(
                     result_html, district, taluka, village, survey_number
                 )
-                # If HTML parsing returned mostly empty fields, fall back to vision
                 if _count_populated_fields(parsed) < 2:
                     print("    HTML parse yielded sparse results, falling back to vision...")
                     screenshot = await page.screenshot(full_page=True, type="png")
@@ -727,20 +726,19 @@ async def scrape_anyror_data(
                     if _count_populated_fields(vision_parsed) > _count_populated_fields(parsed):
                         parsed = vision_parsed
 
-            await _cleanup_and_return(None)  # Close browser
+            await _cleanup_and_return(None)
 
             parsed["status"] = "SUCCESS"
-            print(f"  ✓ Done! Owner: {parsed.get('owner_name', '—')}")
+            print(f"  Done! Owner: {parsed.get('owner_name', 'â')}")
             return parsed
 
-    # Wrap the entire scrape in a 120-second timeout guard
     try:
         return await asyncio.wait_for(_run_scrape(), timeout=120.0)
     except asyncio.TimeoutError:
-        print("  ✗ Scraper timed out after 120 seconds")
-        return {"error": "AnyROR scrape timed out. The government portal may be slow — try again."}
+        print("  Scraper timed out after 120 seconds")
+        return {"error": "AnyROR scrape timed out. The government portal may be slow â try again."}
     except Exception as e:
-        print(f"  ✗ Fatal Scraper Error: {e}")
+        print(f"  Fatal Scraper Error: {e}")
         return {"error": str(e)}
 
 
