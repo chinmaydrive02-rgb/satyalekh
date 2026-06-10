@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { UploadCloud, FileText, Loader2, Cpu, ShieldCheck, AlertTriangle, MapPin, User, Calendar, BookmarkPlus, CheckCircle2, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import TopNav from '@/components/TopNav';
-import { API_BASE_URL, getUserEmail, fetchCredits } from '@/lib/api';
+import { API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, fetchConfig } from '@/lib/api';
 import { createClient } from '@/utils/supabase/client';
 
 // Exact AnyROR Record Types from https://anyror.gujarat.gov.in/LandRecordRural.aspx
@@ -166,7 +166,16 @@ export default function DocumentUpload() {
 
     // Credit gate: if payments are enabled on the backend and the user has
     // no credits, redirect to the pricing page before launching the bot.
-    const userEmail = getUserEmail();
+    let userEmail = getUserEmail();
+    const cfg = await fetchConfig();
+    if (cfg?.payments_enabled && !userEmail) {
+      const entered = window.prompt(
+        `Enter your email to claim ${cfg.free_trial_credits} free search${cfg.free_trial_credits === 1 ? '' : 'es'} (no card needed). Credits are linked to your email.`
+      );
+      if (!entered || !entered.includes('@')) return;
+      userEmail = entered.trim().toLowerCase();
+      setUserEmail(userEmail);
+    }
     if (userEmail) {
       const info = await fetchCredits(userEmail);
       if (info?.payments_enabled && info.credits <= 0) {

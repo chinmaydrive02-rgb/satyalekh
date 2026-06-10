@@ -54,3 +54,45 @@ export async function fetchCredits(email: string): Promise<CreditsInfo | null> {
     return null;
   }
 }
+
+// ─── Public config (no email needed) ────────────────────────────────────────
+
+export interface AppConfig {
+  payments_enabled: boolean;
+  free_trial_credits: number;
+  price_single_inr: number;
+  price_pack5_inr: number;
+}
+
+let _configCache: AppConfig | null = null;
+
+export async function fetchConfig(): Promise<AppConfig | null> {
+  if (_configCache) return _configCache;
+  try {
+    const res = await fetch(`${API_BASE_URL}/config`);
+    if (!res.ok) return null;
+    _configCache = (await res.json()) as AppConfig;
+    return _configCache;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Cached survey-number suggestions ───────────────────────────────────────
+// Real survey numbers previously seen on AnyROR for a village (instant).
+
+export async function fetchSurveyOptions(
+  district: string, taluka: string, village: string
+): Promise<string[]> {
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/options/surveys?district=${encodeURIComponent(district)}` +
+      `&taluka=${encodeURIComponent(taluka)}&village=${encodeURIComponent(village)}`
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.surveys) ? data.surveys : [];
+  } catch {
+    return [];
+  }
+}

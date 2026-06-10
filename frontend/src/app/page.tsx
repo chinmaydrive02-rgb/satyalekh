@@ -28,12 +28,12 @@ export default function Home() {
       <Map onPlotSelect={handlePlotSelect} />
 
       {/* Floating UI Elements - pushed below fixed TopNav */}
-      <div className="absolute left-6 top-[72px] z-40">
+      <div className="absolute inset-x-4 sm:inset-x-auto sm:left-6 top-[72px] z-40 flex justify-center sm:justify-start">
          <SearchWidget onPlotSelect={handlePlotSelect} />
       </div>
 
       {/* Selected Plot HUD */}
-      <div className="absolute right-6 top-[72px] z-40">
+      <div className="absolute right-4 sm:right-6 top-[72px] z-40 hidden sm:block">
         {selectedPlot && (
           <RiskCard 
             plot={selectedPlot} 

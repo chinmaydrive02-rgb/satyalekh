@@ -19,4 +19,8 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
-    healthCheckPath: /health
+      - key: FREE_TRIAL_CREDITS
+        value: "2"
+    # Use the instant root ping — /health launches a full Chromium browser
+    # (~5s + CPU) and Render probes the health path frequently.
+    healthCheckPath: /

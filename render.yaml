@@ -14,3 +14,14 @@ services:
         value: "sb_publishable_Cv3AzDyBhpa1YUInu796MQ_v-0QHxOR"
       - key: GOOGLE_API_KEY
         sync: false # Requires manual insertion in dashboard
+      - key: FREE_TRIAL_CREDITS
+        value: "2"
+      # Payment activation (set in Render dashboard when going live):
+      - key: STRIPE_ENABLED
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false

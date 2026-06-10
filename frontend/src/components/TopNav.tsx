@@ -24,7 +24,7 @@ export default function TopNav() {
     { href: '/', label: 'Intel Map', icon: <Map size={14}/> },
     { href: '/dashboard', label: 'Portfolio', icon: <LayoutDashboard size={14}/> },
     { href: '/market', label: 'Market Intel', icon: <TrendingUp size={14}/> },
-    { href: '/compliance', label: 'Compliance Audit', icon: <ShieldCheck size={14}/> },
+    { href: '/compliance', label: 'FSI Compliance', icon: <ShieldCheck size={14}/> },
     { href: '/upload', label: 'Title Scanner', icon: <UploadCloud size={14}/> },
     { href: '/directory', label: 'Legal Counsel', icon: <Phone size={14}/> },
     { href: '/pricing', label: 'API / Pricing', icon: <Database size={14}/> },

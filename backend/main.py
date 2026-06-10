@@ -39,6 +39,9 @@ async def add_noindex_header(request: Request, call_next):
 STRIPE_ENABLED = os.getenv("STRIPE_ENABLED", "").strip().lower() in ("1", "true", "yes")
 PRICE_PER_SEARCH_PAISE = 150000   # ₹1,500 per search credit
 PRICE_FIVE_PACK_PAISE = 600000    # ₹6,000 for 5 credits (20% discount)
+# New users automatically get this many free searches (the conversion funnel:
+# try for free → see the value → buy credits). Set FREE_TRIAL_CREDITS=0 to disable.
+FREE_TRIAL_CREDITS = int(os.getenv("FREE_TRIAL_CREDITS", "2"))
 
 
 def _get_stripe():
@@ -59,7 +62,8 @@ def _get_supabase():
 
 
 def _get_credits(email: str) -> int:
-    """Read credit balance from the Supabase user_credits table."""
+    """Read credit balance from the Supabase user_credits table.
+    First-time emails are auto-created with FREE_TRIAL_CREDITS free searches."""
     sb = _get_supabase()
     if sb is None:
         return 0
@@ -67,6 +71,10 @@ def _get_credits(email: str) -> int:
         res = sb.table("user_credits").select("credits").eq("user_email", email).limit(1).execute()
         if res.data:
             return int(res.data[0].get("credits") or 0)
+        # New user → grant the free trial
+        sb.table("user_credits").insert({"user_email": email, "credits": FREE_TRIAL_CREDITS}).execute()
+        print(f"[credits] new user {email} granted {FREE_TRIAL_CREDITS} trial credits")
+        return FREE_TRIAL_CREDITS
     except Exception as e:
         print(f"[credits] read failed: {e}")
     return 0
@@ -154,6 +162,18 @@ def credits_endpoint(email: str):
         "email": email,
         "credits": _get_credits(email) if STRIPE_ENABLED else 0,
         "payments_enabled": STRIPE_ENABLED,
+        "free_trial_credits": FREE_TRIAL_CREDITS,
+    }
+
+
+@app.get("/config")
+def config_endpoint():
+    """Lightweight public config — lets the frontend adapt its UI without an email."""
+    return {
+        "payments_enabled": STRIPE_ENABLED,
+        "free_trial_credits": FREE_TRIAL_CREDITS,
+        "price_single_inr": PRICE_PER_SEARCH_PAISE // 100,
+        "price_pack5_inr": PRICE_FIVE_PACK_PAISE // 100,
     }
 
 
@@ -177,10 +197,27 @@ async def stripe_webhook(request: Request):
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
+        session_id = session.get("id") or ""
         metadata = session.get("metadata") or {}
         email = (metadata.get("user_email") or session.get("customer_email") or "").strip().lower()
         credits = int(metadata.get("credits") or "1")
         if email:
+            # Idempotency: Stripe retries webhooks — never credit the same session twice
+            sb = _get_supabase()
+            if sb is not None and session_id:
+                try:
+                    existing = sb.table("payments").select("id").eq("stripe_session_id", session_id).limit(1).execute()
+                    if existing.data:
+                        print(f"[stripe] session {session_id} already processed — skipping")
+                        return {"received": True, "duplicate": True}
+                    sb.table("payments").insert({
+                        "stripe_session_id": session_id,
+                        "user_email": email,
+                        "credits": credits,
+                        "amount_paise": session.get("amount_total") or 0,
+                    }).execute()
+                except Exception as e:
+                    print(f"[stripe] payments table write failed (continuing): {e}")
             new_balance = _add_credits(email, credits)
             print(f"[stripe] +{credits} credits for {email} → balance {new_balance}")
     return {"received": True}
@@ -364,6 +401,16 @@ async def villages_endpoint(district: str, taluka: str):
     from scraper import fetch_villages
     villages = await fetch_villages(district=district.strip(), taluka=taluka.strip())
     return {"district": district, "taluka": taluka, "villages": villages}
+
+@app.get("/options/surveys")
+def surveys_endpoint(district: str, taluka: str, village: str):
+    """
+    Return previously-seen survey numbers for a village (cached from past
+    scrapes in Supabase). Instant — returns [] if nothing cached yet.
+    """
+    from scraper import get_cached_survey_options
+    options = get_cached_survey_options(district, taluka, village)
+    return {"district": district, "taluka": taluka, "village": village, "surveys": options}
 
 
 # ─── Health Check ──────────────────────────────────────────────────────────

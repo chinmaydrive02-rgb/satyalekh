@@ -66,3 +66,20 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-primary-container);
 }
+/* Print styles — "Download Report" produces a clean black-on-white PDF */
+@media print {
+  nav, .print\:hidden, button, a[href] { display: none !important; }
+  body, main {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  main { padding-top: 0 !important; }
+  .glass-panel {
+    background: #ffffff !important;
+    border: 1px solid #cccccc !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
+  * { color: #111111 !important; text-shadow: none !important; }
+  h1, h2, h3 { color: #000000 !important; }
+}

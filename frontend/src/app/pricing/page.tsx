@@ -114,8 +114,11 @@ export default function Pricing() {
       <div className="z-10 mb-12 text-center flex flex-col items-center">
         <h1 className="text-5xl font-display uppercase tracking-tight mb-4">Architectural Pricing</h1>
         <p className="text-[#849495] font-sans tracking-widest uppercase text-sm max-w-[600px]">
-          Secure title intelligence tiers. Choose on-demand queries for individual plots 
+          Secure title intelligence tiers. Choose on-demand queries for individual plots
           or bulk enterprise API access for financial institutions.
+        </p>
+        <p className="mt-4 text-[#4edea3] text-[11px] font-mono border border-[#4edea3]/30 bg-[#4edea3]/5 px-4 py-2">
+          New users get free trial searches automatically — just enter your email and run your first search.
         </p>
       </div>
 

@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useMemo, use, Suspense } from 'react';
-import { ChevronLeft, MapPin, Activity, AlertCircle, FileText, Share2, Database, Loader2, Search, User, BookmarkPlus, CheckCircle2, Download } from 'lucide-react';
+import { ChevronLeft, MapPin, Activity, AlertCircle, FileText, Share2, Database, Loader2, Search, User, BookmarkPlus, CheckCircle2, Download, Mail, Gift, Printer } from 'lucide-react';
 import Link from 'next/link';
 import TopNav from '@/components/TopNav';
-import { API_BASE_URL, getUserEmail, fetchCredits } from '@/lib/api';
+import { API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, fetchConfig } from '@/lib/api';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 
@@ -22,6 +22,10 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'duplicate' | 'error'>('idle');
+  const [needEmail, setNeedEmail] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [paywalled, setPaywalled] = useState(false);
+  const [freeTrialCredits, setFreeTrialCredits] = useState(2);
 
   const handleSaveToPortfolio = async () => {
     if (!record || saveState === 'saving' || saveState === 'saved') return;
@@ -68,22 +72,30 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
 
   // Manual fetch — only runs when the user clicks "FETCH RECORD FROM ANYROR".
   // The scrape takes 30-120s (live CAPTCHA solving), so we never auto-trigger it.
-  const fetchPropertyData = async () => {
+  const fetchPropertyData = async (emailOverride?: string) => {
     if (isLoading) return;
 
-    // Credit gate: if payments are enabled and the user has no credits,
-    // send them to the pricing page.
-    const userEmail = getUserEmail();
+    // Credit gate: when payments are enabled we need an email (free trial
+    // credits are granted to new emails automatically — no card needed).
+    const userEmail = emailOverride || getUserEmail();
+    const cfg = await fetchConfig();
+    if (cfg) setFreeTrialCredits(cfg.free_trial_credits);
+    if (cfg?.payments_enabled && !userEmail) {
+      setNeedEmail(true);
+      return;
+    }
+    setNeedEmail(false);
     if (userEmail) {
       const info = await fetchCredits(userEmail);
       if (info?.payments_enabled && info.credits <= 0) {
-        window.location.href = '/pricing';
+        setPaywalled(true);
         return;
       }
     }
 
     setIsLoading(true);
     setError(null);
+    setPaywalled(false);
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (userEmail) headers['X-User-Email'] = userEmail;
@@ -102,8 +114,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
         const data = await res.json();
         setRecord(data);
       } else if (res.status === 402) {
-        const errData = await res.json().catch(() => ({ detail: 'Payment required' }));
-        setError(errData.detail || 'Payment required — purchase search credits on the pricing page.');
+        setPaywalled(true);
       } else {
         const errData = await res.json().catch(() => ({ detail: "Unknown error" }));
         setError(errData.detail || "Could not fetch record from backend.");
@@ -165,10 +176,25 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
                <MapPin size={14} className="text-[#00f0ff]"/> {record?.village || urlVillage}, {record?.taluka?.replace(/_/g, ' ') || urlTaluka.replace(/_/g, ' ')}, {record?.district || urlDistrict}
             </p>
          </div>
-         <div className="flex gap-4">
-            <button className="px-6 py-3 border border-[#3b494b] text-[#849495] text-xs font-bold tracking-widest uppercase hover:bg-[#1c1b1b] hover:text-[#dbfcff] transition-all flex items-center gap-2">
+         <div className="flex gap-4 print:hidden">
+            <button
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({ title: `Satya-Lekh — Survey ${surveyNum}`, url: window.location.href }).catch(() => {});
+                } else {
+                  navigator.clipboard?.writeText(window.location.href);
+                }
+              }}
+              className="px-6 py-3 border border-[#3b494b] text-[#849495] text-xs font-bold tracking-widest uppercase hover:bg-[#1c1b1b] hover:text-[#dbfcff] transition-all flex items-center gap-2">
                <Share2 size={14}/> Share Intel
             </button>
+            {record && (
+              <button
+                onClick={() => window.print()}
+                className="px-6 py-3 border border-[#00f0ff]/50 text-[#00f0ff] text-xs font-bold tracking-widest uppercase hover:bg-[#00f0ff]/10 transition-all flex items-center gap-2">
+                 <Printer size={14}/> Download Report
+              </button>
+            )}
             <Link href="/upload" className="px-6 py-3 bg-gradient-to-r from-[#00dbe9] to-[#00f0ff] text-[#002022] text-xs font-bold tracking-widest uppercase hover:brightness-110 transition-all flex items-center gap-2">
                <Search size={14}/> Fetch via RPA
             </Link>
@@ -241,11 +267,66 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
             </div>
           )}
 
+          {/* Email capture — free trial credits are granted to new emails */}
+          {needEmail && (
+            <div className="flex flex-col items-center gap-4 p-6 border border-[#00f0ff]/30 bg-[#00f0ff]/5 text-center">
+              <Gift size={24} className="text-[#4edea3]" />
+              <div>
+                <h3 className="text-sm font-display uppercase text-[#dbfcff] mb-1">Get {freeTrialCredits} Free Search{freeTrialCredits === 1 ? '' : 'es'}</h3>
+                <p className="text-[10px] text-[#849495] max-w-sm leading-relaxed">Enter your email to claim your free trial searches — no card needed. Credits are linked to your email.</p>
+              </div>
+              <form
+                className="flex w-full max-w-sm gap-2"
+                onSubmit={e => {
+                  e.preventDefault();
+                  const em = emailInput.trim().toLowerCase();
+                  if (!em.includes('@')) return;
+                  setUserEmail(em);
+                  fetchPropertyData(em);
+                }}
+              >
+                <input
+                  type="email"
+                  required
+                  value={emailInput}
+                  onChange={e => setEmailInput(e.target.value)}
+                  placeholder="you@email.com"
+                  className="flex-1 bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2.5 bg-gradient-to-r from-[#00dbe9] to-[#00f0ff] text-[#002022] text-[10px] font-bold tracking-widest uppercase hover:brightness-110 transition-all flex items-center gap-1.5"
+                >
+                  <Mail size={12} /> Continue
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* Paywall — out of credits */}
+          {paywalled && (
+            <div className="flex flex-col items-center gap-4 p-6 border border-[#de4ced]/40 bg-[#de4ced]/5 text-center">
+              <AlertCircle size={24} className="text-[#de4ced]" />
+              <div>
+                <h3 className="text-sm font-display uppercase text-[#dbfcff] mb-1">No Search Credits Remaining</h3>
+                <p className="text-[10px] text-[#849495] max-w-sm leading-relaxed">
+                  Each search runs a live bot against the government AnyROR portal — CAPTCHA solving, Gujarati translation, and structured extraction included.
+                </p>
+              </div>
+              <Link
+                href="/pricing"
+                className="px-8 py-3 bg-gradient-to-r from-[#de4ced] to-[#ff00f0] text-[#002022] text-xs font-bold tracking-widest uppercase hover:brightness-110 transition-all"
+              >
+                Buy Search Credits
+              </Link>
+            </div>
+          )}
+
           {/* Fetch Trigger */}
-          {hasSurveyNumber ? (
+          {hasSurveyNumber && !needEmail && !paywalled ? (
             <div className="flex flex-col items-center gap-4 text-center">
               <button
-                onClick={fetchPropertyData}
+                onClick={() => fetchPropertyData()}
                 className="px-10 py-4 bg-gradient-to-r from-[#00dbe9] to-[#00f0ff] text-[#002022] text-sm font-bold tracking-[0.15em] uppercase hover:brightness-110 transition-all flex items-center gap-3"
               >
                 <Download size={16} /> Fetch Record from AnyROR
@@ -254,7 +335,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
                 <span className="text-[#eab308] font-bold">⚠</span> This will take 30-120 seconds — the bot navigates the live government portal and solves the CAPTCHA with Gemini Vision. First search may take 60-90s extra while the backend warms up.
               </p>
             </div>
-          ) : (
+          ) : !hasSurveyNumber ? (
             <div className="flex flex-col items-center gap-6 text-center">
               <Database size={48} className="text-[#3b494b]" />
               <p className="text-xs text-[#3b494b] max-w-md">No survey number specified. Use the Title Scanner to search for a record.</p>
@@ -262,7 +343,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
                 Open Title Scanner
               </Link>
             </div>
-          )}
+          ) : null}
         </div>
       )}
 

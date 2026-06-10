@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Search, ChevronDown, Loader2 } from 'lucide-react';
-import { API_BASE_URL, getUserEmail, fetchCredits } from '@/lib/api';
+import { Search, ChevronDown, Loader2, Gift } from 'lucide-react';
+import { API_BASE_URL, getUserEmail, fetchCredits, fetchConfig, fetchSurveyOptions, AppConfig } from '@/lib/api';
 
 const RECORD_TYPES = [
   { value: 'OLD_SCAN_712', label: 'Old Scanned 7/12 (VF-7/12)' },
@@ -31,6 +31,22 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
   const [loadingTalukas, setLoadingTalukas]     = useState(false);
   const [loadingVillages, setLoadingVillages]   = useState(false);
   const [villageError, setVillageError]         = useState(false);
+  const [config, setConfig]                     = useState<AppConfig | null>(null);
+  const [surveyOptions, setSurveyOptions]       = useState<string[]>([]);
+
+  // Load public config (payments / free trial info)
+  useEffect(() => { fetchConfig().then(c => { if (c) setConfig(c); }); }, []);
+
+  // When a village name has been typed, look up cached real survey numbers
+  // (instant — populated by previous scrapes; empty for fresh villages)
+  useEffect(() => {
+    const v = village.trim();
+    if (!district || !taluka || v.length < 3) { setSurveyOptions([]); return; }
+    const t = setTimeout(() => {
+      fetchSurveyOptions(district, taluka, v).then(setSurveyOptions);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [district, taluka, village]);
 
   // Load districts on mount
   useEffect(() => {
@@ -117,7 +133,7 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
   const inputCls  = "w-full px-4 py-3 bg-[#1c1b1b] border-b-2 border-[#3b494b] text-[#dbfcff] text-sm font-mono focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]";
 
   return (
-    <div className="glass-panel w-[320px] p-6 flex flex-col gap-5">
+    <div className="glass-panel w-full max-w-[340px] sm:w-[320px] p-5 sm:p-6 flex flex-col gap-5 max-h-[calc(100vh-100px)] overflow-y-auto">
       <div className="flex flex-col gap-1 mb-2">
         <h1 className="text-[#dbfcff] font-display font-medium text-[28px] uppercase tracking-tight leading-none">Satya-Lekh</h1>
         <span className="text-[#00f0ff] uppercase tracking-[0.2em] text-[10px] font-bold">Title Intelligence HUD</span>
@@ -226,10 +242,18 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
             value={surveyNo}
             onChange={e => setSurveyNo(e.target.value)}
             placeholder={isOwnerSearch ? 'Enter owner name' : 'e.g. 123'}
+            list={!isOwnerSearch && surveyOptions.length > 0 ? 'sw-survey-suggestions' : undefined}
             className={inputCls}
           />
+          {!isOwnerSearch && surveyOptions.length > 0 && (
+            <datalist id="sw-survey-suggestions">
+              {surveyOptions.map(s => <option key={s} value={s} />)}
+            </datalist>
+          )}
           {!isOwnerSearch && (
-            <p className="text-[#3b494b] text-[9px] leading-relaxed">Common formats: 123, 123/1, 123 P, 45 A — check AnyROR for exact format</p>
+            surveyOptions.length > 0
+              ? <p className="text-[#4edea3] text-[9px] leading-relaxed">✓ {surveyOptions.length} verified survey numbers known for this village — start typing to see them</p>
+              : <p className="text-[#3b494b] text-[9px] leading-relaxed">Common formats: 123, 123/1, 123 P, 45 A — check AnyROR for exact format</p>
           )}
         </div>
 
@@ -241,6 +265,11 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
           <span className="relative z-10 flex items-center justify-center gap-2"><Search size={14} /> Initialize Vector</span>
           <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
         </button>
+        {config?.payments_enabled && (
+          <div className="flex items-center justify-center gap-2 text-[9px] text-[#4edea3] border border-[#4edea3]/30 bg-[#4edea3]/5 px-3 py-2">
+            <Gift size={10} /> {config.free_trial_credits} free search{config.free_trial_credits === 1 ? '' : 'es'} for new users — no card needed
+          </div>
+        )}
         <p className="text-[#3b494b] text-[9px] leading-relaxed text-center">First search may take 60-90s while the backend warms up.</p>
       </form>
     </div>

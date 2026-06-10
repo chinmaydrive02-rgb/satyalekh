@@ -18,6 +18,53 @@ def get_gemini_client():
     return _gemini_client
 
 
+def _get_supabase_or_none():
+    """Best-effort Supabase client for caching (village lists, survey options).
+    Returns None if not configured — all callers must tolerate that."""
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_KEY")
+    if not url or not key:
+        return None
+    try:
+        from supabase import create_client
+        return create_client(url, key)
+    except Exception:
+        return None
+
+
+def _save_survey_options(district: str, taluka: str, village: str, options: list):
+    """Persist the real survey-number list seen on AnyROR so future users get
+    instant suggestions without a scrape. Fire-and-forget."""
+    sb = _get_supabase_or_none()
+    if sb is None or not options:
+        return
+    try:
+        key = f"{district.strip().lower()}|{taluka.strip().lower()}|{village.strip().lower()}"
+        sb.table("survey_options").upsert(
+            {"location_key": key, "district": district, "taluka": taluka,
+             "village": village, "options": options},
+            on_conflict="location_key",
+        ).execute()
+        print(f"    ✓ Cached {len(options)} survey options for {key}")
+    except Exception as e:
+        print(f"    survey_options cache write failed (non-fatal): {e}")
+
+
+def get_cached_survey_options(district: str, taluka: str, village: str) -> list:
+    """Read previously-seen survey numbers for a village from Supabase."""
+    sb = _get_supabase_or_none()
+    if sb is None:
+        return []
+    try:
+        key = f"{district.strip().lower()}|{taluka.strip().lower()}|{village.strip().lower()}"
+        res = sb.table("survey_options").select("options").eq("location_key", key).limit(1).execute()
+        if res.data:
+            return res.data[0].get("options") or []
+    except Exception as e:
+        print(f"    survey_options cache read failed: {e}")
+    return []
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # AnyROR Page Element IDs — verified from https://anyror.gujarat.gov.in/LandRecordRural.aspx
 # ──────────────────────────────────────────────────────────────────────────────
@@ -608,6 +655,10 @@ async def scrape_anyror_data(
                         if val and val != "0":
                             options_texts.append((val, text))
 
+                    # Persist the full real survey list for instant future suggestions
+                    _save_survey_options(district, taluka, village,
+                                         [t for _, t in options_texts])
+
                     best = _find_best_option(options_texts, survey_number)
                     if best:
                         await survey_el.select_option(value=best)
@@ -762,6 +813,19 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
         print(f"  [cache] Returning cached villages for {district}/{taluka}")
         return _village_cache[cache_key]
 
+    # Tier 2: Supabase persistent cache (survives Render restarts/cold starts)
+    sb = _get_supabase_or_none()
+    if sb is not None:
+        try:
+            res = sb.table("village_cache").select("villages").eq("cache_key", cache_key).limit(1).execute()
+            if res.data and res.data[0].get("villages"):
+                villages = res.data[0]["villages"]
+                _village_cache[cache_key] = villages
+                print(f"  [supabase-cache] Returning {len(villages)} villages for {district}/{taluka}")
+                return villages
+        except Exception as e:
+            print(f"  village_cache read failed (non-fatal): {e}")
+
     print(f"\n  Fetching villages: {district} > {taluka}")
 
     async def _run():
@@ -839,6 +903,18 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
     # Batch-translate Gujarati names to English using Gemini
     villages = await _batch_translate_villages(gujarati_names, district, taluka)
     _village_cache[cache_key] = villages
+
+    # Persist to Supabase so the 20-30s scrape never has to repeat after a restart
+    if villages and sb is not None:
+        try:
+            sb.table("village_cache").upsert(
+                {"cache_key": cache_key, "district": district, "taluka": taluka,
+                 "villages": villages},
+                on_conflict="cache_key",
+            ).execute()
+            print(f"  ✓ Persisted {len(villages)} villages to Supabase cache")
+        except Exception as e:
+            print(f"  village_cache write failed (non-fatal): {e}")
     return villages
 
 
