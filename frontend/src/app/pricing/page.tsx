@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Database, ShieldCheck, Zap, Send, X, CheckCircle2, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Database, ShieldCheck, Zap, Send, X, CheckCircle2, Loader2, CreditCard, Wallet } from 'lucide-react';
 import TopNav from '@/components/TopNav';
+import { API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, CreditsInfo } from '@/lib/api';
 
 export default function Pricing() {
   const [showContactModal, setShowContactModal] = useState(false);
@@ -10,6 +11,59 @@ export default function Pricing() {
   const [formData, setFormData] = useState({ name: '', email: '', company: '', message: '' });
   const [isSending, setIsSending] = useState(false);
   const [isSent, setIsSent] = useState(false);
+
+  // Payment / credits state
+  const [buyEmail, setBuyEmail] = useState('');
+  const [buyLoading, setBuyLoading] = useState(0); // quantity currently being purchased (0 = idle)
+  const [creditsInfo, setCreditsInfo] = useState<CreditsInfo | null>(null);
+  const [checkingCredits, setCheckingCredits] = useState(false);
+  const [payError, setPayError] = useState('');
+
+  // Restore saved email and show current balance on load
+  useEffect(() => {
+    const saved = getUserEmail();
+    if (saved) {
+      setBuyEmail(saved);
+      fetchCredits(saved).then(info => { if (info) setCreditsInfo(info); });
+    }
+  }, []);
+
+  const validEmail = buyEmail.trim().includes('@');
+
+  const handleCheckCredits = async () => {
+    if (!validEmail) { setPayError('Enter a valid email to check credits.'); return; }
+    setPayError('');
+    setCheckingCredits(true);
+    setUserEmail(buyEmail);
+    const info = await fetchCredits(buyEmail.trim().toLowerCase());
+    setCheckingCredits(false);
+    if (info) setCreditsInfo(info);
+    else setPayError('Could not reach the server — it may be warming up. Try again in a minute.');
+  };
+
+  const handleBuy = async (quantity: number) => {
+    if (!validEmail) { setPayError('Enter your email above first — credits are linked to it.'); return; }
+    setPayError('');
+    setBuyLoading(quantity);
+    setUserEmail(buyEmail);
+    try {
+      const res = await fetch(`${API_BASE_URL}/create-checkout-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: buyEmail.trim().toLowerCase(), quantity }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+      setPayError(data.detail || 'Payments are not enabled yet — please use the contact form below.');
+    } catch {
+      setPayError('Could not reach the payment server. It may be warming up — try again in a minute.');
+    } finally {
+      setBuyLoading(0);
+    }
+  };
 
   const openContact = (tier: string) => {
     setContactTier(tier);
@@ -75,18 +129,67 @@ export default function Pricing() {
           <h2 className="text-2xl font-display uppercase mb-2">Per-Query Access</h2>
           <div className="text-[#00f0ff] font-display text-4xl mb-6">₹1,500 <span className="text-sm text-[#849495] tracking-widest uppercase">/ plot</span></div>
           
-          <ul className="flex flex-col gap-4 mb-8 text-sm text-[#dbfcff]/80 font-sans mt-4">
+          <ul className="flex flex-col gap-4 mb-6 text-sm text-[#dbfcff]/80 font-sans mt-4">
             <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> Instant OCR Extraction</li>
             <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> GDCR FSI Calculator</li>
             <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> Basic Litigation Flags</li>
           </ul>
 
-          <button 
-            onClick={() => openContact('Per-Query Access (₹1,500/plot)')}
-            className="mt-auto w-full py-4 text-[#002022] font-bold text-sm tracking-[0.15em] uppercase bg-gradient-to-r from-[#00dbe9] to-[#00f0ff] hover:brightness-110 transition-all border-none outline-none relative z-10 flex items-center justify-center gap-2"
-          >
-            <Send size={14}/> Get Started
-          </button>
+          {/* Email + credits */}
+          <div className="flex flex-col gap-3 mb-5 relative z-10">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Your Email (credits are linked to it)</label>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={buyEmail}
+                  onChange={e => setBuyEmail(e.target.value)}
+                  placeholder="you@email.com"
+                  className="flex-1 bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]"
+                />
+                <button
+                  type="button"
+                  onClick={handleCheckCredits}
+                  disabled={checkingCredits || !validEmail}
+                  className="px-3 py-2.5 border border-[#3b494b] text-[#849495] text-[10px] font-bold tracking-widest uppercase hover:border-[#00f0ff]/50 hover:text-[#00f0ff] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  {checkingCredits ? <Loader2 size={12} className="animate-spin"/> : <Wallet size={12}/>} Check Credits
+                </button>
+              </div>
+            </div>
+            {creditsInfo && (
+              <div className={`text-[10px] font-mono px-3 py-2 border ${creditsInfo.payments_enabled ? 'border-[#4edea3]/40 text-[#4edea3] bg-[#4edea3]/5' : 'border-[#eab308]/40 text-[#eab308] bg-[#eab308]/5'}`}>
+                {creditsInfo.payments_enabled
+                  ? <>Remaining credits for {creditsInfo.email}: <span className="font-bold">{creditsInfo.credits}</span></>
+                  : <>Payments are not enabled yet — searches are currently free during beta.</>}
+              </div>
+            )}
+            {payError && <div className="text-[10px] font-mono text-[#ba1b24] px-3 py-2 border border-[#ba1b24]/40 bg-[#ba1b24]/5">{payError}</div>}
+          </div>
+
+          {/* Buy buttons */}
+          <div className="mt-auto flex flex-col gap-3 relative z-10">
+            <button
+              onClick={() => handleBuy(1)}
+              disabled={buyLoading !== 0}
+              className="w-full py-4 text-[#002022] font-bold text-sm tracking-[0.15em] uppercase bg-gradient-to-r from-[#00dbe9] to-[#00f0ff] hover:brightness-110 transition-all border-none outline-none flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {buyLoading === 1 ? <Loader2 size={14} className="animate-spin"/> : <CreditCard size={14}/>} Buy 1 Search — ₹1,500
+            </button>
+            <button
+              onClick={() => handleBuy(5)}
+              disabled={buyLoading !== 0}
+              className="w-full py-3 text-[#00f0ff] font-bold text-xs tracking-[0.15em] uppercase bg-transparent border border-[#00f0ff]/60 hover:bg-[#00f0ff]/10 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {buyLoading === 5 ? <Loader2 size={12} className="animate-spin"/> : <CreditCard size={12}/>} Buy 5 Searches — ₹6,000 <span className="text-[#4edea3] normal-case">(save 20%)</span>
+            </button>
+            <button
+              onClick={() => openContact('Per-Query Access (₹1,500/plot)')}
+              className="w-full py-2 text-[#849495] text-[10px] tracking-[0.15em] uppercase hover:text-[#dbfcff] transition-colors flex items-center justify-center gap-2"
+            >
+              <Send size={10}/> Questions? Contact us instead
+            </button>
+          </div>
         </div>
 
         {/* Enterprise */}

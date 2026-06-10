@@ -36,7 +36,7 @@ export default function Dashboard() {
   const [isFetching, setIsFetching] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // ââ Load portfolio from Supabase ââââââââââââââââââââââââââ
+  // ── Load portfolio from Supabase ──────────────────────────
   const loadPortfolio = useCallback(async () => {
     setIsLoadingPortfolio(true);
     try {
@@ -55,7 +55,7 @@ export default function Dashboard() {
 
   useEffect(() => { loadPortfolio(); }, [loadPortfolio]);
 
-  // ââ Fetch from AnyROR + save to Supabase âââââââââââââââââ
+  // ── Fetch from AnyROR + save to Supabase ─────────────────
   const handleIngest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!district.trim() || !taluka.trim() || !village.trim() || !surveyNo.trim()) return;
@@ -115,7 +115,7 @@ export default function Dashboard() {
     }
   };
 
-  // ââ Delete asset ââââââââââââââââââââââââââââââââââââââââââ
+  // ── Delete asset ──────────────────────────────────────────
   const handleDelete = async (id: string) => {
     if (!confirm('Remove this asset from your portfolio?')) return;
     setDeletingId(id);
@@ -130,7 +130,7 @@ export default function Dashboard() {
     }
   };
 
-  // ââ CSV Export ââââââââââââââââââââââââââââââââââââââââââââ
+  // ── CSV Export ────────────────────────────────────────────
   const handleExport = () => {
     if (holdings.length === 0) return;
     const headers = ['Survey No', 'Village', 'Taluka', 'District', 'Owner', 'Area', 'Tenure Type', 'Encumbrances', 'Jantri Rate', 'Last Sale', 'Added On'];
@@ -162,7 +162,7 @@ export default function Dashboard() {
           <div>
             <h1 className="text-4xl font-display uppercase tracking-tight mb-2">SOVEREIGN PORTFOLIO</h1>
             <p className="text-[#849495] font-sans text-sm tracking-widest uppercase flex items-center gap-2">
-              <Database size={14}/> Active Intelligence Contracts â {isLoadingPortfolio ? '...' : `${holdings.length} Assets`}
+              <Database size={14}/> Active Intelligence Contracts — {isLoadingPortfolio ? '...' : `${holdings.length} Assets`}
             </p>
           </div>
           <div className="flex gap-3">
@@ -186,19 +186,19 @@ export default function Dashboard() {
             <h2 className="text-sm font-display text-[#00f0ff] uppercase flex items-center gap-2 mb-2"><Crosshair size={14}/> AnyROR Target Retrieval</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">District (àªà«àª²à«àª²à«)</label>
+                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">District (જીલ્લો)</label>
                 <input type="text" value={district} onChange={e => setDistrict(e.target.value)} placeholder="e.g. Ahmedabad" className={inputClass} />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Taluka (àª¤àª¾àª²à«àªà«)</label>
+                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Taluka (તાલુકો)</label>
                 <input type="text" value={taluka} onChange={e => setTaluka(e.target.value)} placeholder="e.g. Daskroi" className={inputClass} />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Village (àªàª¾àª®)</label>
+                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Village (ગામ)</label>
                 <input type="text" value={village} onChange={e => setVillage(e.target.value)} placeholder="e.g. Bopal" className={inputClass} />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Survey No. (àª¸àª°à«àªµà« àª¨àªàª¬àª°)</label>
+                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Survey No. (સર્વે નંબર)</label>
                 <input type="text" value={surveyNo} onChange={e => setSurveyNo(e.target.value)} placeholder="e.g. 123" className={inputClass} />
               </div>
             </div>
@@ -212,15 +212,15 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="glass-panel p-6 border-l-2 border-l-[#00f0ff] flex flex-col justify-between h-[120px]">
             <span className="text-xs text-[#849495] font-sans tracking-widest uppercase">Total Assets</span>
-            <span className="text-3xl font-display text-[#dbfcff]">{isLoadingPortfolio ? 'â' : holdings.length}</span>
+            <span className="text-3xl font-display text-[#dbfcff]">{isLoadingPortfolio ? '—' : holdings.length}</span>
           </div>
           <div className="glass-panel p-6 border-l-2 border-l-[#4edea3] flex flex-col justify-between h-[120px]">
             <span className="text-xs text-[#849495] font-sans tracking-widest uppercase">Clear Title</span>
-            <span className="text-3xl font-display text-[#dbfcff]">{isLoadingPortfolio ? 'â' : totalCleared}</span>
+            <span className="text-3xl font-display text-[#dbfcff]">{isLoadingPortfolio ? '—' : totalCleared}</span>
           </div>
           <div className="glass-panel p-6 border-l-2 border-l-[#ba1b24] flex flex-col justify-between h-[120px] bg-[#ba1b24]/5">
             <span className="text-xs text-[#849495] font-sans tracking-widest uppercase">Encumbered</span>
-            <span className="text-3xl font-display text-[#ba1b24]">{isLoadingPortfolio ? 'â' : totalRisks}</span>
+            <span className="text-3xl font-display text-[#ba1b24]">{isLoadingPortfolio ? '—' : totalRisks}</span>
           </div>
         </div>
 
@@ -278,9 +278,9 @@ export default function Dashboard() {
                         <div className="text-[#dbfcff]">{asset.village}</div>
                         <div className="text-[#849495]">{asset.taluka}, {asset.district}</div>
                       </td>
-                      <td className="p-4 text-[#dbfcff] text-xs">{asset.owner_name || 'â'}</td>
-                      <td className="p-4 text-[#dbfcff] text-xs">{asset.area || 'â'}</td>
-                      <td className="p-4 text-[#4edea3] text-xs font-bold">{asset.jantri_rate || 'â'}</td>
+                      <td className="p-4 text-[#dbfcff] text-xs">{asset.owner_name || '—'}</td>
+                      <td className="p-4 text-[#dbfcff] text-xs">{asset.area || '—'}</td>
+                      <td className="p-4 text-[#4edea3] text-xs font-bold">{asset.jantri_rate || '—'}</td>
                       <td className="p-4 text-right">
                         <span className={`inline-flex items-center gap-2 px-3 py-1 text-[10px] tracking-widest uppercase font-bold border ${!isEncumbered ? 'bg-[#4edea3]/10 text-[#4edea3] border-[#4edea3]/50' : 'bg-[#ba1b24]/10 text-[#ba1b24] border-[#ba1b24]/50'}`}>
                           {!isEncumbered ? <CheckCircle2 size={12}/> : <AlertTriangle size={12}/>}

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Search, ChevronDown, Loader2 } from 'lucide-react';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BASE_URL, getUserEmail, fetchCredits } from '@/lib/api';
 
 const RECORD_TYPES = [
   { value: 'OLD_SCAN_712', label: 'Old Scanned 7/12 (VF-7/12)' },
@@ -44,9 +44,9 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
 
   // Load talukas when district changes
   useEffect(() => {
-    if (!district) { setTalukas([]); setTaluka(''); setVillages([]); setVillage(''); return; }
+    if (!district) { setTalukas([]); setTaluka(''); setVillages([]); return; }
     setLoadingTalukas(true);
-    setTaluka(''); setVillages([]); setVillage('');
+    setTaluka(''); setVillages([]);
     fetch(`${API_BASE_URL}/options/talukas?district=${encodeURIComponent(district)}`)
       .then(r => r.json())
       .then(d => setTalukas(d.talukas || []))
@@ -54,11 +54,19 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
       .finally(() => setLoadingTalukas(false));
   }, [district]);
 
-  // Load villages from AnyROR live (~20s first load, cached after)
+  // Clear stale suggestions when taluka changes (village stays free-typed)
   useEffect(() => {
-    if (!district || !taluka) { setVillages([]); setVillage(''); return; }
+    setVillages([]);
+    setVillageError(false);
+  }, [district, taluka]);
+
+  // OPTIONAL enhancement: fetch live village suggestions from AnyROR (~20s).
+  // The village text input works without this — the backend fuzzy-matches
+  // free-typed English names against the live AnyROR dropdown.
+  const loadVillageSuggestions = () => {
+    if (!district || !taluka || loadingVillages) return;
     setLoadingVillages(true);
-    setVillage(''); setVillageError(false);
+    setVillageError(false);
     fetch(`${API_BASE_URL}/options/villages?district=${encodeURIComponent(district)}&taluka=${encodeURIComponent(taluka)}`)
       .then(r => r.json())
       .then(d => {
@@ -68,7 +76,7 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
       })
       .catch(() => setVillageError(true))
       .finally(() => setLoadingVillages(false));
-  }, [district, taluka]);
+  };
 
   const isOwnerSearch = recordType === 'OWNER_NAME' || recordType === 'OTHER_LANG';
   const surveyLabel = isOwnerSearch ? 'Owner Name' :
@@ -76,13 +84,27 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
     recordType === 'VF6' || recordType === 'OLD_SCAN_6' ? 'Entry No.' :
     'Survey / Block No. (સર્વે નંબર)';
 
-  const isFormValid = district && taluka && village && surveyNo.trim();
+  const isFormValid = district && taluka && village.trim() && surveyNo.trim();
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid) return;
-    const villageObj = villages.find(v => v.english === village);
-    const villageParam = villageObj ? villageObj.gujarati : village;
+    // Credit gate: if payments are enabled on the backend and the user has
+    // no credits, send them to the pricing page first.
+    const email = getUserEmail();
+    if (email) {
+      const info = await fetchCredits(email);
+      if (info?.payments_enabled && info.credits <= 0) {
+        window.location.href = '/pricing';
+        return;
+      }
+    }
+    // If the typed name matches a loaded suggestion, send its Gujarati name
+    // (exact AnyROR match). Otherwise send the free-typed English name — the
+    // backend scraper fuzzy-matches it against the live AnyROR dropdown.
+    const typed = village.trim();
+    const villageObj = villages.find(v => v.english.toLowerCase() === typed.toLowerCase());
+    const villageParam = villageObj ? villageObj.gujarati : typed;
     window.location.href =
       `/property/SURVEY-${surveyNo.trim()}` +
       `?district=${encodeURIComponent(district)}` +
@@ -157,32 +179,42 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
           </div>
         </div>
 
-        {/* Village */}
+        {/* Village — free text input (English or Gujarati works; backend fuzzy-matches) */}
         <div className="flex flex-col gap-2">
           <label className="text-[#849495] text-[10px] font-bold tracking-widest uppercase flex items-center gap-2">
             Village (ગામ)
             {loadingVillages && <span className="text-[#00f0ff] text-[9px] font-normal normal-case tracking-normal">fetching from AnyROR…</span>}
           </label>
-          <div className="relative">
-            <select value={village} onChange={e => setVillage(e.target.value)}
-              className={selectCls} disabled={!taluka || loadingVillages} style={{ backgroundColor: '#1c1b1b' }}>
-              <option value="" style={{ backgroundColor: '#1c1b1b' }}>
-                {!taluka ? '— Select Taluka First —'
-                  : loadingVillages ? 'Loading villages (~20s)…'
-                  : villageError ? '— Error loading villages —'
-                  : villages.length === 0 ? '— No villages found —'
-                  : '— Select Village —'}
-              </option>
-              {villages.map(v => (
-                <option key={v.gujarati} value={v.english} style={{ backgroundColor: '#1c1b1b' }}>{v.english}</option>
-              ))}
-            </select>
+          <input
+            type="text"
+            value={village}
+            onChange={e => setVillage(e.target.value)}
+            placeholder="e.g. Navrangpura, Vejalpur, Bopal"
+            list="sw-village-suggestions"
+            className={inputCls}
+          />
+          <datalist id="sw-village-suggestions">
+            {villages.map(v => (
+              <option key={v.gujarati} value={v.english} />
+            ))}
+          </datalist>
+          <button
+            type="button"
+            onClick={loadVillageSuggestions}
+            disabled={!district || !taluka || loadingVillages}
+            className="text-left text-[9px] text-[#00f0ff]/80 hover:text-[#00f0ff] underline underline-offset-2 decoration-[#00f0ff]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 w-fit"
+          >
             {loadingVillages
-              ? <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#00f0ff] animate-spin pointer-events-none" />
-              : <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#3b494b] pointer-events-none" />}
-          </div>
+              ? <><Loader2 size={9} className="animate-spin" /> Loading suggestions from AnyROR…</>
+              : villages.length > 0
+                ? <>↻ Reload suggestions ({villages.length} villages loaded)</>
+                : <>Load village suggestions from AnyROR (takes ~20s)</>}
+          </button>
+          {villageError && (
+            <p className="text-[#849495] text-[9px] leading-relaxed">Could not load suggestions — just type your village name above (English works fine).</p>
+          )}
           {loadingVillages && (
-            <p className="text-[#3b494b] text-[9px] leading-relaxed">Launching headless browser → navigating AnyROR → reading real village list. Cached after first load.</p>
+            <p className="text-[#3b494b] text-[9px] leading-relaxed">Launching headless browser → navigating AnyROR → reading real village list. Cached after first load. You can also just type the name and search now.</p>
           )}
         </div>
 
@@ -196,6 +228,9 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
             placeholder={isOwnerSearch ? 'Enter owner name' : 'e.g. 123'}
             className={inputCls}
           />
+          {!isOwnerSearch && (
+            <p className="text-[#3b494b] text-[9px] leading-relaxed">Common formats: 123, 123/1, 123 P, 45 A — check AnyROR for exact format</p>
+          )}
         </div>
 
         <button
@@ -206,6 +241,7 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect: (plot: an
           <span className="relative z-10 flex items-center justify-center gap-2"><Search size={14} /> Initialize Vector</span>
           <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
         </button>
+        <p className="text-[#3b494b] text-[9px] leading-relaxed text-center">First search may take 60-90s while the backend warms up.</p>
       </form>
     </div>
   );

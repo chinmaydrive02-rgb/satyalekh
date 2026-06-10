@@ -11,4 +11,12 @@ services:
         sync: false
       - key: SUPABASE_KEY
         sync: false
+      - key: STRIPE_ENABLED
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
     healthCheckPath: /health

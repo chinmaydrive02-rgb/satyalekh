@@ -1,13 +1,24 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Map, UploadCloud, Database, Phone, LayoutDashboard, User, TrendingUp, ShieldCheck, Menu, X } from 'lucide-react';
+import { Map, UploadCloud, Database, Phone, LayoutDashboard, User, TrendingUp, ShieldCheck, Menu, X, Wallet } from 'lucide-react';
+import { getUserEmail, fetchCredits, CreditsInfo } from '@/lib/api';
 
 export default function TopNav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [creditsInfo, setCreditsInfo] = useState<CreditsInfo | null>(null);
+
+  // Show credit balance for users who have linked an email (payments enabled only)
+  useEffect(() => {
+    const email = getUserEmail();
+    if (!email) return;
+    fetchCredits(email).then(info => {
+      if (info && info.payments_enabled) setCreditsInfo(info);
+    });
+  }, [pathname]);
 
   const links = [
     { href: '/', label: 'Intel Map', icon: <Map size={14}/> },
@@ -46,6 +57,15 @@ export default function TopNav() {
                  </Link>
                )
             })}
+            {creditsInfo && (
+              <Link
+                href="/pricing"
+                title={`Search credits for ${creditsInfo.email}`}
+                className="flex items-center gap-1.5 px-3 py-1.5 border text-[10px] font-bold tracking-widest uppercase transition-colors bg-[#00f0ff]/5 border-[#00f0ff]/40 text-[#00f0ff] hover:bg-[#00f0ff]/15"
+              >
+                <Wallet size={12}/> {creditsInfo.credits} CR
+              </Link>
+            )}
           </div>
 
           {/* Mobile Toggle */}

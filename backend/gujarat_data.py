@@ -3,8 +3,14 @@
 # Villages are fetched live from AnyROR portal via Playwright
 
 GUJARAT_DISTRICTS_TALUKAS: dict[str, list[str]] = {
+    # NOTE: Taluka names must match the AnyROR dropdown text as closely as
+    # possible. The backend (_find_best_option in scraper.py) fuzzy-matches,
+    # but exact names are more reliable. Known AnyROR quirks:
+    #   - Ahmedabad's main city taluka appears as "City" (NOT "Ahmedabad City")
+    #   - "Surat City" / "Vadodara City" may also appear as just "City" on AnyROR;
+    #     fuzzy matching handles those since "City" is a substring.
     "Ahmedabad": [
-        "Ahmedabad City", "Bavla", "Daskroi", "Detroj-Rampura",
+        "City", "Bavla", "Daskroi", "Detroj-Rampura",
         "Dhandhuka", "Dholera", "Dholka", "Mandal", "Sanand", "Viramgam"
     ],
     "Amreli": [

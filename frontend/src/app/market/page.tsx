@@ -18,35 +18,39 @@ interface NewsArticle {
   desc: string;
   tag: string;
   color: string;
-  url?: string;
+  url: string;
   date?: string;
 }
 
-// Fallback hardcoded news (always available)
+// Fallback hardcoded news (always available) — with real source URLs
 const STATIC_NEWS: NewsArticle[] = [
   {
     source: "Ahmedabad Mirror",
     title: "Shela Jantri Rates Proposed to Increase by 621%",
     desc: "The draft jantri rates for open plots in the Shela region are proposed to undergo a staggering 621% hike, translating to an effective 2,030% FSI cost jump compared to pre-2023 levels.",
-    tag: "REGULATION", color: "#ba1b24", date: "Apr 2025"
+    tag: "REGULATION", color: "#ba1b24", date: "Apr 2025",
+    url: "https://www.google.com/search?q=Shela+jantri+rates+621+percent+increase+Gujarat"
   },
   {
     source: "Economic Times",
     title: "Sanand Land Rates Spike Following Micron Chip Plant",
     desc: "Land rates in Sanand have increased by a massive 162.5% over the last five years and 425% over the last ten years, driven by the new semiconductor manufacturing district.",
-    tag: "INDUSTRIAL", color: "#de4ced", date: "Q1 2025"
+    tag: "INDUSTRIAL", color: "#de4ced", date: "Q1 2025",
+    url: "https://www.google.com/search?q=Sanand+land+rates+Micron+chip+plant+Gujarat"
   },
   {
     source: "NHB Housing Index",
     title: "Ahmedabad Witnesses 7.9% Property Appreciation",
     desc: "Quarterly trends demonstrate sustained momentum as Ahmedabad properties saw an overall 7.9% growth, bolstered by Metro Phase 2 inaugurations and NRI investments.",
-    tag: "RESIDENTIAL", color: "#4edea3", date: "Q2 FY 24-25"
+    tag: "RESIDENTIAL", color: "#4edea3", date: "Q2 FY 24-25",
+    url: "https://www.google.com/search?q=Ahmedabad+property+appreciation+7.9+percent+NHB"
   },
   {
     source: "Gujarat Samachar",
     title: "Developers Rush Approvals Ahead of Jantri Hike",
     desc: "Gujarat's real estate sector saw a 6% increase in new project registrations as developers attempt to bypass the anticipated 100-200% state-wide jantri revision expected in late 2025.",
-    tag: "FINANCE", color: "#00f0ff", date: "Nov 2024"
+    tag: "FINANCE", color: "#00f0ff", date: "Nov 2024",
+    url: "https://www.google.com/search?q=Gujarat+developers+approvals+jantri+hike+2025"
   }
 ];
 
@@ -93,7 +97,7 @@ export default function MarketIntelligence() {
                   desc: article.description || article.content?.substring(0, 200) || "No description available.",
                   tag: tags[idx],
                   color: colors[idx],
-                  url: article.link,
+                  url: article.link || `https://www.google.com/search?q=${encodeURIComponent(article.title || '')}`,
                   date: article.pubDate ? new Date(article.pubDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : "Recent"
                 });
               }
@@ -288,7 +292,13 @@ export default function MarketIntelligence() {
                  )}
 
                  {displayedNews.map((news, i) => (
-                    <div key={i} className="flex flex-col gap-2 relative pl-4 border-l-2 border-[#3b494b] group hover:border-[#00f0ff] transition-colors pb-4 border-b border-b-[#3b494b]/20">
+                    <a
+                      key={i}
+                      href={news.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex flex-col gap-2 relative pl-4 border-l-2 border-[#3b494b] group hover:border-[#00f0ff] transition-colors pb-4 border-b border-b-[#3b494b]/20 cursor-pointer no-underline"
+                    >
                        <div className="absolute w-2 h-2 rounded-full -left-[5px] top-1" style={{ backgroundColor: news.color }}></div>
                        <div className="flex justify-between items-center text-[10px] uppercase tracking-widest font-bold font-sans">
                            <span className="text-[#849495]">{news.source} {news.date && `(${news.date})`}</span>
@@ -296,17 +306,10 @@ export default function MarketIntelligence() {
                        </div>
                        <h3 className="text-sm font-display leading-tight text-[#dbfcff] group-hover:text-[#00f0ff] transition-colors mt-1">{news.title}</h3>
                        <p className="text-xs text-[#849495] font-serif leading-relaxed mt-2">{news.desc}</p>
-                       {news.url && (
-                         <a 
-                           href={news.url} 
-                           target="_blank" 
-                           rel="noopener noreferrer"
-                           className="text-[9px] text-[#00f0ff] hover:text-[#dbfcff] flex items-center gap-1 mt-1 uppercase tracking-widest font-bold transition-colors"
-                         >
-                           Read Full Article <ExternalLink size={9}/>
-                         </a>
-                       )}
-                    </div>
+                       <span className="text-[9px] text-[#00f0ff] hover:text-[#dbfcff] flex items-center gap-1 mt-1 uppercase tracking-widest font-bold transition-colors">
+                         Read Full Article <ExternalLink size={9}/>
+                       </span>
+                    </a>
                  ))}
 
                  {/* Auto-refresh notice */}

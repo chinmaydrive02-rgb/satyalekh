@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import json
@@ -20,6 +20,170 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_noindex_header(request: Request, call_next):
+    """Prevent search engines from indexing the API during development."""
+    response = await call_next(request)
+    response.headers["X-Robots-Tag"] = "noindex"
+    return response
+
+
+# ─── Payments / Credits (Stripe + Supabase) ───────────────────────────────
+# Graceful degradation: if STRIPE_ENABLED is not "true", all credit checks
+# are skipped and the app behaves exactly as before (free searches).
+# Owner must set on Render: STRIPE_ENABLED=true, STRIPE_SECRET_KEY,
+# STRIPE_WEBHOOK_SECRET, SUPABASE_URL, SUPABASE_KEY (and optionally FRONTEND_URL).
+
+STRIPE_ENABLED = os.getenv("STRIPE_ENABLED", "").strip().lower() in ("1", "true", "yes")
+PRICE_PER_SEARCH_PAISE = 150000   # ₹1,500 per search credit
+PRICE_FIVE_PACK_PAISE = 600000    # ₹6,000 for 5 credits (20% discount)
+
+
+def _get_stripe():
+    import stripe
+    stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Stripe is not configured (STRIPE_SECRET_KEY missing)")
+    return stripe
+
+
+def _get_supabase():
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_KEY")
+    if not url or not key:
+        return None
+    from supabase import create_client
+    return create_client(url, key)
+
+
+def _get_credits(email: str) -> int:
+    """Read credit balance from the Supabase user_credits table."""
+    sb = _get_supabase()
+    if sb is None:
+        return 0
+    try:
+        res = sb.table("user_credits").select("credits").eq("user_email", email).limit(1).execute()
+        if res.data:
+            return int(res.data[0].get("credits") or 0)
+    except Exception as e:
+        print(f"[credits] read failed: {e}")
+    return 0
+
+
+def _add_credits(email: str, amount: int) -> int:
+    """Increment (or decrement, with negative amount) a user's credits. Clamps at 0."""
+    sb = _get_supabase()
+    if sb is None:
+        return 0
+    try:
+        res = sb.table("user_credits").select("id, credits").eq("user_email", email).limit(1).execute()
+        if res.data:
+            new_balance = max(0, int(res.data[0].get("credits") or 0) + amount)
+            sb.table("user_credits").update({"credits": new_balance}).eq("id", res.data[0]["id"]).execute()
+            return new_balance
+        new_balance = max(0, amount)
+        sb.table("user_credits").insert({"user_email": email, "credits": new_balance}).execute()
+        return new_balance
+    except Exception as e:
+        print(f"[credits] write failed: {e}")
+        return 0
+
+
+class CheckoutRequest(BaseModel):
+    email: str
+    quantity: int = 1
+
+
+@app.post("/create-checkout-session")
+async def create_checkout_session(body: CheckoutRequest, request: Request):
+    """Create a Stripe Checkout session for search credits (₹1,500 each, ₹6,000 for 5)."""
+    if not STRIPE_ENABLED:
+        raise HTTPException(status_code=503, detail="Payments are not enabled yet. Please use the contact form on the pricing page.")
+    email = body.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="A valid email is required")
+    quantity = max(1, min(int(body.quantity or 1), 100))
+
+    stripe = _get_stripe()
+    if quantity == 5:
+        # Discounted 5-pack: ₹6,000 total (20% off)
+        line_items = [{
+            "price_data": {
+                "currency": "inr",
+                "unit_amount": PRICE_FIVE_PACK_PAISE,
+                "product_data": {"name": "Satya-Lekh — 5 AnyROR Search Credits (20% off)"},
+            },
+            "quantity": 1,
+        }]
+        credits = 5
+    else:
+        line_items = [{
+            "price_data": {
+                "currency": "inr",
+                "unit_amount": PRICE_PER_SEARCH_PAISE,
+                "product_data": {"name": "Satya-Lekh — AnyROR Search Credit"},
+            },
+            "quantity": quantity,
+        }]
+        credits = quantity
+
+    origin = request.headers.get("origin") or os.getenv("FRONTEND_URL", "http://localhost:3000")
+    try:
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            customer_email=email,
+            line_items=line_items,
+            success_url=f"{origin}/payment-success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{origin}/pricing",
+            metadata={"user_email": email, "credits": str(credits)},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Stripe checkout creation failed: {e}")
+    return {"checkout_url": session.url}
+
+
+@app.get("/credits")
+def credits_endpoint(email: str):
+    """Return the current search-credit balance for an email."""
+    email = email.strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="email query param is required")
+    return {
+        "email": email,
+        "credits": _get_credits(email) if STRIPE_ENABLED else 0,
+        "payments_enabled": STRIPE_ENABLED,
+    }
+
+
+@app.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Stripe webhook: on checkout.session.completed, grant purchased credits."""
+    if not STRIPE_ENABLED:
+        raise HTTPException(status_code=503, detail="Payments are not enabled")
+    stripe = _get_stripe()
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    try:
+        if webhook_secret:
+            event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        else:
+            # No secret configured — accept unverified (development only)
+            event = json.loads(payload)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid webhook payload: {e}")
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        metadata = session.get("metadata") or {}
+        email = (metadata.get("user_email") or session.get("customer_email") or "").strip().lower()
+        credits = int(metadata.get("credits") or "1")
+        if email:
+            new_balance = _add_credits(email, credits)
+            print(f"[stripe] +{credits} credits for {email} → balance {new_balance}")
+    return {"received": True}
 
 
 # ─── Manual OCR Upload Endpoint ───────────────────────────────────────────
@@ -122,10 +286,12 @@ class AnyRORRequest(BaseModel):
     record_type: Optional[str] = "OLD_SCAN_712"
 
 @app.post("/fetch-anyror")
-async def fetch_anyror_endpoint(request: AnyRORRequest):
+async def fetch_anyror_endpoint(request: AnyRORRequest, x_user_email: Optional[str] = Header(default=None)):
     """
     Automated RPA endpoint to scrape AnyROR 7/12 Land Records.
     Uses Playwright + Gemini Vision for CAPTCHA solving and data extraction.
+    When STRIPE_ENABLED=true, requires an X-User-Email header with credits > 0;
+    one credit is deducted per successful fetch.
     """
     # Validate inputs
     if not request.district or not request.district.strip():
@@ -137,6 +303,20 @@ async def fetch_anyror_endpoint(request: AnyRORRequest):
     if not request.survey_no or not request.survey_no.strip():
         raise HTTPException(status_code=400, detail="Survey number is required")
 
+    # Credit gate (only enforced when payments are enabled)
+    email = (x_user_email or "").strip().lower()
+    if STRIPE_ENABLED:
+        if not email:
+            raise HTTPException(
+                status_code=402,
+                detail="Payment required: send your account email in the X-User-Email header. Buy search credits on the pricing page."
+            )
+        if _get_credits(email) <= 0:
+            raise HTTPException(
+                status_code=402,
+                detail="No search credits remaining. Purchase credits on the pricing page (₹1,500/search)."
+            )
+
     result = await scrape_anyror_data(
         district=request.district.strip(),
         taluka=request.taluka.strip(),
@@ -146,7 +326,14 @@ async def fetch_anyror_endpoint(request: AnyRORRequest):
     )
     if "error" in result:
         raise HTTPException(status_code=422, detail=result["error"])
-    
+
+    # Deduct one credit on success
+    if STRIPE_ENABLED and email:
+        try:
+            _add_credits(email, -1)
+        except Exception as e:
+            print(f"[credits] deduction failed for {email}: {e}")
+
     return result
 
 

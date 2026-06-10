@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { UploadCloud, FileText, Loader2, Cpu, ShieldCheck, AlertTriangle, MapPin, User, Calendar, BookmarkPlus, CheckCircle2, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import TopNav from '@/components/TopNav';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BASE_URL, getUserEmail, fetchCredits } from '@/lib/api';
 import { createClient } from '@/utils/supabase/client';
 
 // Exact AnyROR Record Types from https://anyror.gujarat.gov.in/LandRecordRural.aspx
@@ -163,11 +163,26 @@ export default function DocumentUpload() {
   const handleAutomate = async (e: React.FormEvent) => {
     e.preventDefault();
     setAutoResult(null);
+
+    // Credit gate: if payments are enabled on the backend and the user has
+    // no credits, redirect to the pricing page before launching the bot.
+    const userEmail = getUserEmail();
+    if (userEmail) {
+      const info = await fetchCredits(userEmail);
+      if (info?.payments_enabled && info.credits <= 0) {
+        alert("No search credits remaining. You'll be redirected to the pricing page.");
+        window.location.href = '/pricing';
+        return;
+      }
+    }
+
     simulateProgress();
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (userEmail) headers["X-User-Email"] = userEmail;
       const res = await fetch(`${API_BASE_URL}/fetch-anyror`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           record_type: recordType,
           district: district.trim(),
@@ -177,6 +192,13 @@ export default function DocumentUpload() {
         })
       });
       clearInterval(progressTimerRef.current);
+      if (res.status === 402) {
+        const errData = await res.json().catch(() => ({ detail: "Payment required" }));
+        setProgressPct(0); setProgressLabel(""); setShowProgress(false);
+        alert(errData.detail || "Payment required — purchase search credits first.");
+        window.location.href = '/pricing';
+        return;
+      }
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ detail: "Unknown error" }));
         setProgressPct(0); setProgressLabel(""); setShowProgress(false);
@@ -198,6 +220,11 @@ export default function DocumentUpload() {
     return () => { if (progressTimerRef.current) clearInterval(progressTimerRef.current); };
   }, []);
 
+  // Warm up the Render backend as soon as the page mounts (free tier cold-starts)
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/health`).catch(() => {});
+  }, []);
+
   // Cascading dropdown effects
   useEffect(() => {
     setLoadingDistricts(true);
@@ -207,26 +234,33 @@ export default function DocumentUpload() {
   }, []);
 
   useEffect(() => {
-    if (!district) { setTalukas([]); setTaluka(''); setVillages([]); setVillage(''); setVillageGujarati(''); return; }
+    if (!district) { setTalukas([]); setTaluka(''); setVillages([]); return; }
     setLoadingTalukas(true);
-    setTaluka(''); setVillages([]); setVillage(''); setVillageGujarati('');
+    setTaluka(''); setVillages([]);
     fetch(`${API_BASE_URL}/options/talukas?district=${encodeURIComponent(district)}`)
       .then(r => r.json()).then(d => setTalukas(d.talukas || [])).catch(() => setTalukas([]))
       .finally(() => setLoadingTalukas(false));
   }, [district]);
 
+  // Clear stale village suggestions when location changes (typed village is kept usable)
   useEffect(() => {
-    if (!district || !taluka) { setVillages([]); setVillage(''); setVillageGujarati(''); return; }
+    setVillages([]);
+  }, [district, taluka]);
+
+  // OPTIONAL: load live village suggestions from AnyROR (~20s Playwright scrape).
+  // The form is fully usable without this — the backend fuzzy-matches the
+  // free-typed English village name against the live AnyROR dropdown.
+  const loadVillageSuggestions = () => {
+    if (!district || !taluka || loadingVillages) return;
     setLoadingVillages(true);
-    setVillage(''); setVillageGujarati('');
     fetch(`${API_BASE_URL}/options/villages?district=${encodeURIComponent(district)}&taluka=${encodeURIComponent(taluka)}`)
       .then(r => r.json()).then(d => setVillages(d.villages || [])).catch(() => setVillages([]))
       .finally(() => setLoadingVillages(false));
-  }, [district, taluka]);
+  };
 
   const inputClass = "w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]";
   const selectClass = "w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-[#00f0ff] transition-colors cursor-pointer";
-  const isAutoFormValid = district && taluka && village && (needsOwnerName ? ownerName.trim() : surveyNo.trim());
+  const isAutoFormValid = district && taluka && village.trim() && (needsOwnerName ? ownerName.trim() : surveyNo.trim());
 
   // PROGRESS LOADING SCREEN
   if (showProgress) {
@@ -346,28 +380,40 @@ export default function DocumentUpload() {
                 </div>
               </div>
 
-              {/* Village */}
+              {/* Village — free text input (English or Gujarati; backend fuzzy-matches on AnyROR) */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495] flex items-center gap-2">
                   Village (ગામ)
                   {loadingVillages && <span className="text-[#00f0ff] font-normal text-[9px] normal-case tracking-normal">fetching from AnyROR (~20s)…</span>}
                 </label>
-                <div className="relative">
-                  <select value={village}
-                    onChange={e => {
-                      const eng = e.target.value;
-                      setVillage(eng);
-                      const obj = villages.find(v => v.english === eng);
-                      setVillageGujarati(obj ? obj.gujarati : eng);
-                    }}
-                    className={`${selectClass} appearance-none pr-8`} disabled={!taluka || loadingVillages}>
-                    <option value="">{!taluka ? '— Select Taluka First —' : loadingVillages ? 'Loading villages…' : '— Select Village —'}</option>
-                    {villages.map(v => <option key={v.gujarati} value={v.english}>{v.english}</option>)}
-                  </select>
+                <input
+                  type="text"
+                  value={village}
+                  onChange={e => {
+                    const typed = e.target.value;
+                    setVillage(typed);
+                    const obj = villages.find(v => v.english.toLowerCase() === typed.trim().toLowerCase());
+                    setVillageGujarati(obj ? obj.gujarati : '');
+                  }}
+                  placeholder="e.g. Navrangpura, Vejalpur, Bopal"
+                  list="upload-village-suggestions"
+                  className={inputClass}
+                />
+                <datalist id="upload-village-suggestions">
+                  {villages.map(v => <option key={v.gujarati} value={v.english} />)}
+                </datalist>
+                <button
+                  type="button"
+                  onClick={loadVillageSuggestions}
+                  disabled={!district || !taluka || loadingVillages}
+                  className="text-left text-[9px] text-[#00f0ff]/80 hover:text-[#00f0ff] underline underline-offset-2 decoration-[#00f0ff]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 w-fit"
+                >
                   {loadingVillages
-                    ? <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#00f0ff] animate-spin pointer-events-none" />
-                    : <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#3b494b] pointer-events-none" />}
-                </div>
+                    ? <><Loader2 size={9} className="animate-spin" /> Loading suggestions from AnyROR…</>
+                    : villages.length > 0
+                      ? <>↻ Reload suggestions ({villages.length} villages loaded)</>
+                      : <>Load village suggestions from AnyROR (takes ~20s)</>}
+                </button>
               </div>
 
               {/* Survey / Owner */}
@@ -380,13 +426,15 @@ export default function DocumentUpload() {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">{getEntryFieldLabel()}</label>
                   <input type="text" value={surveyNo} onChange={e => setSurveyNo(e.target.value)} placeholder="Enter survey/block number (e.g. 123)" className={inputClass} />
+                  <p className="text-[#3b494b] text-[9px] leading-relaxed">Common formats: 123, 123/1, 123 P, 45 A — check AnyROR for exact format</p>
                 </div>
               )}
             </div>
 
             <div className="text-[10px] text-[#849495] bg-[#1c1b1b]/60 p-3 border border-[#3b494b]/30">
-              <span className="text-[#eab308] font-bold">⚠ CAPTCHA:</span> The RPA bot will auto-solve the government CAPTCHA using Gemini Vision AI. This may take 10-20 seconds. 
+              <span className="text-[#eab308] font-bold">⚠ CAPTCHA:</span> The RPA bot will auto-solve the government CAPTCHA using Gemini Vision AI. This may take 10-20 seconds.
               <span className="text-[#00f0ff]"> All processing happens in background — you&apos;ll see a live progress feed.</span>
+              <span className="block mt-1 text-[#849495]">First search may take 60-90s extra while the backend warms up (free hosting cold start).</span>
             </div>
 
              <button type="submit" disabled={!isAutoFormValid} className="mt-2 w-full py-4 text-[#002022] font-bold text-sm tracking-[0.15em] uppercase bg-gradient-to-r from-[#de4ced] to-[#ff00f0] hover:brightness-110 transition-all flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed">

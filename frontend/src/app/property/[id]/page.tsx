@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, use, Suspense } from 'react';
-import { ChevronLeft, MapPin, Activity, AlertCircle, FileText, Share2, Database, Loader2, Search, User, BookmarkPlus, CheckCircle2 } from 'lucide-react';
+import React, { useState, useMemo, use, Suspense } from 'react';
+import { ChevronLeft, MapPin, Activity, AlertCircle, FileText, Share2, Database, Loader2, Search, User, BookmarkPlus, CheckCircle2, Download } from 'lucide-react';
 import Link from 'next/link';
 import TopNav from '@/components/TopNav';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BASE_URL, getUserEmail, fetchCredits } from '@/lib/api';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 
@@ -63,45 +63,77 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
     }
   };
 
-  useEffect(() => {
-    const fetchPropertyData = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const surveyNum = propertyId.replace('SURVEY-', '');
-        const res = await fetch(`${API_BASE_URL}/fetch-anyror`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            survey_no: surveyNum,
-            district: urlDistrict,
-            taluka: urlTaluka,
-            village: urlVillage,
-            record_type: urlRecordType
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setRecord(data);
-        } else {
-          const errData = await res.json().catch(() => ({ detail: "Unknown error" }));
-          setError(errData.detail || "Could not fetch record from backend.");
-        }
-      } catch {
-        setError("Backend not available. Start the RPA server to view real property data.");
-      } finally {
-        setIsLoading(false);
+  const surveyNum = propertyId.replace('SURVEY-', '');
+  const hasSurveyNumber = !!surveyNum && surveyNum !== 'XX';
+
+  // Manual fetch — only runs when the user clicks "FETCH RECORD FROM ANYROR".
+  // The scrape takes 30-120s (live CAPTCHA solving), so we never auto-trigger it.
+  const fetchPropertyData = async () => {
+    if (isLoading) return;
+
+    // Credit gate: if payments are enabled and the user has no credits,
+    // send them to the pricing page.
+    const userEmail = getUserEmail();
+    if (userEmail) {
+      const info = await fetchCredits(userEmail);
+      if (info?.payments_enabled && info.credits <= 0) {
+        window.location.href = '/pricing';
+        return;
       }
-    };
-    
-    // Only auto-fetch if we have a real survey number
-    const surveyNum = propertyId.replace('SURVEY-', '');
-    if (surveyNum && surveyNum !== 'XX') {
-      fetchPropertyData();
-    } else {
-      setError("No survey number specified. Use the Title Scanner to search for a record.");
     }
-  }, [propertyId, urlDistrict, urlTaluka, urlVillage]);
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (userEmail) headers['X-User-Email'] = userEmail;
+      const res = await fetch(`${API_BASE_URL}/fetch-anyror`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          survey_no: surveyNum,
+          district: urlDistrict,
+          taluka: urlTaluka,
+          village: urlVillage,
+          record_type: urlRecordType
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRecord(data);
+      } else if (res.status === 402) {
+        const errData = await res.json().catch(() => ({ detail: 'Payment required' }));
+        setError(errData.detail || 'Payment required — purchase search credits on the pricing page.');
+      } else {
+        const errData = await res.json().catch(() => ({ detail: "Unknown error" }));
+        setError(errData.detail || "Could not fetch record from backend.");
+      }
+    } catch {
+      setError("Backend not available. It may be cold-starting (60-90s on free hosting) — try again in a minute.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // If the scrape failed because the survey number wasn't found, the backend
+  // returns "...Available options (first 15): ['123', '123/1', ...]" — parse
+  // those so the user can pick the correct one.
+  const availableOptions = useMemo<string[]>(() => {
+    if (!error) return [];
+    const match = error.match(/Available options \(first \d+\): \[(.*?)\]/);
+    if (!match) return [];
+    return match[1]
+      .split(',')
+      .map(s => s.replace(/['"]/g, '').trim())
+      .filter(Boolean);
+  }, [error]);
+
+  const optionHref = (opt: string) =>
+    `/property/SURVEY-${encodeURIComponent(opt)}` +
+    `?district=${encodeURIComponent(urlDistrict)}` +
+    `&taluka=${encodeURIComponent(urlTaluka)}` +
+    `&village=${encodeURIComponent(urlVillage)}` +
+    `&record_type=${encodeURIComponent(urlRecordType)}`;
 
   const hasEncumbrances = record?.encumbrances && 
     record.encumbrances.toLowerCase() !== 'none' && 
@@ -148,21 +180,89 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <Loader2 size={32} className="text-[#00f0ff] animate-spin" />
           <span className="text-xs text-[#849495] uppercase tracking-widest">Fetching Real Data from AnyROR Government Portal...</span>
-          <span className="text-[10px] text-[#3b494b]">This may take 30-90 seconds (CAPTCHA solving + data extraction)</span>
+          <span className="text-[10px] text-[#3b494b]">This may take 30-120 seconds (CAPTCHA solving + data extraction). First search may take 60-90s extra while the backend warms up.</span>
         </div>
       )}
 
-      {/* Error / No Data State */}
-      {!isLoading && error && (
-        <div className="glass-panel p-12 flex flex-col items-center gap-6 text-center border border-[#3b494b]/40">
-          <Database size={48} className="text-[#3b494b]" />
+      {/* Pre-Fetch State — record is only fetched when the user clicks the button */}
+      {!isLoading && !record && (
+        <div className="glass-panel p-8 md:p-12 flex flex-col gap-8 border border-[#3b494b]/40">
+
+          {/* Search Parameter Summary */}
           <div>
-            <h2 className="text-xl font-display uppercase mb-2 text-[#849495]">No Record Data Available</h2>
-            <p className="text-xs text-[#3b494b] max-w-md">{error}</p>
+            <h2 className="text-xl font-display uppercase text-[#00f0ff] mb-6 border-b border-[#3b494b]/40 pb-2">Search Parameters</h2>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-[#849495] tracking-[0.2em] font-bold uppercase">District</span>
+                <span className="text-sm font-mono text-[#dbfcff]">{urlDistrict}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-[#849495] tracking-[0.2em] font-bold uppercase">Taluka</span>
+                <span className="text-sm font-mono text-[#dbfcff]">{urlTaluka.replace(/_/g, ' ')}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-[#849495] tracking-[0.2em] font-bold uppercase">Village</span>
+                <span className="text-sm font-mono text-[#dbfcff]">{urlVillage}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-[#849495] tracking-[0.2em] font-bold uppercase">Survey No.</span>
+                <span className="text-sm font-mono text-[#00f0ff]">{hasSurveyNumber ? surveyNum : '—'}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-[#849495] tracking-[0.2em] font-bold uppercase">Record Type</span>
+                <span className="text-sm font-mono text-[#dbfcff]">{urlRecordType.replace(/_/g, ' ')}</span>
+              </div>
+            </div>
           </div>
-          <Link href="/upload" className="px-8 py-3 bg-gradient-to-r from-[#de4ced] to-[#ff00f0] text-[#002022] text-xs font-bold tracking-widest uppercase hover:brightness-110 transition-all">
-            Fetch Record via Title Scanner
-          </Link>
+
+          {/* Error from a previous fetch attempt */}
+          {error && (
+            <div className="flex flex-col gap-4 p-4 bg-[#111111]/80 border-l-2 border-[#ba1b24]">
+              <div className="flex items-start gap-3">
+                <AlertCircle size={16} className="text-[#ba1b24] mt-0.5 flex-shrink-0" />
+                <p className="text-xs font-mono text-[#ba1b24] break-words">{error}</p>
+              </div>
+              {availableOptions.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-[10px] text-[#849495] tracking-widest uppercase font-bold">Valid survey numbers found in this village — pick the right one:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {availableOptions.map(opt => (
+                      <Link
+                        key={opt}
+                        href={optionHref(opt)}
+                        className="px-3 py-1.5 border border-[#00f0ff]/40 bg-[#00f0ff]/5 text-[#00f0ff] text-xs font-mono hover:bg-[#00f0ff]/15 transition-colors"
+                      >
+                        {opt}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Fetch Trigger */}
+          {hasSurveyNumber ? (
+            <div className="flex flex-col items-center gap-4 text-center">
+              <button
+                onClick={fetchPropertyData}
+                className="px-10 py-4 bg-gradient-to-r from-[#00dbe9] to-[#00f0ff] text-[#002022] text-sm font-bold tracking-[0.15em] uppercase hover:brightness-110 transition-all flex items-center gap-3"
+              >
+                <Download size={16} /> Fetch Record from AnyROR
+              </button>
+              <p className="text-[10px] text-[#849495] max-w-md leading-relaxed">
+                <span className="text-[#eab308] font-bold">⚠</span> This will take 30-120 seconds — the bot navigates the live government portal and solves the CAPTCHA with Gemini Vision. First search may take 60-90s extra while the backend warms up.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-6 text-center">
+              <Database size={48} className="text-[#3b494b]" />
+              <p className="text-xs text-[#3b494b] max-w-md">No survey number specified. Use the Title Scanner to search for a record.</p>
+              <Link href="/upload" className="px-8 py-3 bg-gradient-to-r from-[#de4ced] to-[#ff00f0] text-[#002022] text-xs font-bold tracking-widest uppercase hover:brightness-110 transition-all">
+                Open Title Scanner
+              </Link>
+            </div>
+          )}
         </div>
       )}
 

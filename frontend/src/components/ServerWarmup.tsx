@@ -16,11 +16,13 @@ export default function ServerWarmup() {
       try {
         const res = await fetch(`${API_BASE_URL}/`, {
           method: "GET",
+          // Give Render up to 90s to cold-start
           signal: AbortSignal.timeout(90_000),
         });
         if (cancelled) return;
         if (res.ok) {
           setStatus("ready");
+          // Auto-hide 4s after "ready" so it doesn't clutter the UI
           setTimeout(() => { if (!cancelled) setVisible(false); }, 4000);
         } else {
           setStatus("error");
