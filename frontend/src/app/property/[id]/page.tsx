@@ -15,6 +15,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
   const urlDistrict = searchParams.get('district') || 'Ahmedabad';
   const urlTaluka = searchParams.get('taluka') || 'CITY';
   const urlVillage = searchParams.get('village') || 'Navrangpura';
+  const urlRecordType = searchParams.get('record_type') || 'OLD_SCAN_712';
   
   const supabase = createClient();
   const [record, setRecord] = useState<any>(null);
@@ -76,7 +77,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
             district: urlDistrict,
             taluka: urlTaluka,
             village: urlVillage,
-            record_type: 'OLD_SCAN_712'
+            record_type: urlRecordType
           })
         });
         if (res.ok) {
@@ -104,7 +105,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
 
   const hasEncumbrances = record?.encumbrances && 
     record.encumbrances.toLowerCase() !== 'none' && 
-    record.encumbrances !== 'â';
+    record.encumbrances !== '—';
 
   return (
     <>
@@ -174,19 +175,19 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                     <div className="flex flex-col gap-1 col-span-2 md:col-span-3">
                        <span className="text-[10px] text-[#849495] tracking-[0.2em] font-bold uppercase flex items-center gap-1"><User size={10}/> Owner Name</span>
-                       <span className="text-lg font-display text-[#dbfcff]">{record.owner_name || 'â'}</span>
+                       <span className="text-lg font-display text-[#dbfcff]">{record.owner_name || '—'}</span>
                     </div>
                     <div className="flex flex-col gap-1">
                        <span className="text-[10px] text-[#849495] tracking-[0.2em] font-bold uppercase">Total Area</span>
-                       <span className="text-lg font-display text-[#dbfcff]">{record.area || 'â'}</span>
+                       <span className="text-lg font-display text-[#dbfcff]">{record.area || '—'}</span>
                     </div>
                     <div className="flex flex-col gap-1">
                        <span className="text-[10px] text-[#849495] tracking-[0.2em] font-bold uppercase">Tenure Type</span>
-                       <span className="text-lg font-display text-[#dbfcff]">{record.tenure_type || 'â'}</span>
+                       <span className="text-lg font-display text-[#dbfcff]">{record.tenure_type || '—'}</span>
                     </div>
                     <div className="flex flex-col gap-1">
                        <span className="text-[10px] text-[#849495] tracking-[0.2em] font-bold uppercase">Cultivation</span>
-                       <span className="text-lg font-display text-[#dbfcff]">{record.cultivation || 'â'}</span>
+                       <span className="text-lg font-display text-[#dbfcff]">{record.cultivation || '—'}</span>
                     </div>
                  </div>
               </div>
@@ -195,11 +196,11 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
                  <div className="grid grid-cols-2 gap-6">
                     <div className="flex flex-col gap-1 p-4 bg-[#111111]/80 border-l-2 border-[#4edea3]">
                        <span className="text-[10px] text-[#849495] tracking-widest uppercase font-bold">Jantri Rate</span>
-                       <span className="text-lg font-display text-[#4edea3]">{record.jantri_rate || 'â'}</span>
+                       <span className="text-lg font-display text-[#4edea3]">{record.jantri_rate || '—'}</span>
                     </div>
                     <div className="flex flex-col gap-1 p-4 bg-[#111111]/80 border-l-2 border-[#00f0ff]">
                        <span className="text-[10px] text-[#849495] tracking-widest uppercase font-bold">Last Sale</span>
-                       <span className="text-lg font-display text-[#dbfcff]">{record.last_sale || 'â'}</span>
+                       <span className="text-lg font-display text-[#dbfcff]">{record.last_sale || '—'}</span>
                     </div>
                  </div>
               </div>
@@ -221,12 +222,12 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
               <div className="glass-panel p-6 border border-[#3b494b]/40 sticky top-24">
                  <h2 className="text-lg font-display uppercase text-[#dbfcff] flex items-center gap-2 mb-6"><FileText size={16} className="text-[#00f0ff]"/> Record Summary</h2>
                  <div className="flex flex-col gap-4 text-sm">
-                    <div className="flex justify-between border-b border-[#3b494b]/20 pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">Survey No.</span><span className="text-[#dbfcff] font-mono">{record.survey_no || 'â'}</span></div>
-                    <div className="flex justify-between border-b border-[#3b494b]/20 pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">Village</span><span className="text-[#dbfcff]">{record.village || 'â'}</span></div>
-                    <div className="flex justify-between border-b border-[#3b494b]/20 pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">District</span><span className="text-[#dbfcff]">{record.district || 'â'}</span></div>
-                    <div className="flex justify-between border-b border-[#3b494b]/20 pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">Taluka</span><span className="text-[#dbfcff]">{record.taluka?.replace(/_/g, ' ') || 'â'}</span></div>
-                    <div className="flex justify-between border-b border-[#3b494b]/20 pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">Record</span><span className="text-[#00f0ff] text-xs">{record.message || 'â'}</span></div>
-                    <div className="flex justify-between pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">Status</span><span className="{`text-xs font-bold uppercase ${record.status === 'SUCCESS' ? 'text-[#4edea3]' : 'text-[#ba1b24]'}`}>{record.status || 'â'}</span></div>
+                    <div className="flex justify-between border-b border-[#3b494b]/20 pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">Survey No.</span><span className="text-[#dbfcff] font-mono">{record.survey_no || '—'}</span></div>
+                    <div className="flex justify-between border-b border-[#3b494b]/20 pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">Village</span><span className="text-[#dbfcff]">{record.village || '—'}</span></div>
+                    <div className="flex justify-between border-b border-[#3b494b]/20 pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">District</span><span className="text-[#dbfcff]">{record.district || '—'}</span></div>
+                    <div className="flex justify-between border-b border-[#3b494b]/20 pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">Taluka</span><span className="text-[#dbfcff]">{record.taluka?.replace(/_/g, ' ') || '—'}</span></div>
+                    <div className="flex justify-between border-b border-[#3b494b]/20 pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">Record</span><span className="text-[#00f0ff] text-xs">{record.message || '—'}</span></div>
+                    <div className="flex justify-between pb-2"><span className="text-[#849495] text-xs uppercase tracking-widest">Status</span><span className={`text-xs font-bold uppercase ${record.status === 'SUCCESS' ? 'text-[#4edea3]' : 'text-[#ba1b24]'}`}>{record.status || '—'}</span></div>
                  </div>
                  <div className="mt-6 flex flex-col gap-3">
                     {record && (
@@ -242,7 +243,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
                         {saveState === 'saving' && <><Loader2 size={12} className="animate-spin"/> Saving...</>}
                         {saveState === 'saved' && <><CheckCircle2 size={12}/> Saved to Portfolio</>}
                         {saveState === 'duplicate' && <><CheckCircle2 size={12}/> Already in Portfolio</>}
-                        {saveState === 'error' && <>Save Failed â Retry</>}
+                        {saveState === 'error' && <>Save Failed — Retry</>}
                         {saveState === 'idle' && <><BookmarkPlus size={12}/> Save to Portfolio</>}
                       </button>
                     )}

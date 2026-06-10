@@ -1,5 +1,5 @@
 # gujarat_data.py
-# Static Gujarat administrative hierarchy: Districts â Talukas
+# Static Gujarat administrative hierarchy: Districts → Talukas
 # Villages are fetched live from AnyROR portal via Playwright
 
 GUJARAT_DISTRICTS_TALUKAS: dict[str, list[str]] = {
@@ -79,10 +79,10 @@ GUJARAT_DISTRICTS_TALUKAS: dict[str, list[str]] = {
         "Halvad", "Maliya", "Morbi", "Tankara", "Wankaner"
     ],
     "Narmada": [
-        "Dediyapad", "Garudeshwar", "Nandod", "Sagbara", "Tilakwada"
+        "Dediyapada", "Garudeshwar", "Nandod", "Sagbara", "Tilakwada"
     ],
     "Navsari": [
-        "Chikhhli", "Gandevi", "Jalalpore", "Khergam", "Navsari", "Vansda"
+        "Chikhli", "Gandevi", "Jalalpore", "Khergam", "Navsari", "Vansda"
     ],
     "Panchmahal": [
         "Godhra", "Ghoghamba", "Halol", "Jambughoda", "Kalol",
