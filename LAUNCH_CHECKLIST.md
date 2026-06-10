@@ -7,6 +7,12 @@ Backend: new users automatically get free trial credits (FREE_TRIAL_CREDITS env,
 
 Frontend: search widget is mobile-responsive and shows verified survey-number suggestions as you type. Property page asks for email inline (claims free trial — no card) and shows a proper paywall when credits run out, plus a working Share button and a print-friendly "Download Report". Compliance page is now a real CGDCR-2017 FSI calculator (zone + road width + plot area → buildable area + chargeable-FSI premium cost). SEO metadata added.
 
+## Step 0 — Actually deploy this update (REQUIRED — read this first)
+
+**Frontend:** Vercel is NOT connected to your GitHub repo — all past deployments were made from the CLI, so pushing to `main` does nothing. The live `satyalekh.vercel.app` is running old code. Fix permanently: Vercel dashboard → satyalekh project → Settings → Git → Connect `chinmaydrive02-rgb/satyalekh` (root directory: `frontend`). Or deploy once manually from your laptop: `cd ~/Downloads/SATYALEKH/frontend && npx vercel --prod`.
+
+**Backend:** Check the Render dashboard → satyalekh-api → whether a deploy started for commit `4a49ffe`. If not, click "Manual Deploy → Deploy latest commit" (and enable Auto-Deploy in Settings). Note: when I tested, the API didn't wake up within ~2 minutes — if it stays down, check Render's logs / free-tier hours.
+
 ## Step 1 — Supabase (5 min, REQUIRED)
 
 Open the Supabase SQL editor at https://supabase.com/dashboard → project `uvvwqugljoritqbjcryg` → SQL Editor, and run the whole of `backend/schema.sql`. This creates: `user_credits`, `payments`, `village_cache`, `survey_options` (plus `portfolio_assets` if missing). Nothing payment-related works without `user_credits`.
