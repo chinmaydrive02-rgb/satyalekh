@@ -83,3 +83,9 @@
   * { color: #111111 !important; text-shadow: none !important; }
   h1, h2, h3 { color: #000000 !important; }
 }
+
+/* Welcome intro animation */
+@keyframes sl-slide-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}

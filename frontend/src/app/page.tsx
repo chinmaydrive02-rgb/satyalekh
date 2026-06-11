@@ -5,6 +5,7 @@ import Map from "@/components/Map";
 import SearchWidget from "@/components/SearchWidget";
 import RiskCard from "@/components/RiskCard";
 import TopNav from "@/components/TopNav";
+import WelcomeIntro from "@/components/WelcomeIntro";
 
 export default function Home() {
   const [selectedPlot, setSelectedPlot] = useState<any>(null);
@@ -23,6 +24,7 @@ export default function Home() {
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-[#0a0a0a]">
+      <WelcomeIntro />
       <TopNav />
       {/* Background Map layer */}
       <Map onPlotSelect={handlePlotSelect} />

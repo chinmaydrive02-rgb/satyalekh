@@ -376,6 +376,16 @@ def _find_best_option(options_texts: list, target: str) -> Opt[str]:
             if gujarati in text:
                 return val
 
+    # 5. Gujarati taluka map (exact AnyROR dropdown text, scraped June 2026)
+    try:
+        from gujarat_data import get_taluka_gujarati
+        for gu in get_taluka_gujarati(target_lower):
+            for val, text in options_texts:
+                if gu == text.strip() or gu in text:
+                    return val
+    except Exception:
+        pass
+
     return None
 
 
