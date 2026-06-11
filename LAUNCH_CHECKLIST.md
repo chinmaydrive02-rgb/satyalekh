@@ -48,6 +48,17 @@ Once `STRIPE_ENABLED=true`, every new email gets 2 free searches automatically, 
 
 Render free tier sleeps after 15 min → 60–90 s cold starts kill conversions. Create a free monitor at https://cron-job.org (or UptimeRobot) hitting `https://satyalekh-api-sg.onrender.com/` every 10 minutes. (Upgrading Render to the $7/mo Starter plan removes spin-down entirely and is the single best UX upgrade you can buy.)
 
+## ⚠ Known blocker — AnyROR vs cloud IPs (June 11, 2026)
+
+During final testing, anyror.gujarat.gov.in **did not respond at all** to requests from Render servers (tested both Oregon and the new Singapore service, with up to 100s timeouts), while loading instantly from a residential Indian connection. The portal appears to throttle or block data-center/foreign traffic, at least during Indian evening hours. Everything else in the stack is verified working end-to-end (frontend → API → Playwright → credits/caches).
+
+What to try, in order:
+1. **Retry off-peak** (early morning IST) — searches worked from this same Render setup in April, so the block may be load-based or temporary.
+2. **Host the backend on an Indian IP** — Oracle Cloud "Always Free" has Mumbai/Hyderabad regions with free ARM VMs (needs signup + card verification). Deploy the same `backend/Dockerfile` there and update `NEXT_PUBLIC_API_URL` in Vercel.
+3. If even Indian data-center IPs are blocked, a residential proxy provider (paid) is the remaining option.
+
+The active backend is `satyalekh-api-sg` (Singapore). The old `satyalekh-api` (Oregon) can be suspended.
+
 ## Security — do these soon
 
 1. **Rotate the GitHub token.** A personal access token is embedded in `.git/config` (and was used for pushes). GitHub → Settings → Developer settings → revoke it, create a fine-grained token scoped to this repo only, then run: `git remote set-url origin https://<NEW_TOKEN>@github.com/chinmaydrive02-rgb/satyalekh.git`

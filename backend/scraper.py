@@ -586,7 +586,10 @@ async def scrape_anyror_data(
 
             if not nav_ok:
                 return await _cleanup_and_return(
-                    {"error": "AnyROR portal is not reachable. Check your internet connection."}
+                    {"error": "The government AnyROR portal is not responding to our servers right now "
+                              "(it sometimes throttles or blocks cloud traffic, especially during Indian "
+                              "business hours). Please try again in a few minutes — off-peak hours "
+                              "(early morning / late night IST) work best."}
                 )
 
             # Wait for the district dropdown to be populated (page fully loaded)
