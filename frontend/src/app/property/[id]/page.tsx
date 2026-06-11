@@ -146,9 +146,39 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
     `&village=${encodeURIComponent(urlVillage)}` +
     `&record_type=${encodeURIComponent(urlRecordType)}`;
 
-  const hasEncumbrances = record?.encumbrances && 
-    record.encumbrances.toLowerCase() !== 'none' && 
+  const hasEncumbrances = record?.encumbrances &&
+    record.encumbrances.toLowerCase() !== 'none' &&
     record.encumbrances !== '—';
+
+  // ── Title Clearance Score ─────────────────────────────────────────────
+  // Deterministic 0–100 score from the official record's risk signals.
+  const clearance = useMemo(() => {
+    if (!record) return null;
+    const checks: { label: string; ok: boolean; weight: number; detail: string }[] = [];
+    const tenure = (record.tenure_type || '').toLowerCase();
+    const enc = (record.encumbrances || '').toLowerCase();
+    const mut = (record.mutation_entries || '').toLowerCase();
+    const restricted = /new|navi|restrict|prohibit|72-?aa|ganot/.test(tenure);
+    const encumbered = !!enc && !['none', 'null', '', 'n/a', 'no', 'nil', '—', 'clear'].includes(enc.trim());
+    const mutationFlag = /pending|dispute|objection|stay/.test(mut);
+    const ownerKnown = !!record.owner_name && record.owner_name !== '—';
+    const govt = /sarkar|government|sarkari|forest/.test((record.owner_name || '').toLowerCase());
+
+    checks.push({ label: 'No encumbrances / mortgages (Boja)', ok: !encumbered, weight: 40,
+      detail: encumbered ? `Record shows: ${record.encumbrances}` : 'No liens or charges found on the record' });
+    checks.push({ label: 'Old tenure — freely transferable', ok: !restricted, weight: 30,
+      detail: restricted ? 'New/restricted tenure: collector permission + premium may be required before sale or NA use' : 'No transfer restrictions detected in tenure type' });
+    checks.push({ label: 'No disputed / pending mutations', ok: !mutationFlag, weight: 15,
+      detail: mutationFlag ? 'Mutation entries mention pending or disputed items — verify ferfar nondh at the e-Dhara kendra' : 'No disputed mutation flags found' });
+    checks.push({ label: 'Owner clearly identified', ok: ownerKnown && !govt, weight: 15,
+      detail: !ownerKnown ? 'Owner name could not be extracted — verify manually' : govt ? 'Owner appears to be government/forest — not privately transferable' : `Recorded owner: ${record.owner_name}` });
+
+    const score = checks.reduce((s, c) => s + (c.ok ? c.weight : 0), 0);
+    const grade = score >= 85 ? { label: 'CLEAR', color: '#4edea3' }
+      : score >= 55 ? { label: 'CAUTION', color: '#eab308' }
+      : { label: 'HIGH RISK', color: '#ba1b24' };
+    return { score, grade, checks };
+  }, [record]);
 
   return (
     <>
@@ -385,6 +415,40 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
                     </div>
                  </div>
               </div>
+              {clearance && (
+                <div className="glass-panel p-8 border border-[#3b494b]/40" style={{ borderLeftWidth: 3, borderLeftColor: clearance.grade.color }}>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-[#3b494b]/40 pb-4">
+                    <h2 className="text-xl font-display uppercase text-[#dbfcff] flex items-center gap-2">
+                      <CheckCircle2 size={18} style={{ color: clearance.grade.color }}/> Title Clearance Score
+                    </h2>
+                    <div className="flex items-center gap-4">
+                      <span className="text-4xl font-display" style={{ color: clearance.grade.color }}>{clearance.score}<span className="text-sm text-[#849495]">/100</span></span>
+                      <span className="px-3 py-1 text-xs uppercase font-bold tracking-widest border"
+                        style={{ color: clearance.grade.color, borderColor: `${clearance.grade.color}80`, backgroundColor: `${clearance.grade.color}15` }}>
+                        {clearance.grade.label}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {clearance.checks.map((c, i) => (
+                      <div key={i} className="flex items-start gap-3 p-3 bg-[#111111]/60 border-l-2" style={{ borderLeftColor: c.ok ? '#4edea3' : '#ba1b24' }}>
+                        <span className="mt-0.5 shrink-0" style={{ color: c.ok ? '#4edea3' : '#ba1b24' }}>
+                          {c.ok ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold tracking-wide text-[#dbfcff] uppercase">{c.label}
+                            <span className="ml-2 text-[9px] text-[#3b494b] font-mono normal-case">{c.weight} pts</span>
+                          </div>
+                          <p className="text-[10px] text-[#849495] leading-relaxed mt-0.5">{c.detail}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-[#3b494b] leading-relaxed mt-4">
+                    Automated assessment of the official 7/12 record only. Not a legal title opinion — for transactions, verify the index-2, search report (30 yrs) and pending litigation with a lawyer. The printable report includes this scorecard.
+                  </p>
+                </div>
+              )}
               <div className="glass-panel p-8 border border-[#3b494b]/40">
                  <h2 className="text-xl font-display uppercase text-[#de4ced] mb-6 border-b border-[#3b494b]/40 pb-2 flex items-center gap-2"><AlertCircle size={18}/> Risk Assessment</h2>
                  <div className="grid grid-cols-1 gap-6">

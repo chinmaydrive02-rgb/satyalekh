@@ -32,8 +32,8 @@ const STEPS = [
   },
   {
     icon: <FileCheck2 size={22} />,
-    title: 'Read It in English',
-    desc: 'Owner, area, tenure, mutations and encumbrances — translated, risk-scored (clear / restricted / encumbered) and ready to save or print.',
+    title: 'Get the Clearance Verdict',
+    desc: 'A 0–100 Title Clearance Score: encumbrances, tenure restrictions, mutation flags and ownership — translated to English, ready to save or print.',
   },
 ];
 
@@ -106,7 +106,7 @@ export default function WelcomeIntro() {
                 Satya<span className="text-[#00f0ff]">-</span>Lekh
               </h1>
               <p className="text-[#00f0ff] uppercase tracking-[0.3em] text-[11px] font-bold">
-                Gujarat Land Records · Decoded in English
+                India&apos;s Land Title Clearance Checker
               </p>
               <p className="text-[#849495] text-xs mt-4 max-w-md mx-auto leading-relaxed">
                 The government&apos;s 7/12 (સાતબાર) records are locked behind CAPTCHAs and Gujarati script.

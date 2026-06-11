@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk' });
 
 export const metadata: Metadata = {
-  title: 'Satya-Lekh — Gujarat Land Records (7/12 Satbara) in English, in Minutes',
+  title: 'Satya-Lekh — India’s Land Title Clearance Checker | Gujarat 7/12 in English',
   description:
     'Search AnyROR Gujarat land records (7/12 / Satbara utara) by district, taluka, village and survey number. Automatic CAPTCHA solving, Gujarati-to-English translation, encumbrance and tenure risk analysis for buyers, lawyers and banks.',
   keywords: [
