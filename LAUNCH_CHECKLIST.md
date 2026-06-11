@@ -11,7 +11,7 @@ Frontend: search widget is mobile-responsive and shows verified survey-number su
 
 **Frontend:** Vercel is NOT connected to your GitHub repo — all past deployments were made from the CLI, so pushing to `main` does nothing. The live `satyalekh.vercel.app` is running old code. Fix permanently: Vercel dashboard → satyalekh project → Settings → Git → Connect `chinmaydrive02-rgb/satyalekh` (root directory: `frontend`). Or deploy once manually from your laptop: `cd ~/Downloads/SATYALEKH/frontend && npx vercel --prod`.
 
-**Backend:** Check the Render dashboard → satyalekh-api → whether a deploy started for commit `4a49ffe`. If not, click "Manual Deploy → Deploy latest commit" (and enable Auto-Deploy in Settings). Note: when I tested, the API didn't wake up within ~2 minutes — if it stays down, check Render's logs / free-tier hours.
+**Backend:** Check the Render dashboard → satyalekh-api-sg → whether a deploy started for commit `4a49ffe`. If not, click "Manual Deploy → Deploy latest commit" (and enable Auto-Deploy in Settings). Note: when I tested, the API didn't wake up within ~2 minutes — if it stays down, check Render's logs / free-tier hours.
 
 ## Step 1 — Supabase (5 min, REQUIRED)
 
@@ -19,7 +19,7 @@ Open the Supabase SQL editor at https://supabase.com/dashboard → project `uvvw
 
 ## Step 2 — Render env vars (2 min, REQUIRED)
 
-In the Render dashboard → satyalekh-api → Environment, confirm/add:
+In the Render dashboard → satyalekh-api-sg → Environment, confirm/add:
 
 | Key | Value |
 |---|---|
@@ -28,7 +28,7 @@ In the Render dashboard → satyalekh-api → Environment, confirm/add:
 
 ## Step 3 — Vercel env var (1 min, REQUIRED)
 
-Vercel dashboard → project → Settings → Environment Variables: `NEXT_PUBLIC_API_URL = https://satyalekh-api.onrender.com` (production). Redeploy after adding.
+Vercel dashboard → project → Settings → Environment Variables: `NEXT_PUBLIC_API_URL = https://satyalekh-api-sg.onrender.com` (production). Redeploy after adding.
 
 ## Step 4 — Smoke test (after deploy)
 
@@ -37,7 +37,7 @@ Visit the site → select Ahmedabad → City → type "Navrangpura" → survey n
 ## Step 5 — Turn on payments (when ready)
 
 1. Create a Stripe account → get **test** keys first (`sk_test_...`).
-2. Stripe dashboard → Developers → Webhooks → Add endpoint: `https://satyalekh-api.onrender.com/webhook/stripe`, event `checkout.session.completed`. Copy the `whsec_...` secret.
+2. Stripe dashboard → Developers → Webhooks → Add endpoint: `https://satyalekh-api-sg.onrender.com/webhook/stripe`, event `checkout.session.completed`. Copy the `whsec_...` secret.
 3. Add to Render: `STRIPE_ENABLED=true`, `STRIPE_SECRET_KEY=sk_test_...`, `STRIPE_WEBHOOK_SECRET=whsec_...`, `FRONTEND_URL=https://<your-vercel-domain>`.
 4. Test: pricing page → enter email → Buy 1 Search → card `4242 4242 4242 4242` → confirm credits appear (`/credits?email=...`).
 5. Swap test keys for live keys. Note: Stripe India requires business verification for live INR payments; if that's a blocker, Razorpay is the common alternative — the backend's checkout/webhook layer is small and could be swapped later.
@@ -46,7 +46,7 @@ Once `STRIPE_ENABLED=true`, every new email gets 2 free searches automatically, 
 
 ## Step 6 — Keep the backend warm (strongly recommended, free)
 
-Render free tier sleeps after 15 min → 60–90 s cold starts kill conversions. Create a free monitor at https://cron-job.org (or UptimeRobot) hitting `https://satyalekh-api.onrender.com/` every 10 minutes. (Upgrading Render to the $7/mo Starter plan removes spin-down entirely and is the single best UX upgrade you can buy.)
+Render free tier sleeps after 15 min → 60–90 s cold starts kill conversions. Create a free monitor at https://cron-job.org (or UptimeRobot) hitting `https://satyalekh-api-sg.onrender.com/` every 10 minutes. (Upgrading Render to the $7/mo Starter plan removes spin-down entirely and is the single best UX upgrade you can buy.)
 
 ## Security — do these soon
 
