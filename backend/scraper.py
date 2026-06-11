@@ -567,18 +567,21 @@ async def scrape_anyror_data(
             # ── Step 1: Navigate ──────────────────────────────────────────────
             print("  [1/8] Navigating to AnyROR...")
             nav_ok = False
-            for nav_attempt in range(1, 4):
+            # AnyROR responds slowly (sometimes >60s) to data-center IPs, so use
+            # the most lenient wait ("commit" = first response byte) with a long
+            # timeout, then rely on the dropdown-population wait for readiness.
+            for nav_attempt in range(1, 3):
                 try:
                     await page.goto(
                         "https://anyror.gujarat.gov.in/LandRecordRural.aspx",
-                        wait_until="domcontentloaded",
-                        timeout=45000
+                        wait_until="commit",
+                        timeout=100000
                     )
                     nav_ok = True
                     break
                 except Exception as e:
                     print(f"    Navigation attempt {nav_attempt} failed: {e}")
-                    if nav_attempt < 3:
+                    if nav_attempt < 2:
                         await asyncio.sleep(3)
 
             if not nav_ok:
@@ -587,7 +590,7 @@ async def scrape_anyror_data(
                 )
 
             # Wait for the district dropdown to be populated (page fully loaded)
-            await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=20000)
+            await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=60000)
 
             # ── Step 2: Select Record Type ────────────────────────────────────
             record_val = RECORD_TYPE_MAP.get(record_type, "11")
@@ -796,9 +799,9 @@ async def scrape_anyror_data(
 
     # Wrap the entire scrape in a 120-second timeout guard
     try:
-        return await asyncio.wait_for(_run_scrape(), timeout=120.0)
+        return await asyncio.wait_for(_run_scrape(), timeout=300.0)
     except asyncio.TimeoutError:
-        print("  ✗ Scraper timed out after 120 seconds")
+        print("  ✗ Scraper timed out after 300 seconds")
         return {"error": "AnyROR scrape timed out. The government portal may be slow — try again."}
     except Exception as e:
         print(f"  ✗ Fatal Scraper Error: {e}")
@@ -855,9 +858,9 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
             try:
                 await page.goto(
                     "https://anyror.gujarat.gov.in/LandRecordRural.aspx",
-                    wait_until="domcontentloaded", timeout=45000
+                    wait_until="commit", timeout=100000
                 )
-                await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5)
+                await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=60000)
 
                 # Select district
                 ok = await _select_cascading_option(
@@ -899,7 +902,7 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
                 await browser.close()
 
     try:
-        gujarati_names = await asyncio.wait_for(_run(), timeout=90.0)
+        gujarati_names = await asyncio.wait_for(_run(), timeout=180.0)
     except asyncio.TimeoutError:
         print("  ✗ Village fetch timed out")
         return []

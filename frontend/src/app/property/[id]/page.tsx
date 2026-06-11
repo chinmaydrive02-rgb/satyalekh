@@ -206,7 +206,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <Loader2 size={32} className="text-[#00f0ff] animate-spin" />
           <span className="text-xs text-[#849495] uppercase tracking-widest">Fetching Real Data from AnyROR Government Portal...</span>
-          <span className="text-[10px] text-[#3b494b]">This may take 30-120 seconds (CAPTCHA solving + data extraction). First search may take 60-90s extra while the backend warms up.</span>
+          <span className="text-[10px] text-[#3b494b]">This can take up to 5 minutes — the government portal is often slow (CAPTCHA solving + data extraction). First search may take 60-90s extra while the backend warms up.</span>
         </div>
       )}
 
@@ -332,7 +332,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
                 <Download size={16} /> Fetch Record from AnyROR
               </button>
               <p className="text-[10px] text-[#849495] max-w-md leading-relaxed">
-                <span className="text-[#eab308] font-bold">⚠</span> This will take 30-120 seconds — the bot navigates the live government portal and solves the CAPTCHA with Gemini Vision. First search may take 60-90s extra while the backend warms up.
+                <span className="text-[#eab308] font-bold">⚠</span> This can take 1–5 minutes — the bot navigates the live government portal and solves the CAPTCHA with Gemini Vision. First search may take 60-90s extra while the backend warms up.
               </p>
             </div>
           ) : !hasSurveyNumber ? (
