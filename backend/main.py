@@ -491,8 +491,11 @@ async def land_report(body: LandReportRequest):
         "Be specific to the locality, honest about uncertainty, keep each section under 60 words."
     )
     try:
-        response = genai.Client().models.generate_content(
-            model="gemini-2.5-flash", contents=[prompt])
+        import asyncio
+        from scraper import get_gemini_client
+        response = await asyncio.to_thread(
+            lambda: get_gemini_client().models.generate_content(
+                model="gemini-2.5-flash", contents=[prompt]))
         text = response.text.strip()
         if text.startswith("```json"):
             text = text[7:]
