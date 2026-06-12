@@ -436,6 +436,9 @@ class LandReportRequest(BaseModel):
     lng: float
     area_sqm: float = 0
     place_hint: Optional[str] = None
+    # Deterministic facts computed client-side (reverse-geocoded address,
+    # measured infra distances) — the model must build around these.
+    verified_facts: Optional[str] = None
 
 @app.post("/land-report")
 async def land_report(body: LandReportRequest):
@@ -471,24 +474,33 @@ async def land_report(body: LandReportRequest):
 
     acres = round(body.area_sqm / 4046.86, 3) if body.area_sqm else None
     prompt = (
-        "You are a land intelligence analyst for Indian real estate due diligence. "
-        f"Analyze the land parcel at latitude {body.lat}, longitude {body.lng}"
-        + (f" (near: {body.place_hint})" if body.place_hint else "")
+        "You are a senior property due-diligence analyst at an Indian real-estate law firm, "
+        "drafting a preliminary land assessment in formal professional register (the style of a "
+        "lawyer's opinion memo: measured, precise, citing what must be verified). "
+        "Never mention AI, models, data sources, or how this report was produced.\n\n"
+        f"SUBJECT PARCEL: latitude {body.lat}, longitude {body.lng}"
         + (f", area {body.area_sqm:.0f} sq m ({acres} acres)" if body.area_sqm else "")
-        + (f". Elevation: {elevation} m." if elevation is not None else ".")
-        + (f" Annual rainfall 2025: {annual_rain_mm} mm." if annual_rain_mm else "")
-        + " Using your geographic knowledge of this exact location, return ONLY valid JSON: "
-        '{"location_summary": "...", '
+        + (f"\nREVERSE-GEOCODED ADDRESS (authoritative — trust this over coordinates): {body.place_hint}" if body.place_hint else "")
+        + (f"\nSURVEYED FACTS (measured, authoritative — use these figures verbatim, do not contradict them):\n{body.verified_facts}" if body.verified_facts else "")
+        + (f"\nElevation: {elevation} m AMSL." if elevation is not None else "")
+        + (f"\nRecorded annual precipitation (latest full year): {annual_rain_mm} mm." if annual_rain_mm else "")
+        + "\n\nIMPORTANT: If the address provided conflicts with your assumptions about the coordinates, "
+        "the address is correct. Anchor every locality claim to the address and surveyed facts. "
+        "Where you are uncertain, say 'to be verified' rather than guessing.\n\n"
+        "Return ONLY valid JSON:\n"
+        '{"executive_summary": "3-4 sentence professional opinion of the parcel and its principal risks", '
+        '"location_summary": "...", '
         '"soil_terrain": "...", '
-        '"water_flood_risk": "...", '
+        '"water_flood_risk": "include drainage, waterlogging history of this locality, water-body buffer considerations", '
         '"climate": "...", '
-        '"connectivity": "nearby highways/metro/airport/rail with approx distances", '
-        '"land_use_zoning": "likely zoning/DP context and what to verify", '
-        '"market_outlook": "price trend drivers for this micro-market", '
-        '"legal_notes": "state-specific title checks (e.g. 7/12, NA status for Gujarat)", '
+        '"connectivity": "transit, road and airport access — use the surveyed distances verbatim where provided", '
+        '"land_use_zoning": "likely DP/TP zoning context, CGDCR implications, what the sanctioned plan must be checked for", '
+        '"development_potential": "realistic development scenarios given location, FSI regime and plot size", '
+        '"market_outlook": "demand drivers, indicative price band if confident, jantri considerations", '
+        '"legal_notes": "the precise statutory checks for this state: 7/12 extract, index-2, NA conversion, title search, encumbrance certificate, RERA", '
         '"suitability": {"agriculture": 0-10, "residential": 0-10, "commercial": 0-10}, '
-        '"red_flags": ["..."]} '
-        "Be specific to the locality, honest about uncertainty, keep each section under 60 words."
+        '"red_flags": ["specific, actionable concerns for this parcel"]} '
+        "Keep each section under 70 words, specific to the locality, no generic filler."
     )
     try:
         import asyncio
