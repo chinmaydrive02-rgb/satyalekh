@@ -36,6 +36,23 @@ Highest land-transaction velocity in Gujarat (Dholera SIR, Sanand industrial bel
 - Enterprise (banks/NBFCs): API + bulk verification, custom (the current "Bank Bulk Deals" card).
 - The ₹1,500/search current price should become the *report* price for enterprise, not the consumer price.
 
+## Competitive landscape — what to take from every land app in India (researched June 2026)
+
+**Landeed** (the category leader, ₹19.5 Cr funded, 24 states, 120+ document types) — steal four things:
+(1) *Prohibited Property Checker* — flag wakf, forest, government, 72-AA/restricted and blacklisted parcels before purchase; for Gujarat this is a deterministic checklist against tenure + owner fields we already extract. (2) *Property Locker* — let users store their deeds/7-12/EC in an encrypted vault (Supabase storage; drives retention + account creation). (3) *Watchlist with mutation alerts* — already on our roadmap; Landeed proves people pay for it. (4) *Document bundles* — sell a "Title Pack" (7/12 + VF-6 history + index-2 + EC) as one purchase instead of per-search.
+
+**TEAL** (bank-grade diligence, aggregates 900+ sources incl. courts) — the lesson: **litigation search**. eCourts API lookup by owner name + village turns our report from "record check" into "title check". Banks/NBFCs pay for exactly this; it's the enterprise wedge.
+
+**Zapkey** (registered transaction data) — *comparable sales*: Gujarat's Garvi/IGR index-2 data gives actual registered sale prices near a parcel. A "Recent registered transactions within 1 km" section in the land report is the single most persuasive data point for buyers.
+
+**Bhunaksha** (govt cadastral maps, NIC, many states) — the holy grail integration: render actual survey-number plot boundaries on our map so users *click a plot → get its survey number → run the title check*, no typing. HydraLakes does this for Telangana; Gujarat's cadastral layer via Bhunaksha/RoR maps should be investigated from the Indian server (likely same IP-blocking as AnyROR).
+
+**MagicBricks PropWorth / NoBroker valuation** — instant price estimate per locality; we approximate with jantri × locality multiplier until we have transaction data.
+
+**Govt quick wins (deterministic, free, build anytime):** stamp duty + registration fee calculator for Gujarat (4.9% + 1%, female-owner concession) fed by the jantri rate — pairs with the FSI calculator; RERA Gujarat project lookup by location; bullet-train (MAHSR) and DMIC corridor proximity in the infra layer — both pass through Ahmedabad and move land prices.
+
+**Expansion sequencing by state portal:** Maharashtra (MahaBhulekh + most liquid market) → Karnataka (Bhoomi RTC) → Telangana/AP (Dharani/Webland, where Landeed started — fight them last, not first).
+
 ## Hard dependencies, in order
 1. **Indian IP for the scraper** — see DEPLOY_INDIA.md (Oracle Cloud Mumbai, free). Without this nothing else matters.
 2. Keep-warm + uptime monitor (cron-job.org, free).
