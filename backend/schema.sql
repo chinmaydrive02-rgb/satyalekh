@@ -83,6 +83,35 @@ CREATE TABLE IF NOT EXISTS survey_options (
 ALTER TABLE survey_options ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "backend access" ON survey_options FOR ALL USING (true) WITH CHECK (true);
 
+-- ── Property Locker (document vault) ─────────────────────────
+-- Files live in the public 'lockers' storage bucket under unguessable paths;
+-- this table is the per-email index. Replace with auth-scoped RLS when
+-- Supabase Auth lands.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('lockers', 'lockers', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "locker upload" ON storage.objects;
+CREATE POLICY "locker upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'lockers');
+DROP POLICY IF EXISTS "locker read" ON storage.objects;
+CREATE POLICY "locker read" ON storage.objects FOR SELECT USING (bucket_id = 'lockers');
+DROP POLICY IF EXISTS "locker delete" ON storage.objects;
+CREATE POLICY "locker delete" ON storage.objects FOR DELETE USING (bucket_id = 'lockers');
+
+CREATE TABLE IF NOT EXISTS locker_documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_email TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    storage_path TEXT NOT NULL,
+    doc_type TEXT DEFAULT 'other',
+    size_bytes BIGINT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_locker_email ON locker_documents (user_email);
+ALTER TABLE locker_documents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "backend access" ON locker_documents;
+CREATE POLICY "backend access" ON locker_documents FOR ALL USING (true) WITH CHECK (true);
+
 -- ── Legacy geometry table (keep for reference, not used by app) ──
 -- CREATE EXTENSION IF NOT EXISTS postgis;
 -- CREATE TABLE IF NOT EXISTS land_parcels ( ... );

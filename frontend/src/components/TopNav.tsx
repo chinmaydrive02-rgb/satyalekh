@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Map, UploadCloud, Database, Phone, LayoutDashboard, User, TrendingUp, ShieldCheck, Menu, X, Wallet, Sparkles } from 'lucide-react';
+import { Map, UploadCloud, Database, Phone, LayoutDashboard, User, TrendingUp, ShieldCheck, Menu, X, Wallet, Sparkles, Vault, BookOpen } from 'lucide-react';
 import { getUserEmail, fetchCredits, CreditsInfo } from '@/lib/api';
 
 export default function TopNav() {
@@ -27,8 +27,9 @@ export default function TopNav() {
     { href: '/market', label: 'Market Intel', icon: <TrendingUp size={14}/> },
     { href: '/compliance', label: 'FSI Compliance', icon: <ShieldCheck size={14}/> },
     { href: '/upload', label: 'Title Scanner', icon: <UploadCloud size={14}/> },
-    { href: '/directory', label: 'Legal Counsel', icon: <Phone size={14}/> },
-    { href: '/pricing', label: 'API / Pricing', icon: <Database size={14}/> },
+    { href: '/locker', label: 'Locker', icon: <Vault size={14}/> },
+    { href: '/documents', label: 'Documents', icon: <BookOpen size={14}/> },
+    { href: '/pricing', label: 'Pricing', icon: <Database size={14}/> },
     { href: '/contact', label: 'Contact', icon: <User size={14}/> },
   ];
 
