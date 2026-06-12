@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Map, UploadCloud, Database, Phone, LayoutDashboard, User, TrendingUp, ShieldCheck, Menu, X, Wallet } from 'lucide-react';
+import { Map, UploadCloud, Database, Phone, LayoutDashboard, User, TrendingUp, ShieldCheck, Menu, X, Wallet, Sparkles } from 'lucide-react';
 import { getUserEmail, fetchCredits, CreditsInfo } from '@/lib/api';
 
 export default function TopNav() {
@@ -22,6 +22,7 @@ export default function TopNav() {
 
   const links = [
     { href: '/', label: 'Intel Map', icon: <Map size={14}/> },
+    { href: '/land-intel', label: 'Land Intel AI', icon: <Sparkles size={14}/> },
     { href: '/dashboard', label: 'Portfolio', icon: <LayoutDashboard size={14}/> },
     { href: '/market', label: 'Market Intel', icon: <TrendingUp size={14}/> },
     { href: '/compliance', label: 'FSI Compliance', icon: <ShieldCheck size={14}/> },

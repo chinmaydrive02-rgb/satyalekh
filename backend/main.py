@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 import os
 import json
 from pydantic import BaseModel
@@ -20,6 +21,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 @app.middleware("http")
@@ -52,13 +56,20 @@ def _get_stripe():
     return stripe
 
 
+_sb_client = None
+
 def _get_supabase():
+    """Memoized Supabase client (one connection pool per process)."""
+    global _sb_client
+    if _sb_client is not None:
+        return _sb_client
     url = os.getenv("SUPABASE_URL")
     key = os.getenv("SUPABASE_KEY")
     if not url or not key:
         return None
     from supabase import create_client
-    return create_client(url, key)
+    _sb_client = create_client(url, key)
+    return _sb_client
 
 
 def _get_credits(email: str) -> int:
@@ -411,6 +422,97 @@ def surveys_endpoint(district: str, taluka: str, village: str):
     from scraper import get_cached_survey_options
     options = get_cached_survey_options(district, taluka, village)
     return {"district": district, "taluka": taluka, "village": village, "surveys": options}
+
+
+# ─── AI Land Intelligence Report (HydraLakes-style, works anywhere) ────────
+# Free open geo-data (Open-Meteo elevation + rainfall archive) + Gemini
+# composition. No land-records scraping involved — this is why it works for
+# any coordinates in India (or Earth).
+
+_land_report_cache: dict = {}
+
+class LandReportRequest(BaseModel):
+    lat: float
+    lng: float
+    area_sqm: float = 0
+    place_hint: Optional[str] = None
+
+@app.post("/land-report")
+async def land_report(body: LandReportRequest):
+    if not (-90 <= body.lat <= 90 and -180 <= body.lng <= 180):
+        raise HTTPException(status_code=400, detail="Invalid coordinates")
+    cache_key = f"{round(body.lat, 4)},{round(body.lng, 4)},{int(body.area_sqm)}"
+    if cache_key in _land_report_cache:
+        return _land_report_cache[cache_key]
+
+    # Enrich with free open data (best-effort, short timeouts)
+    elevation = None
+    annual_rain_mm = None
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=8) as cx:
+            try:
+                r = await cx.get("https://api.open-meteo.com/v1/elevation",
+                                 params={"latitude": body.lat, "longitude": body.lng})
+                elevation = (r.json().get("elevation") or [None])[0]
+            except Exception:
+                pass
+            try:
+                r = await cx.get("https://archive-api.open-meteo.com/v1/archive",
+                                 params={"latitude": body.lat, "longitude": body.lng,
+                                         "start_date": "2025-01-01", "end_date": "2025-12-31",
+                                         "daily": "precipitation_sum", "timezone": "auto"})
+                vals = (r.json().get("daily") or {}).get("precipitation_sum") or []
+                annual_rain_mm = round(sum(v for v in vals if v is not None))
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    acres = round(body.area_sqm / 4046.86, 3) if body.area_sqm else None
+    prompt = (
+        "You are a land intelligence analyst for Indian real estate due diligence. "
+        f"Analyze the land parcel at latitude {body.lat}, longitude {body.lng}"
+        + (f" (near: {body.place_hint})" if body.place_hint else "")
+        + (f", area {body.area_sqm:.0f} sq m ({acres} acres)" if body.area_sqm else "")
+        + (f". Elevation: {elevation} m." if elevation is not None else ".")
+        + (f" Annual rainfall 2025: {annual_rain_mm} mm." if annual_rain_mm else "")
+        + " Using your geographic knowledge of this exact location, return ONLY valid JSON: "
+        '{"location_summary": "...", '
+        '"soil_terrain": "...", '
+        '"water_flood_risk": "...", '
+        '"climate": "...", '
+        '"connectivity": "nearby highways/metro/airport/rail with approx distances", '
+        '"land_use_zoning": "likely zoning/DP context and what to verify", '
+        '"market_outlook": "price trend drivers for this micro-market", '
+        '"legal_notes": "state-specific title checks (e.g. 7/12, NA status for Gujarat)", '
+        '"suitability": {"agriculture": 0-10, "residential": 0-10, "commercial": 0-10}, '
+        '"red_flags": ["..."]} '
+        "Be specific to the locality, honest about uncertainty, keep each section under 60 words."
+    )
+    try:
+        response = genai.Client().models.generate_content(
+            model="gemini-2.5-flash", contents=[prompt])
+        text = response.text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        report = json.loads(text.strip())
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Report generation failed: {e}")
+
+    result = {
+        "lat": body.lat, "lng": body.lng, "area_sqm": body.area_sqm,
+        "elevation_m": elevation, "annual_rain_mm": annual_rain_mm,
+        "report": report,
+    }
+    if len(_land_report_cache) > 500:
+        _land_report_cache.clear()
+    _land_report_cache[cache_key] = result
+    return result
 
 
 # ─── Health Check ──────────────────────────────────────────────────────────
