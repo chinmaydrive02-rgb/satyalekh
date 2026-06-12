@@ -530,6 +530,34 @@ async def land_report(body: LandReportRequest):
     return result
 
 
+# ─── Litigation Search (eCourts party-name lookup) ─────────────────────────
+
+class LitigationRequest(BaseModel):
+    name: str
+    district: str
+    year: str = ""
+
+@app.post("/litigation-search")
+async def litigation_search(body: LitigationRequest):
+    """
+    Search Gujarat district eCourts for cases by party name (TEAL-style
+    title check). One year per search; principal court complex of the
+    district (v1). Takes 60-180s — live portal + CAPTCHA solving.
+    """
+    name = body.name.strip()
+    if len(name) < 3:
+        raise HTTPException(status_code=400, detail="Party name must be at least 3 characters")
+    if not body.district.strip():
+        raise HTTPException(status_code=400, detail="District is required")
+    import datetime
+    year = body.year.strip() or str(datetime.date.today().year)
+    from litigation import search_litigation
+    result = await search_litigation(name=name, district=body.district.strip(), year=year)
+    if "error" in result:
+        raise HTTPException(status_code=422, detail=result["error"])
+    return result
+
+
 # ─── Health Check ──────────────────────────────────────────────────────────
 
 @app.get("/")

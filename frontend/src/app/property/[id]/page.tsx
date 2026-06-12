@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, use, Suspense } from 'react';
-import { ChevronLeft, MapPin, Activity, AlertCircle, FileText, Share2, Database, Loader2, Search, User, BookmarkPlus, CheckCircle2, Download, Mail, Gift, Printer } from 'lucide-react';
+import { ChevronLeft, MapPin, Activity, AlertCircle, FileText, Share2, Database, Loader2, Search, User, BookmarkPlus, CheckCircle2, Download, Mail, Gift, Printer, Landmark } from 'lucide-react';
 import Link from 'next/link';
 import TopNav from '@/components/TopNav';
 import { API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, fetchConfig } from '@/lib/api';
@@ -26,6 +26,30 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
   const [emailInput, setEmailInput] = useState('');
   const [paywalled, setPaywalled] = useState(false);
   const [freeTrialCredits, setFreeTrialCredits] = useState(2);
+  const [litState, setLitState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [litResult, setLitResult] = useState<any>(null);
+  const [litError, setLitError] = useState('');
+  const [litYear, setLitYear] = useState(String(new Date().getFullYear()));
+
+  const runLitigationSearch = async () => {
+    if (!record?.owner_name || litState === 'running') return;
+    setLitState('running');
+    setLitError('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/litigation-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: record.owner_name, district: record.district || urlDistrict, year: litYear }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Search failed');
+      setLitResult(data);
+      setLitState('done');
+    } catch (e: any) {
+      setLitError(e.message || 'Search failed');
+      setLitState('error');
+    }
+  };
 
   const handleSaveToPortfolio = async () => {
     if (!record || saveState === 'saving' || saveState === 'saved') return;
@@ -455,6 +479,54 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
                   </p>
                 </div>
               )}
+              {/* Litigation Check (eCourts) */}
+              <div className="glass-panel p-8 border border-[#3b494b]/40">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 border-b border-[#3b494b]/40 pb-3">
+                  <h2 className="text-xl font-display uppercase text-[#dbfcff] flex items-center gap-2">
+                    <Landmark size={18} className="text-[#eab308]"/> Litigation Check
+                    <span className="px-2 py-0.5 text-[8px] uppercase font-bold tracking-widest bg-[#eab308]/10 text-[#eab308] border border-[#eab308]/40">Beta</span>
+                  </h2>
+                  {litState !== 'running' && (
+                    <div className="flex items-center gap-2">
+                      <input value={litYear} onChange={e => setLitYear(e.target.value)} maxLength={4}
+                        className="w-[70px] bg-[#111] border border-[#3b494b] text-[#dbfcff] px-2 py-1.5 font-mono text-xs focus:outline-none focus:border-[#eab308]" />
+                      <button onClick={runLitigationSearch}
+                        className="px-4 py-2 bg-[#eab308] text-[#1a1500] text-[10px] font-bold uppercase tracking-widest hover:brightness-110">
+                        Search eCourts
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-[#849495] leading-relaxed mb-3">
+                  Searches Gujarat district court records for cases naming <span className="text-[#dbfcff]">{record.owner_name || 'the recorded owner'}</span> in the selected registration year — pending and disposed. Principal court complex of {record.district || urlDistrict} district.
+                </p>
+                {litState === 'running' && (
+                  <div className="flex items-center gap-3 py-4 text-[#eab308] text-xs">
+                    <Loader2 size={16} className="animate-spin"/> Querying the eCourts portal (60–180s — live CAPTCHA solving)…
+                  </div>
+                )}
+                {litState === 'error' && (
+                  <div className="text-[10px] font-mono text-[#ba1b24] px-3 py-2 border border-[#ba1b24]/40 bg-[#ba1b24]/5">{litError}</div>
+                )}
+                {litState === 'done' && litResult && (
+                  <div className="flex flex-col gap-2">
+                    <div className={`text-[11px] font-mono px-3 py-2 border ${litResult.cases?.length ? 'border-[#ba1b24]/40 text-[#ba1b24] bg-[#ba1b24]/5' : 'border-[#4edea3]/40 text-[#4edea3] bg-[#4edea3]/5'}`}>
+                      {litResult.message}
+                    </div>
+                    {(litResult.cases || []).map((c: any, i: number) => (
+                      <div key={i} className="p-3 bg-[#111111]/70 border-l-2 border-[#ba1b24] flex flex-col gap-0.5">
+                        <span className="text-xs font-mono text-[#dbfcff]">{c.case_no} · {c.case_type}</span>
+                        <span className="text-[10px] text-[#b8c8c9]">{c.parties}</span>
+                        <span className="text-[9px] uppercase tracking-widest text-[#849495]">{c.status} {c.court ? `· ${c.court}` : ''}</span>
+                      </div>
+                    ))}
+                    <p className="text-[8px] text-[#3b494b] leading-relaxed">
+                      Name-based search — same-name matches are possible and spellings vary across records. One year per search; check multiple years and the High Court for transaction-grade certainty.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="glass-panel p-8 border border-[#3b494b]/40">
                  <h2 className="text-xl font-display uppercase text-[#de4ced] mb-6 border-b border-[#3b494b]/40 pb-2 flex items-center gap-2"><AlertCircle size={18}/> Risk Assessment</h2>
                  <div className="grid grid-cols-1 gap-6">
