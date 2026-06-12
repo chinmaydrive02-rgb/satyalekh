@@ -50,7 +50,7 @@ Render free tier sleeps after 15 min → 60–90 s cold starts kill conversions.
 
 ## ⚠ Known blocker — AnyROR vs cloud IPs (June 11, 2026)
 
-During final testing, anyror.gujarat.gov.in **did not respond at all** to requests from Render servers (tested both Oregon and the new Singapore service, with up to 100s timeouts), while loading instantly from a residential Indian connection. The portal appears to throttle or block data-center/foreign traffic, at least during Indian evening hours. Everything else in the stack is verified working end-to-end (frontend → API → Playwright → credits/caches).
+During final testing, anyror.gujarat.gov.in **and services.ecourts.gov.in (Litigation Check)** did not respond at all to requests from Render servers (tested both Oregon and the new Singapore service, with up to 100s timeouts), while loading instantly from a residential Indian connection. Both are NIC-hosted — one Indian-IP server unlocks both the title scraper and the litigation search. The portal appears to throttle or block data-center/foreign traffic, at least during Indian evening hours. Everything else in the stack is verified working end-to-end (frontend → API → Playwright → credits/caches).
 
 What to try, in order:
 1. **Retry off-peak** (early morning IST) — searches worked from this same Render setup in April, so the block may be load-based or temporary.
