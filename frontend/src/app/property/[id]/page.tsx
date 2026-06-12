@@ -158,20 +158,26 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
     const tenure = (record.tenure_type || '').toLowerCase();
     const enc = (record.encumbrances || '').toLowerCase();
     const mut = (record.mutation_entries || '').toLowerCase();
+    const owner = (record.owner_name || '').toLowerCase();
     const restricted = /new|navi|restrict|prohibit|72-?aa|ganot/.test(tenure);
     const encumbered = !!enc && !['none', 'null', '', 'n/a', 'no', 'nil', '—', 'clear'].includes(enc.trim());
     const mutationFlag = /pending|dispute|objection|stay/.test(mut);
     const ownerKnown = !!record.owner_name && record.owner_name !== '—';
-    const govt = /sarkar|government|sarkari|forest/.test((record.owner_name || '').toLowerCase());
+    // Prohibited-category screen (wakf / forest / government / gauchar /
+    // panchayat / trust holdings are not freely purchasable)
+    const prohibited = /sarkar|government|sarkari|forest|વન|wakf|waqf|વક્ફ|gauchar|ગૌચર|panchayat|પંચાયત|trust|ટ્રસ્ટ|devasthan|temple/.test(owner)
+      || /wakf|waqf|gauchar|devasthan/.test(tenure);
 
-    checks.push({ label: 'No encumbrances / mortgages (Boja)', ok: !encumbered, weight: 40,
+    checks.push({ label: 'No encumbrances / mortgages (Boja)', ok: !encumbered, weight: 35,
       detail: encumbered ? `Record shows: ${record.encumbrances}` : 'No liens or charges found on the record' });
-    checks.push({ label: 'Old tenure — freely transferable', ok: !restricted, weight: 30,
+    checks.push({ label: 'Old tenure — freely transferable', ok: !restricted, weight: 25,
       detail: restricted ? 'New/restricted tenure: collector permission + premium may be required before sale or NA use' : 'No transfer restrictions detected in tenure type' });
-    checks.push({ label: 'No disputed / pending mutations', ok: !mutationFlag, weight: 15,
+    checks.push({ label: 'Prohibited-category screen', ok: !prohibited, weight: 20,
+      detail: prohibited ? 'Holding appears to be government / wakf / forest / gauchar / trust category — such land is generally not privately transferable. Halt and verify.' : 'Not flagged as government, wakf, forest, gauchar, panchayat or trust holding' });
+    checks.push({ label: 'No disputed / pending mutations', ok: !mutationFlag, weight: 10,
       detail: mutationFlag ? 'Mutation entries mention pending or disputed items — verify ferfar nondh at the e-Dhara kendra' : 'No disputed mutation flags found' });
-    checks.push({ label: 'Owner clearly identified', ok: ownerKnown && !govt, weight: 15,
-      detail: !ownerKnown ? 'Owner name could not be extracted — verify manually' : govt ? 'Owner appears to be government/forest — not privately transferable' : `Recorded owner: ${record.owner_name}` });
+    checks.push({ label: 'Owner clearly identified', ok: ownerKnown, weight: 10,
+      detail: !ownerKnown ? 'Owner name could not be extracted — verify manually' : `Recorded owner: ${record.owner_name}` });
 
     const score = checks.reduce((s, c) => s + (c.ok ? c.weight : 0), 0);
     const grade = score >= 85 ? { label: 'CLEAR', color: '#4edea3' }

@@ -133,9 +133,9 @@ export default function Pricing() {
           <div className="text-[#00f0ff] font-display text-4xl mb-6">₹1,500 <span className="text-sm text-[#849495] tracking-widest uppercase">/ plot</span></div>
           
           <ul className="flex flex-col gap-4 mb-6 text-sm text-[#dbfcff]/80 font-sans mt-4">
-            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> Instant OCR Extraction</li>
-            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> GDCR FSI Calculator</li>
-            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> Basic Litigation Flags</li>
+            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> Title Clearance Score + printable report</li>
+            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> Prohibited-category & encumbrance screen</li>
+            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> 5-pack = full Title Pack: 7/12 + VF-6 mutation history + VF-8A khata + owner-name search</li>
           </ul>
 
           {/* Email + credits */}

@@ -43,6 +43,8 @@ export const KEY_POINTS: Pt[] = [
   { name: 'GIFT City', lng: 72.6840, lat: 23.1560 },
   { name: 'Sanand GIDC', lng: 72.3720, lat: 22.9920 },
   { name: 'CTM / NH-48 junction', lng: 72.6350, lat: 22.9980 },
+  { name: 'Sabarmati MAHSR (Bullet Train) Terminal', lng: 72.5870, lat: 23.0700 },
+  { name: 'Dholera SIR (DMIC node)', lng: 72.1950, lat: 22.2480 },
 ];
 
 export const WATER_BODIES: Pt[] = [
@@ -148,6 +150,22 @@ export function analyzeInfra(lng: number, lat: number): InfraIntel {
   if (sanandD < 15000) {
     rows.push({ label: 'Sanand GIDC', value: fmtKm(sanandD), flag: 'good' });
     facts.push(`Sanand industrial estate: ${fmtKm(sanandD)}.`);
+  }
+
+  // MAHSR bullet train terminal (Mumbai–Ahmedabad HSR) — major price driver
+  const hsr = KEY_POINTS.find(p => p.name.includes('MAHSR'))!;
+  const hsrD = distM(lng, lat, hsr.lng, hsr.lat);
+  if (hsrD < 10000) {
+    rows.push({ label: 'Bullet Train (MAHSR) Terminal', value: fmtKm(hsrD), flag: hsrD < 3000 ? 'good' : undefined });
+    facts.push(`Sabarmati MAHSR high-speed rail terminal: ${fmtKm(hsrD)}.`);
+  }
+
+  // Dholera SIR / DMIC investment node
+  const dholera = KEY_POINTS.find(p => p.name.includes('Dholera'))!;
+  const dholeraD = distM(lng, lat, dholera.lng, dholera.lat);
+  if (dholeraD < 30000) {
+    rows.push({ label: 'Dholera SIR (DMIC)', value: fmtKm(dholeraD), flag: 'good' });
+    facts.push(`Dholera Special Investment Region: ${fmtKm(dholeraD)}.`);
   }
 
   return { inCoverage: true, rows, redFlags, factsText: facts.join(' ') };

@@ -36,6 +36,19 @@ export default function ComplianceCalculator() {
   const [roadKey, setRoadKey] = useState('12to18');
   const [plotArea, setPlotArea] = useState('');
   const [jantri, setJantri] = useState('');
+  // Stamp duty calculator
+  const [dealValue, setDealValue] = useState('');
+  const [femaleBuyer, setFemaleBuyer] = useState(false);
+
+  const duty = useMemo(() => {
+    const v = parseFloat(dealValue);
+    if (!v || v <= 0) return null;
+    // Gujarat: stamp duty 4.9% (incl. surcharge); registration fee 1%,
+    // waived for sole female buyers. Verify current notification before paying.
+    const stamp = v * 0.049;
+    const reg = femaleBuyer ? 0 : v * 0.01;
+    return { stamp, reg, total: stamp + reg };
+  }, [dealValue, femaleBuyer]);
 
   const zone = ZONES.find(z => z.key === zoneKey)!;
   const road = ROADS.find(r => r.key === roadKey)!;
@@ -191,6 +204,40 @@ export default function ComplianceCalculator() {
                 </div>
               </>
             )}
+
+            {/* Stamp Duty & Registration Calculator */}
+            <div className="glass-panel p-8 border border-[#3b494b]/40 flex flex-col gap-5">
+              <h2 className="text-lg font-display uppercase text-[#dbfcff] border-b border-[#3b494b]/40 pb-3 flex items-center gap-2">
+                <IndianRupee size={16} className="text-[#00f0ff]"/> Stamp Duty & Registration (Gujarat)
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                <div className="flex flex-col gap-2">
+                  <label className={labelCls}>Transaction Value (₹) — higher of deal price or jantri value</label>
+                  <input type="number" min="0" value={dealValue} onChange={e => setDealValue(e.target.value)} placeholder="e.g. 5000000" className={inputCls} />
+                </div>
+                <label className="flex items-center gap-3 cursor-pointer pb-3">
+                  <input type="checkbox" checked={femaleBuyer} onChange={e => setFemaleBuyer(e.target.checked)} className="accent-[#00f0ff] w-4 h-4" />
+                  <span className="text-[11px] text-[#849495]">Sole female buyer (registration fee waived)</span>
+                </label>
+              </div>
+              {duty && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="flex flex-col gap-1 p-4 bg-[#111111]/80 border-l-2 border-[#00f0ff]">
+                    <span className={labelCls}>Stamp Duty (4.9%)</span>
+                    <span className="text-lg font-display text-[#dbfcff]">₹{fmt(duty.stamp)}</span>
+                  </div>
+                  <div className="flex flex-col gap-1 p-4 bg-[#111111]/80 border-l-2 border-[#de4ced]">
+                    <span className={labelCls}>Registration (1%)</span>
+                    <span className="text-lg font-display text-[#dbfcff]">{duty.reg === 0 ? 'Waived' : `₹${fmt(duty.reg)}`}</span>
+                  </div>
+                  <div className="flex flex-col gap-1 p-4 bg-[#111111]/80 border-l-2 border-[#4edea3]">
+                    <span className={labelCls}>Total Government Cost</span>
+                    <span className="text-lg font-display text-[#4edea3]">₹{fmt(duty.total)}</span>
+                  </div>
+                </div>
+              )}
+              <p className="text-[9px] text-[#3b494b] leading-relaxed">Duty is payable on the higher of consideration or jantri valuation. Rates per prevailing Gujarat notification — verify with the sub-registrar before payment.</p>
+            </div>
 
             <div className="flex items-start gap-3 p-4 border border-[#3b494b]/40 bg-[#1c1b1b]/30">
               <Info size={14} className="text-[#849495] mt-0.5 shrink-0" />
