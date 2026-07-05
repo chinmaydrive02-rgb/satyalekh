@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Database, TrendingUp, AlertTriangle, CheckCircle2, Crosshair, Plus, Loader2, X, FolderOpen, Trash2, Download, RefreshCw } from 'lucide-react';
+import { Database, AlertTriangle, CheckCircle2, Crosshair, Plus, Loader2, X, FolderOpen, Trash2, Download, RefreshCw, Bell, BellRing } from 'lucide-react';
 import TopNav from '@/components/TopNav';
 import Link from 'next/link';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BASE_URL, getUserEmail, setUserEmail, addToWatchlist } from '@/lib/api';
 import { createClient } from '@/utils/supabase/client';
 
 interface PortfolioAsset {
@@ -35,6 +35,8 @@ export default function Dashboard() {
   const [surveyNo, setSurveyNo] = useState('');
   const [isFetching, setIsFetching] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [watchingId, setWatchingId] = useState<string | null>(null);
+  const [watchedIds, setWatchedIds] = useState<Set<string>>(new Set());
 
   // ── Load portfolio from Supabase ──────────────────────────
   const loadPortfolio = useCallback(async () => {
@@ -68,7 +70,7 @@ export default function Dashboard() {
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ detail: "Unknown error" }));
-        alert(`RPA Error: ${errData.detail || "Backend returned an error."}`);
+        alert(`Fetch error: ${errData.detail || "Backend returned an error."}`);
         return;
       }
       const data = await res.json();
@@ -108,7 +110,7 @@ export default function Dashboard() {
       setDistrict(''); setTaluka(''); setVillage(''); setSurveyNo('');
     } catch (err: any) {
       alert(err?.message?.includes('fetch')
-        ? "Could not connect to the RPA backend. Please start the backend server."
+        ? "Could not connect to the backend. Please start the backend server."
         : `Error: ${err?.message || "Unknown error"}`);
     } finally {
       setIsFetching(false);
@@ -130,6 +132,33 @@ export default function Dashboard() {
     }
   };
 
+  // ── Watch a portfolio parcel (daily re-check + alerts) ────
+  const handleWatch = async (asset: PortfolioAsset) => {
+    if (watchingId || watchedIds.has(asset.id)) return;
+    let email = getUserEmail();
+    if (!email) {
+      const entered = window.prompt('Enter your email to get change alerts for this parcel:');
+      if (!entered || !entered.includes('@')) return;
+      email = entered.trim().toLowerCase();
+      setUserEmail(email);
+    }
+    setWatchingId(asset.id);
+    try {
+      await addToWatchlist({
+        email,
+        district: asset.district || '',
+        taluka: asset.taluka || '',
+        village: asset.village || '',
+        survey_no: asset.survey_no,
+      });
+      setWatchedIds(prev => new Set(prev).add(asset.id));
+    } catch {
+      alert('Could not add to watchlist — please try again.');
+    } finally {
+      setWatchingId(null);
+    }
+  };
+
   // ── CSV Export ────────────────────────────────────────────
   const handleExport = () => {
     if (holdings.length === 0) return;
@@ -147,34 +176,34 @@ export default function Dashboard() {
     URL.revokeObjectURL(url);
   };
 
-  const inputClass = "w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-mono text-xs focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]";
   const totalCleared = holdings.filter(h => !h.encumbrances || h.encumbrances.toLowerCase() === 'none').length;
   const totalRisks = holdings.filter(h => h.encumbrances && h.encumbrances.toLowerCase() !== 'none').length;
   const isFormValid = district.trim() && taluka.trim() && village.trim() && surveyNo.trim();
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] flex flex-col pt-20 pb-12 px-6 relative overflow-hidden">
+    <main className="min-h-screen bg-bg text-ink flex flex-col pt-24 pb-12 px-4 sm:px-6">
       <TopNav />
-      <div className="z-10 w-full max-w-[1200px] mx-auto flex flex-col gap-8 mt-4">
+      <div className="w-full max-w-[1200px] mx-auto flex flex-col gap-8">
 
         {/* Header */}
-        <div className="flex justify-between items-end border-b border-[#3b494b]/40 pb-6">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-border pb-6">
           <div>
-            <h1 className="text-4xl font-display uppercase tracking-tight mb-2">SOVEREIGN PORTFOLIO</h1>
-            <p className="text-[#849495] font-sans text-sm tracking-widest uppercase flex items-center gap-2">
-              <Database size={14}/> Active Intelligence Contracts — {isLoadingPortfolio ? '...' : `${holdings.length} Assets`}
+            <p className="eyebrow mb-1">Portfolio</p>
+            <h1 className="text-3xl sm:text-4xl font-bold text-ink mb-2">Your saved parcels</h1>
+            <p className="text-muted text-sm flex items-center gap-2">
+              <Database size={14}/> {isLoadingPortfolio ? 'Loading…' : `${holdings.length} asset${holdings.length === 1 ? '' : 's'} tracked`}
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2">
             {holdings.length > 0 && (
-              <button onClick={handleExport} className="px-4 py-3 border border-[#3b494b] text-[#849495] text-xs font-bold tracking-widest uppercase hover:border-[#4edea3] hover:text-[#4edea3] transition-all flex items-center gap-2">
+              <button onClick={handleExport} className="btn btn-outline">
                 <Download size={14}/> Export CSV
               </button>
             )}
-            <button onClick={() => loadPortfolio()} title="Refresh" className="px-4 py-3 border border-[#3b494b] text-[#849495] text-xs font-bold tracking-widest uppercase hover:border-[#00f0ff] hover:text-[#00f0ff] transition-all flex items-center gap-2">
+            <button onClick={() => loadPortfolio()} title="Refresh" className="btn btn-outline px-3">
               <RefreshCw size={14}/>
             </button>
-            <button onClick={() => setShowIngest(!showIngest)} className="px-6 py-3 bg-[#00f0ff] text-[#0a0a0a] text-xs font-bold tracking-widest uppercase hover:bg-[#dbfcff] transition-all flex items-center gap-2">
+            <button onClick={() => setShowIngest(!showIngest)} className="btn btn-primary">
               {showIngest ? <><X size={14}/> Close</> : <><Plus size={14}/> Add Asset</>}
             </button>
           </div>
@@ -182,69 +211,69 @@ export default function Dashboard() {
 
         {/* Ingest Form */}
         {showIngest && (
-          <form onSubmit={handleIngest} className="glass-panel p-6 border-l-4 border-[#00f0ff] flex flex-col gap-4">
-            <h2 className="text-sm font-display text-[#00f0ff] uppercase flex items-center gap-2 mb-2"><Crosshair size={14}/> AnyROR Target Retrieval</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">District (જીલ્લો)</label>
-                <input type="text" value={district} onChange={e => setDistrict(e.target.value)} placeholder="e.g. Ahmedabad" className={inputClass} />
+          <form onSubmit={handleIngest} className="card p-6 border-l-4 border-l-brand flex flex-col gap-4">
+            <h2 className="text-base font-semibold text-ink flex items-center gap-2"><Crosshair size={15} className="text-brand"/> Fetch a parcel from AnyROR</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="label">District (જીલ્લો)</label>
+                <input type="text" value={district} onChange={e => setDistrict(e.target.value)} placeholder="e.g. Ahmedabad" className="input" />
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Taluka (તાલુકો)</label>
-                <input type="text" value={taluka} onChange={e => setTaluka(e.target.value)} placeholder="e.g. Daskroi" className={inputClass} />
+              <div className="flex flex-col gap-1.5">
+                <label className="label">Taluka (તાલુકો)</label>
+                <input type="text" value={taluka} onChange={e => setTaluka(e.target.value)} placeholder="e.g. Daskroi" className="input" />
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Village (ગામ)</label>
-                <input type="text" value={village} onChange={e => setVillage(e.target.value)} placeholder="e.g. Bopal" className={inputClass} />
+              <div className="flex flex-col gap-1.5">
+                <label className="label">Village (ગામ)</label>
+                <input type="text" value={village} onChange={e => setVillage(e.target.value)} placeholder="e.g. Bopal" className="input" />
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Survey No. (સર્વે નંબર)</label>
-                <input type="text" value={surveyNo} onChange={e => setSurveyNo(e.target.value)} placeholder="e.g. 123" className={inputClass} />
+              <div className="flex flex-col gap-1.5">
+                <label className="label">Survey No. (સર્વે નંબર)</label>
+                <input type="text" value={surveyNo} onChange={e => setSurveyNo(e.target.value)} placeholder="e.g. 123" className="input font-mono" />
               </div>
             </div>
-            <button type="submit" disabled={isFetching || !isFormValid} className="mt-2 w-full md:w-auto self-end py-3 px-8 text-[#0a0a0a] font-bold text-xs tracking-widest uppercase bg-gradient-to-r from-[#de4ced] to-[#ff00f0] disabled:opacity-50 hover:brightness-110 flex items-center justify-center gap-2">
-              {isFetching ? <><Loader2 size={14} className="animate-spin"/> Fetching from AnyROR...</> : "Fetch & Ingest Asset"}
+            <button type="submit" disabled={isFetching || !isFormValid} className="btn btn-primary w-full md:w-auto self-end">
+              {isFetching ? <><Loader2 size={14} className="animate-spin"/> Fetching from AnyROR…</> : "Fetch & Save Asset"}
             </button>
           </form>
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="glass-panel p-6 border-l-2 border-l-[#00f0ff] flex flex-col justify-between h-[120px]">
-            <span className="text-xs text-[#849495] font-sans tracking-widest uppercase">Total Assets</span>
-            <span className="text-3xl font-display text-[#dbfcff]">{isLoadingPortfolio ? '—' : holdings.length}</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="card p-6 border-l-4 border-l-brand flex flex-col justify-between min-h-[110px]">
+            <span className="eyebrow">Total Assets</span>
+            <span className="text-3xl font-bold font-mono text-ink">{isLoadingPortfolio ? '—' : holdings.length}</span>
           </div>
-          <div className="glass-panel p-6 border-l-2 border-l-[#4edea3] flex flex-col justify-between h-[120px]">
-            <span className="text-xs text-[#849495] font-sans tracking-widest uppercase">Clear Title</span>
-            <span className="text-3xl font-display text-[#dbfcff]">{isLoadingPortfolio ? '—' : totalCleared}</span>
+          <div className="card p-6 border-l-4 border-l-success flex flex-col justify-between min-h-[110px]">
+            <span className="eyebrow">Clear Title</span>
+            <span className="text-3xl font-bold font-mono text-success">{isLoadingPortfolio ? '—' : totalCleared}</span>
           </div>
-          <div className="glass-panel p-6 border-l-2 border-l-[#ba1b24] flex flex-col justify-between h-[120px] bg-[#ba1b24]/5">
-            <span className="text-xs text-[#849495] font-sans tracking-widest uppercase">Encumbered</span>
-            <span className="text-3xl font-display text-[#ba1b24]">{isLoadingPortfolio ? '—' : totalRisks}</span>
+          <div className="card p-6 border-l-4 border-l-danger flex flex-col justify-between min-h-[110px]">
+            <span className="eyebrow">Encumbered</span>
+            <span className="text-3xl font-bold font-mono text-danger">{isLoadingPortfolio ? '—' : totalRisks}</span>
           </div>
         </div>
 
         {/* Portfolio Table */}
-        <div className="glass-panel mt-4 overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="card overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[760px]">
             <thead>
-              <tr className="border-b border-[#3b494b]/40 text-[#849495] text-[10px] tracking-widest uppercase bg-[#131313]">
-                <th className="p-4 font-normal">Survey No.</th>
-                <th className="p-4 font-normal">Location</th>
-                <th className="p-4 font-normal">Owner</th>
-                <th className="p-4 font-normal">Area</th>
-                <th className="p-4 font-normal">Jantri Rate</th>
-                <th className="p-4 font-normal text-right">Status</th>
-                <th className="p-4 font-normal text-right">Remove</th>
+              <tr className="border-b border-border text-muted text-xs uppercase tracking-wider bg-surface-soft">
+                <th className="p-4 font-semibold">Survey No.</th>
+                <th className="p-4 font-semibold">Location</th>
+                <th className="p-4 font-semibold">Owner</th>
+                <th className="p-4 font-semibold">Area</th>
+                <th className="p-4 font-semibold">Jantri Rate</th>
+                <th className="p-4 font-semibold text-right">Status</th>
+                <th className="p-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="font-mono text-sm">
+            <tbody className="text-sm">
               {isLoadingPortfolio ? (
                 <tr>
                   <td colSpan={7} className="p-12 text-center">
                     <div className="flex flex-col items-center gap-4">
-                      <Loader2 size={28} className="text-[#00f0ff] animate-spin" />
-                      <div className="text-[#849495] text-xs uppercase tracking-widest">Loading Portfolio from Supabase...</div>
+                      <Loader2 size={26} className="text-brand animate-spin" />
+                      <div className="text-muted text-sm">Loading your portfolio…</div>
                     </div>
                   </td>
                 </tr>
@@ -252,10 +281,10 @@ export default function Dashboard() {
                 <tr>
                   <td colSpan={7} className="p-12 text-center">
                     <div className="flex flex-col items-center gap-4">
-                      <FolderOpen size={40} className="text-[#3b494b]" />
-                      <div className="text-[#849495] font-sans text-xs uppercase tracking-widest">No Active Holdings</div>
-                      <div className="text-[#3b494b] font-sans text-xs">Search a land record then click &quot;Save to Portfolio&quot;</div>
-                      <Link href="/upload" className="px-6 py-2 text-[10px] bg-[#00f0ff] text-[#002022] font-bold uppercase tracking-widest hover:bg-[#dbfcff] transition-all">
+                      <FolderOpen size={36} className="text-faint" />
+                      <div className="text-ink font-medium text-sm">No saved parcels yet</div>
+                      <div className="text-muted text-sm">Search a land record then click &quot;Save to Portfolio&quot;</div>
+                      <Link href="/upload" className="btn btn-primary">
                         Go to Title Scanner
                       </Link>
                     </div>
@@ -264,37 +293,48 @@ export default function Dashboard() {
               ) : (
                 holdings.map((asset) => {
                   const isEncumbered = asset.encumbrances && asset.encumbrances.toLowerCase() !== 'none';
+                  const isWatched = watchedIds.has(asset.id);
                   return (
-                    <tr key={asset.id} className="border-b border-[#3b494b]/20 hover:bg-[#1c1b1b] transition-colors group">
-                      <td className="p-4 text-[#00f0ff] font-bold">
+                    <tr key={asset.id} className="border-b border-border hover:bg-surface-soft/60 transition-colors">
+                      <td className="p-4">
                         <Link
                           href={`/property/SURVEY-${asset.survey_no}?district=${encodeURIComponent(asset.district||'')}&taluka=${encodeURIComponent(asset.taluka||'')}&village=${encodeURIComponent(asset.village||'')}`}
-                          className="hover:underline flex items-center gap-2"
+                          className="font-mono font-semibold text-brand hover:underline"
                         >
-                          <TrendingUp size={14}/> {asset.survey_no}
+                          {asset.survey_no}
                         </Link>
                       </td>
-                      <td className="p-4 text-xs">
-                        <div className="text-[#dbfcff]">{asset.village}</div>
-                        <div className="text-[#849495]">{asset.taluka}, {asset.district}</div>
+                      <td className="p-4">
+                        <div className="text-ink">{asset.village}</div>
+                        <div className="text-muted text-xs">{asset.taluka}, {asset.district}</div>
                       </td>
-                      <td className="p-4 text-[#dbfcff] text-xs">{asset.owner_name || '—'}</td>
-                      <td className="p-4 text-[#dbfcff] text-xs">{asset.area || '—'}</td>
-                      <td className="p-4 text-[#4edea3] text-xs font-bold">{asset.jantri_rate || '—'}</td>
+                      <td className="p-4 text-ink-soft">{asset.owner_name || '—'}</td>
+                      <td className="p-4 text-ink-soft font-mono text-xs">{asset.area || '—'}</td>
+                      <td className="p-4 text-ink-soft font-mono text-xs">{asset.jantri_rate || '—'}</td>
                       <td className="p-4 text-right">
-                        <span className={`inline-flex items-center gap-2 px-3 py-1 text-[10px] tracking-widest uppercase font-bold border ${!isEncumbered ? 'bg-[#4edea3]/10 text-[#4edea3] border-[#4edea3]/50' : 'bg-[#ba1b24]/10 text-[#ba1b24] border-[#ba1b24]/50'}`}>
+                        <span className={`badge border ${!isEncumbered ? 'bg-success-soft text-success border-success-border' : 'bg-danger-soft text-danger border-danger-border'}`}>
                           {!isEncumbered ? <CheckCircle2 size={12}/> : <AlertTriangle size={12}/>}
-                          {isEncumbered ? 'ENCUMBERED' : 'CLEAR'}
+                          {isEncumbered ? 'Encumbered' : 'Clear'}
                         </span>
                       </td>
-                      <td className="p-4 text-right">
+                      <td className="p-4 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => handleWatch(asset)}
+                          disabled={watchingId === asset.id || isWatched}
+                          className={`p-2 rounded-lg transition-colors disabled:opacity-70 ${isWatched ? 'text-success' : 'text-muted hover:text-brand hover:bg-brand-soft'}`}
+                          title={isWatched ? 'On your watchlist — daily re-checks active' : 'Watch: daily re-check + change alerts'}
+                        >
+                          {watchingId === asset.id
+                            ? <Loader2 size={15} className="animate-spin"/>
+                            : isWatched ? <BellRing size={15}/> : <Bell size={15}/>}
+                        </button>
                         <button
                           onClick={() => handleDelete(asset.id)}
                           disabled={deletingId === asset.id}
-                          className="p-2 text-[#3b494b] hover:text-[#ba1b24] transition-colors disabled:opacity-50"
+                          className="p-2 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors disabled:opacity-50"
                           title="Remove from portfolio"
                         >
-                          {deletingId === asset.id ? <Loader2 size={14} className="animate-spin"/> : <Trash2 size={14}/>}
+                          {deletingId === asset.id ? <Loader2 size={15} className="animate-spin"/> : <Trash2 size={15}/>}
                         </button>
                       </td>
                     </tr>
@@ -305,7 +345,6 @@ export default function Dashboard() {
           </table>
         </div>
       </div>
-      <div className="pointer-events-none absolute inset-0 z-0 opacity-[0.03] bg-[linear-gradient(rgba(0,0,0,0)_50%,_rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]"></div>
     </main>
   );
 }

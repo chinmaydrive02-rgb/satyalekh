@@ -1,10 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { UploadCloud, FileText, Loader2, Cpu, ShieldCheck, AlertTriangle, MapPin, User, Calendar, BookmarkPlus, CheckCircle2, ChevronDown } from 'lucide-react';
+import { UploadCloud, Loader2, Cpu, ShieldCheck, BookmarkPlus, CheckCircle2, ChevronDown, AlertCircle, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import TopNav from '@/components/TopNav';
-import { API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, fetchConfig } from '@/lib/api';
+import JobProgress from '@/components/JobProgress';
+import TitleReportView from '@/components/TitleReport';
+import {
+  API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, fetchConfig,
+  startTitleReport, pollJob, parseSurveySuggestions,
+  ApiError, Job, TitleReport,
+} from '@/lib/api';
 import { createClient } from '@/utils/supabase/client';
 
 // Exact AnyROR Record Types from https://anyror.gujarat.gov.in/LandRecordRural.aspx
@@ -19,21 +25,6 @@ const RECORD_TYPES = [
   { value: "OWNER_NAME", label: "KNOW KHATA BY OWNER NAME (ખાતેદારના નામ પરથી ખાતુ જાણવા)" },
   { value: "E_CHAVDI", label: "e-CHAVDI (ઈ-ચાવડી)" },
   { value: "REVENUE_CASE", label: "REVENUE CASE DETAILS (જમીન રેકર્ડ ને લગતા કેસની વિગત)" },
-];
-
-// Progress stages shown while RPA bot is working
-const PROGRESS_STAGES = [
-  { pct: 5, label: "Initializing secure connection to Government Portal..." },
-  { pct: 15, label: "Navigating to AnyROR Gujarat Revenue Department..." },
-  { pct: 25, label: "Selecting record type and filling district details..." },
-  { pct: 35, label: "Populating taluka and village cascading fields..." },
-  { pct: 45, label: "Entering survey/block number into form..." },
-  { pct: 55, label: "Capturing CAPTCHA image from government server..." },
-  { pct: 65, label: "Solving CAPTCHA via Gemini Vision AI..." },
-  { pct: 75, label: "Submitting request to Revenue Department API..." },
-  { pct: 85, label: "Parsing and extracting record data..." },
-  { pct: 92, label: "Translating Gujarati fields to English..." },
-  { pct: 98, label: "Validating document integrity and finalizing..." },
 ];
 
 export default function DocumentUpload() {
@@ -53,8 +44,16 @@ export default function DocumentUpload() {
   const [villageGujarati, setVillageGujarati] = useState(''); // Gujarati name sent to backend
   const [surveyNo, setSurveyNo] = useState('');
   const [ownerName, setOwnerName] = useState('');
-  const [autoResult, setAutoResult] = useState<any>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'duplicate' | 'error'>('idle');
+
+  // Job-based scrape state (shared contract with property/[id])
+  const [autoPhase, setAutoPhase] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [autoJob, setAutoJob] = useState<Job | null>(null);
+  const [autoReport, setAutoReport] = useState<TitleReport | null>(null);
+  const [autoError, setAutoError] = useState<string | null>(null);
+  const [autoSuggestions, setAutoSuggestions] = useState<string[]>([]);
+  const [jobStartedAt, setJobStartedAt] = useState<number | null>(null);
+  const autoAbortRef = useRef<AbortController | null>(null);
 
   // Cascading dropdown data
   interface Village { english: string; gujarati: string; }
@@ -66,14 +65,15 @@ export default function DocumentUpload() {
   const [loadingVillages, setLoadingVillages]   = useState(false);
 
   const handleSaveToPortfolio = async () => {
-    if (!autoResult || saveState === 'saving' || saveState === 'saved') return;
+    const rec = autoReport?.record;
+    if (!rec || saveState === 'saving' || saveState === 'saved') return;
     setSaveState('saving');
     try {
       const { data: existing } = await supabase
         .from('portfolio_assets')
         .select('id')
-        .eq('survey_no', autoResult.survey_no || surveyNo.trim())
-        .eq('village', autoResult.village || village.trim())
+        .eq('survey_no', rec.survey_no || surveyNo.trim())
+        .eq('village', rec.village || village.trim())
         .limit(1);
 
       if (existing && existing.length > 0) {
@@ -83,17 +83,17 @@ export default function DocumentUpload() {
       }
 
       const { error } = await supabase.from('portfolio_assets').insert({
-        survey_no: autoResult.survey_no || surveyNo.trim(),
-        district: autoResult.district || district.trim(),
-        taluka: autoResult.taluka || taluka.trim(),
-        village: autoResult.village || village.trim(),
-        owner_name: autoResult.owner_name || null,
-        area: autoResult.area || null,
-        tenure_type: autoResult.tenure_type || null,
-        encumbrances: autoResult.encumbrances || null,
-        jantri_rate: autoResult.jantri_rate || null,
-        last_sale: autoResult.last_sale || null,
-        mutation_entries: autoResult.mutation_entries || null,
+        survey_no: rec.survey_no || surveyNo.trim(),
+        district: rec.district || district.trim(),
+        taluka: rec.taluka || taluka.trim(),
+        village: rec.village || village.trim(),
+        owner_name: rec.owner_name || null,
+        area: rec.area || null,
+        tenure_type: rec.tenure_type || null,
+        encumbrances: rec.encumbrances || null,
+        jantri_rate: rec.jantri_rate || null,
+        last_sale: rec.last_sale || null,
+        mutation_entries: rec.mutation_entries || null,
         record_type: recordType,
       });
       if (error) throw error;
@@ -103,12 +103,6 @@ export default function DocumentUpload() {
       setTimeout(() => setSaveState('idle'), 3000);
     }
   };
-
-  // Progress Loading State
-  const [showProgress, setShowProgress] = useState(false);
-  const [progressPct, setProgressPct] = useState(0);
-  const [progressLabel, setProgressLabel] = useState('');
-  const progressTimerRef = useRef<any>(null);
 
   // Get dynamic label for the last field based on record type
   const getEntryFieldLabel = () => {
@@ -146,23 +140,9 @@ export default function DocumentUpload() {
     }
   };
 
-  const simulateProgress = () => {
-    let idx = 0;
-    setShowProgress(true);
-    setProgressPct(0);
-    setProgressLabel(PROGRESS_STAGES[0].label);
-    progressTimerRef.current = setInterval(() => {
-      if (idx < PROGRESS_STAGES.length) {
-        setProgressPct(PROGRESS_STAGES[idx].pct);
-        setProgressLabel(PROGRESS_STAGES[idx].label);
-        idx++;
-      }
-    }, 1800);
-  };
-
-  const handleAutomate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAutoResult(null);
+  /** Starts the background scrape job (same jobs API as the property page). */
+  const launchJob = async (surveyOverride?: string) => {
+    if (autoPhase === 'running') return;
 
     // Credit gate: if payments are enabled on the backend and the user has
     // no credits, redirect to the pricing page before launching the bot.
@@ -185,48 +165,74 @@ export default function DocumentUpload() {
       }
     }
 
-    simulateProgress();
+    const surveyValue = surveyOverride ?? (needsOwnerName ? ownerName.trim() : surveyNo.trim());
+
+    setAutoPhase('running');
+    setAutoJob(null);
+    setAutoReport(null);
+    setAutoError(null);
+    setAutoSuggestions([]);
+    setSaveState('idle');
+    setJobStartedAt(Date.now());
+
     try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (userEmail) headers["X-User-Email"] = userEmail;
-      const res = await fetch(`${API_BASE_URL}/fetch-anyror`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
+      const { job_id } = await startTitleReport(
+        {
           record_type: recordType,
           district: district.trim(),
           taluka: taluka.trim(),
           village: (villageGujarati || village).trim(),
-          survey_no: needsOwnerName ? ownerName.trim() : surveyNo.trim()
-        })
-      });
-      clearInterval(progressTimerRef.current);
-      if (res.status === 402) {
-        const errData = await res.json().catch(() => ({ detail: "Payment required" }));
-        setProgressPct(0); setProgressLabel(""); setShowProgress(false);
-        alert(errData.detail || "Payment required — purchase search credits first.");
+          survey_no: surveyValue,
+          include_chain: true,
+        },
+        userEmail || undefined
+      );
+
+      autoAbortRef.current?.abort();
+      const ac = new AbortController();
+      autoAbortRef.current = ac;
+
+      const final = await pollJob(job_id, { signal: ac.signal, onUpdate: setAutoJob, intervalMs: 2500 });
+      if (final.status === 'done' && final.result) {
+        setAutoReport(final.result);
+        setAutoPhase('done');
+      } else {
+        const msg = final.error || 'The search failed on the government portal. Please retry.';
+        setAutoError(msg);
+        setAutoSuggestions(
+          final.suggestions && final.suggestions.length > 0
+            ? final.suggestions
+            : parseSurveySuggestions(msg)
+        );
+        setAutoPhase('error');
+      }
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof ApiError && err.status === 402) {
+        alert(err.message || 'Payment required — purchase search credits first.');
         window.location.href = '/pricing';
         return;
       }
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({ detail: "Unknown error" }));
-        setProgressPct(0); setProgressLabel(""); setShowProgress(false);
-        alert(`RPA Error: ${errData.detail || "Backend returned an error"}`);
-        return;
-      }
-      const data = await res.json();
-      setProgressPct(100);
-      setProgressLabel("Record retrieved successfully!");
-      setTimeout(() => { setShowProgress(false); setAutoResult(data); }, 1200);
-    } catch {
-      clearInterval(progressTimerRef.current);
-      setProgressPct(0); setProgressLabel(""); setShowProgress(false);
-      alert("Could not connect to the RPA backend. Please ensure the backend server is running.");
+      const msg = err instanceof Error ? err.message : 'Could not connect to the backend. Please retry in a minute.';
+      setAutoError(msg);
+      setAutoSuggestions(parseSurveySuggestions(msg));
+      setAutoPhase('error');
     }
   };
 
+  const handleAutomate = (e: React.FormEvent) => {
+    e.preventDefault();
+    launchJob();
+  };
+
+  /** Suggestion chip click: retry immediately with the corrected survey number. */
+  const applySuggestion = (opt: string) => {
+    setSurveyNo(opt);
+    launchJob(opt);
+  };
+
   useEffect(() => {
-    return () => { if (progressTimerRef.current) clearInterval(progressTimerRef.current); };
+    return () => autoAbortRef.current?.abort();
   }, []);
 
   // Warm up the Render backend as soon as the page mounts (free tier cold-starts)
@@ -267,133 +273,96 @@ export default function DocumentUpload() {
       .finally(() => setLoadingVillages(false));
   };
 
-  const inputClass = "w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]";
-  const selectClass = "w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-[#00f0ff] transition-colors cursor-pointer";
+  const inputClass = "input";
+  const selectClass = "input cursor-pointer";
   const isAutoFormValid = district && taluka && village.trim() && (needsOwnerName ? ownerName.trim() : surveyNo.trim());
 
-  // PROGRESS LOADING SCREEN
-  if (showProgress) {
+  // LIVE PROGRESS SCREEN — real job stages streamed from the backend
+  if (autoPhase === 'running') {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] flex flex-col items-center justify-center relative overflow-hidden">
+      <div className="min-h-screen bg-bg text-ink flex flex-col items-center justify-center px-4 sm:px-6">
         <TopNav />
-        <div className="z-10 flex flex-col items-center gap-8 w-full max-w-[520px] px-6">
-          <div className="relative">
-            <div className="w-20 h-20 border-2 border-[#00f0ff]/30 flex items-center justify-center">
-              <Cpu size={36} className="text-[#00f0ff] animate-pulse" />
-            </div>
-            <div className="absolute -inset-3 border border-[#00f0ff]/10 animate-ping" style={{ animationDuration: '3s' }}></div>
-          </div>
-          <div className="text-center">
-            <h2 className="text-2xl font-display uppercase tracking-tight mb-2">Autonomous RPA Bot Active</h2>
-            <p className="text-[10px] text-[#849495] uppercase tracking-widest">Processing in secure background — Do not close this page</p>
-          </div>
-          <div className="w-full">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-[10px] uppercase tracking-widest text-[#849495]">Progress</span>
-              <span className="text-sm font-mono text-[#00f0ff] font-bold">{progressPct}%</span>
-            </div>
-            <div className="w-full h-3 bg-[#1c1b1b] border border-[#3b494b]/40 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-[#00f0ff] to-[#4edea3] transition-all duration-1000 ease-out" style={{ width: `${progressPct}%` }}></div>
-            </div>
-          </div>
-          <div className="glass-panel p-4 w-full text-center">
-            <div className="flex items-center justify-center gap-2 text-xs text-[#00f0ff] font-mono">
-              <Loader2 size={14} className="animate-spin" />
-              {progressLabel}
-            </div>
-          </div>
-          <div className="w-full flex flex-col gap-2 mt-2">
-            {PROGRESS_STAGES.filter((_, i) => {
-              const currentIdx = PROGRESS_STAGES.findIndex(s => s.pct >= progressPct);
-              return i <= Math.max(currentIdx, 0);
-            }).map((stage, i) => (
-              <div key={i} className="flex items-center gap-3 text-[10px] font-mono">
-                <span className={`w-4 h-4 flex items-center justify-center border ${stage.pct <= progressPct ? 'border-[#4edea3] text-[#4edea3]' : 'border-[#3b494b] text-[#3b494b]'}`}>
-                  {stage.pct <= progressPct ? '✓' : '·'}
-                </span>
-                <span className={stage.pct <= progressPct ? 'text-[#dbfcff]' : 'text-[#3b494b]'}>{stage.label}</span>
-              </div>
-            ))}
-          </div>
+        <div className="w-full max-w-[560px]">
+          <JobProgress job={autoJob} startedAt={jobStartedAt} title="Fetching the record from AnyROR" />
         </div>
-        <div className="pointer-events-none absolute inset-0 z-0 opacity-[0.03] bg-[linear-gradient(rgba(0,0,0,0)_50%,_rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] pt-20 pb-10 px-6 flex flex-col items-center relative overflow-hidden">
+    <div className="min-h-screen bg-bg text-ink pt-24 pb-10 px-4 sm:px-6 flex flex-col items-center">
       <TopNav />
-      <div className="z-10 w-full max-w-[640px] flex flex-col gap-6 mt-4">
-        <div className="text-center mb-0">
-           <h1 className="text-3xl md:text-4xl font-display uppercase tracking-tight mb-2">Initialize Forensic Scan</h1>
-           <p className="text-[#849495] font-sans text-xs tracking-widest uppercase">Upload Title Deed OR Deploy Automated AnyROR RPA Bot</p>
+      <div className="w-full max-w-[640px] flex flex-col gap-6">
+        <div className="text-center">
+           <p className="eyebrow mb-1">Title Scanner</p>
+           <h1 className="text-3xl font-bold text-ink mb-2">Fetch or scan a land record</h1>
+           <p className="text-muted text-sm">Fetch it live from AnyROR, or upload a document for OCR analysis.</p>
         </div>
 
         {/* Tab Controls */}
-        <div className="flex bg-[#1c1b1b]/80 border border-[#3b494b]/40 mb-2 p-1">
-          <button onClick={() => setActiveTab('auto')} className={`flex-1 py-3 text-xs uppercase tracking-widest font-bold transition-all ${activeTab === 'auto' ? 'bg-[#00f0ff] text-[#002022]' : 'text-[#849495] hover:text-[#00f0ff]'}`}>Auto Web Scraper</button>
-          <button onClick={() => setActiveTab('manual')} className={`flex-1 py-3 text-xs uppercase tracking-widest font-bold transition-all ${activeTab === 'manual' ? 'bg-[#00f0ff] text-[#002022]' : 'text-[#849495] hover:text-[#00f0ff]'}`}>Manual OCR Upload</button>
+        <div className="flex bg-surface-soft border border-border rounded-xl p-1">
+          <button onClick={() => setActiveTab('auto')} className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'auto' ? 'bg-surface text-brand shadow-sm border border-border' : 'text-muted hover:text-ink'}`}>Fetch from AnyROR</button>
+          <button onClick={() => setActiveTab('manual')} className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'manual' ? 'bg-surface text-brand shadow-sm border border-border' : 'text-muted hover:text-ink'}`}>Upload document (OCR)</button>
         </div>
 
         {activeTab === 'manual' ? (
-          <form onSubmit={handleUpload} className="glass-panel p-8 border border-[#3b494b]/40 flex flex-col gap-6">
-             <div className="w-full h-40 border-2 border-dashed border-[#3b494b] flex flex-col items-center justify-center text-[#849495] hover:border-[#00f0ff] transition-colors relative cursor-pointer group">
+          <form onSubmit={handleUpload} className="card p-6 sm:p-8 flex flex-col gap-6">
+             <div className="w-full h-40 border-2 border-dashed border-border-strong rounded-xl flex flex-col items-center justify-center text-muted hover:border-brand transition-colors relative cursor-pointer group">
                 <input type="file" accept="image/*,application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                <UploadCloud size={40} className="mb-3 group-hover:text-[#00f0ff] transition-colors" />
-                <span className="text-xs uppercase tracking-widest font-bold group-hover:text-[#dbfcff]">{file ? file.name : "Drop Secure File Here"}</span>
+                <UploadCloud size={36} className="mb-3 group-hover:text-brand transition-colors" />
+                <span className="text-sm font-medium group-hover:text-ink">{file ? file.name : "Drop your 7/12 image or PDF here"}</span>
              </div>
-             <button type="submit" disabled={!file || isAnalyzing} className="w-full py-4 text-[#002022] font-bold text-sm tracking-[0.15em] uppercase bg-gradient-to-r from-[#00dbe9] to-[#00f0ff] disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 transition-all flex justify-center items-center">
-               {isAnalyzing ? <><Loader2 className="animate-spin mr-2" size={18}/> Executing Vector Scan</> : "Analyze Document"}
+             <button type="submit" disabled={!file || isAnalyzing} className="btn btn-primary w-full py-3">
+               {isAnalyzing ? <><Loader2 className="animate-spin" size={16}/> Analyzing document…</> : "Analyze Document"}
              </button>
           </form>
         ) : (
-          <form onSubmit={handleAutomate} className="glass-panel p-8 border border-[#3b494b]/40 flex flex-col gap-5">
+          <form onSubmit={handleAutomate} className="card p-6 sm:p-8 flex flex-col gap-5">
             {/* AnyROR Record Type */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase tracking-widest font-bold text-[#00f0ff]">Select Any One (કોઇ એક પસંદ કરો)</label>
+              <label className="label">Record type (કોઇ એક પસંદ કરો)</label>
               <select value={recordType} onChange={e => setRecordType(e.target.value)} style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }} className={selectClass}>
                 {RECORD_TYPES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
 
             {/* Cascading Location Dropdowns */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               {/* District */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">District (જીલ્લો)</label>
+                <label className="label">District (જીલ્લો)</label>
                 <div className="relative">
                   <select value={district} onChange={e => setDistrict(e.target.value)}
                     className={`${selectClass} appearance-none pr-8`} disabled={loadingDistricts}>
-                    <option value="">{loadingDistricts ? 'Loading...' : '— Select District —'}</option>
+                    <option value="">{loadingDistricts ? 'Loading…' : 'Select district'}</option>
                     {districts.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                   {loadingDistricts
-                    ? <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#00f0ff] animate-spin pointer-events-none" />
-                    : <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#3b494b] pointer-events-none" />}
+                    ? <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand animate-spin pointer-events-none" />
+                    : <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />}
                 </div>
               </div>
 
               {/* Taluka */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Taluka (તાલુકો)</label>
+                <label className="label">Taluka (તાલુકો)</label>
                 <div className="relative">
                   <select value={taluka} onChange={e => setTaluka(e.target.value)}
                     className={`${selectClass} appearance-none pr-8`} disabled={!district || loadingTalukas}>
-                    <option value="">{!district ? '— Select District First —' : loadingTalukas ? 'Loading...' : '— Select Taluka —'}</option>
+                    <option value="">{!district ? 'Select district first' : loadingTalukas ? 'Loading…' : 'Select taluka'}</option>
                     {talukas.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                   {loadingTalukas
-                    ? <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#00f0ff] animate-spin pointer-events-none" />
-                    : <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#3b494b] pointer-events-none" />}
+                    ? <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand animate-spin pointer-events-none" />
+                    : <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />}
                 </div>
               </div>
 
               {/* Village — free text input (English or Gujarati; backend fuzzy-matches on AnyROR) */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495] flex items-center gap-2">
+                <label className="label flex items-center gap-2">
                   Village (ગામ)
-                  {loadingVillages && <span className="text-[#00f0ff] font-normal text-[9px] normal-case tracking-normal">fetching from AnyROR (~20s)…</span>}
+                  {loadingVillages && <span className="text-brand font-normal text-xs">fetching from AnyROR (~20s)…</span>}
                 </label>
                 <input
                   type="text"
@@ -415,10 +384,10 @@ export default function DocumentUpload() {
                   type="button"
                   onClick={loadVillageSuggestions}
                   disabled={!district || !taluka || loadingVillages}
-                  className="text-left text-[9px] text-[#00f0ff]/80 hover:text-[#00f0ff] underline underline-offset-2 decoration-[#00f0ff]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 w-fit"
+                  className="text-left text-xs text-brand hover:text-brand-strong underline underline-offset-2 decoration-brand/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 w-fit"
                 >
                   {loadingVillages
-                    ? <><Loader2 size={9} className="animate-spin" /> Loading suggestions from AnyROR…</>
+                    ? <><Loader2 size={11} className="animate-spin" /> Loading suggestions from AnyROR…</>
                     : villages.length > 0
                       ? <>↻ Reload suggestions ({villages.length} villages loaded)</>
                       : <>Load village suggestions from AnyROR (takes ~20s)</>}
@@ -428,122 +397,123 @@ export default function DocumentUpload() {
               {/* Survey / Owner */}
               {needsOwnerName ? (
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Owner Name (જમીન માલિકનું નામ)</label>
+                  <label className="label">Owner Name (જમીન માલિકનું નામ)</label>
                   <input type="text" value={ownerName} onChange={e => setOwnerName(e.target.value)} placeholder="Enter owner name" className={inputClass} />
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">{getEntryFieldLabel()}</label>
-                  <input type="text" value={surveyNo} onChange={e => setSurveyNo(e.target.value)} placeholder="Enter survey/block number (e.g. 123)" className={inputClass} />
-                  <p className="text-[#3b494b] text-[9px] leading-relaxed">Common formats: 123, 123/1, 123 P, 45 A — check AnyROR for exact format</p>
+                  <label className="label">{getEntryFieldLabel()}</label>
+                  <input type="text" value={surveyNo} onChange={e => setSurveyNo(e.target.value)} placeholder="Enter survey/block number (e.g. 123)" className={`${inputClass} font-mono`} />
+                  <p className="text-faint text-xs leading-relaxed">Common formats: 123, 123/1, 123 P, 45 A — check AnyROR for exact format</p>
                 </div>
               )}
             </div>
 
-            <div className="text-[10px] text-[#849495] bg-[#1c1b1b]/60 p-3 border border-[#3b494b]/30">
-              <span className="text-[#eab308] font-bold">⚠ CAPTCHA:</span> The RPA bot will auto-solve the government CAPTCHA using Gemini Vision AI. This may take 10-20 seconds.
-              <span className="text-[#00f0ff]"> All processing happens in background — you&apos;ll see a live progress feed.</span>
-              <span className="block mt-1 text-[#849495]">First search may take 60-90s extra while the backend warms up (free hosting cold start).</span>
+            <div className="text-xs text-ink-soft bg-brand-soft/60 rounded-lg p-3 border border-brand-border leading-relaxed">
+              <span className="font-semibold text-brand">Note:</span> the government CAPTCHA is solved
+              automatically (10–20 seconds) and everything runs in the background with a live progress feed.
+              <span className="block mt-1 text-muted">The first search may take 60–90s extra while the backend warms up (free hosting cold start).</span>
             </div>
 
-             <button type="submit" disabled={!isAutoFormValid} className="mt-2 w-full py-4 text-[#002022] font-bold text-sm tracking-[0.15em] uppercase bg-gradient-to-r from-[#de4ced] to-[#ff00f0] hover:brightness-110 transition-all flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed">
-               <Cpu className="mr-2" size={18}/> Launch RPA Bot
+             <button type="submit" disabled={!isAutoFormValid} className="btn btn-primary w-full py-3">
+               <Cpu size={16}/> Fetch Record
              </button>
           </form>
         )}
 
-        {/* Results Block */}
-        {(result || autoResult) && (
-           <div className="glass-panel p-6 border-l-4 border-l-[#4edea3] flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                 <div className="flex items-center gap-2 text-[#4edea3] font-bold tracking-widest uppercase text-xs"><ShieldCheck size={16}/> Record Retrieved Successfully</div>
-                 <span className="text-[10px] bg-[#4edea3]/10 text-[#4edea3] px-2 py-1 uppercase tracking-widest border border-[#4edea3]/30">VERIFIED &amp; TRANSLATED</span>
+        {/* Auto scrape — error + recovery */}
+        {autoPhase === 'error' && (
+          <div className="card p-6 border-danger-border flex flex-col gap-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle size={16} className="text-danger mt-0.5 shrink-0" />
+              <div>
+                <h3 className="text-base font-semibold text-ink mb-1">Search Failed</h3>
+                <p className="text-sm text-danger break-words leading-relaxed">{autoError}</p>
               </div>
-              
-              {autoResult && (
-                <div className="flex flex-col gap-0">
-                  <div className="text-xs text-[#00f0ff] font-bold uppercase tracking-widest mb-3">{autoResult.message}</div>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                    <div className="flex flex-col gap-1">
-                       <span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold flex items-center gap-1"><User size={10}/> Owner Name</span>
-                       <div className="text-sm font-display text-[#dbfcff]">{autoResult.owner_name}</div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                       <span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold flex items-center gap-1"><MapPin size={10}/> Location</span>
-                       <div className="text-sm font-display text-[#dbfcff]">{autoResult.village}, {autoResult.taluka?.replace(/_/g, ' ')}</div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                       <span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold">Survey No.</span>
-                       <div className="text-sm font-display text-[#dbfcff]">{autoResult.survey_no}</div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                       <span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold">Area</span>
-                       <div className="text-sm font-display text-[#dbfcff]">{autoResult.area}</div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                       <span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold">Tenure Type</span>
-                       <div className="text-sm font-display text-[#dbfcff]">{autoResult.tenure_type}</div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                       <span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold">Cultivation</span>
-                       <div className="text-sm font-display text-[#dbfcff]">{autoResult.cultivation}</div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                       <span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold">Jantri Rate</span>
-                       <div className="text-sm font-display text-[#00f0ff]">{autoResult.jantri_rate}</div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                       <span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold flex items-center gap-1"><Calendar size={10}/> Last Sale</span>
-                       <div className="text-sm font-display text-[#dbfcff]">{autoResult.last_sale}</div>
-                    </div>
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-[#3b494b]/40 grid grid-cols-1 gap-3">
-                    <div className="flex flex-col gap-1">
-                       <span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold">Mutation Entries</span>
-                       <div className="text-xs font-mono text-[#dbfcff]">{autoResult.mutation_entries}</div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                       <span className="text-[10px] text-[#ba1b24] uppercase tracking-widest font-bold flex items-center gap-1"><AlertTriangle size={10}/> Encumbrances</span>
-                       <div className="text-xs font-mono text-[#ba1b24]">{autoResult.encumbrances}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {result && (
-                <div className="grid grid-cols-2 gap-4">
-                   <div><span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold">Owner</span><div className="text-sm font-display">{result.owner_name}</div></div>
-                   <div><span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold">Survey No</span><div className="text-sm font-display">{result.survey_no}</div></div>
-                   <div><span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold">Tenure Type</span><div className="text-sm font-display">{result.tenure_type}</div></div>
-                   <div><span className="text-[10px] text-[#849495] uppercase tracking-widest font-bold">Encumbrances</span><div className="text-sm font-display text-[#ba1b24]">{result.encumbrances}</div></div>
-                </div>
-              )}
-
-              <div className="flex flex-col md:flex-row gap-4 mt-4 pt-4 border-t border-[#3b494b]/40">
-                  {autoResult && (
+            </div>
+            {autoSuggestions.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <span className="text-sm text-ink-soft font-medium">
+                  Valid survey numbers found in this village — tap one to search it:
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {autoSuggestions.map(opt => (
                     <button
-                      onClick={handleSaveToPortfolio}
-                      disabled={saveState === 'saving' || saveState === 'saved' || saveState === 'duplicate'}
-                      className={`flex-1 py-3 text-[10px] font-bold tracking-[0.2em] uppercase transition-all flex items-center justify-center gap-2
-                        ${saveState === 'saved' ? 'bg-[#4edea3]/20 text-[#4edea3] border border-[#4edea3]/50 cursor-default'
-                        : saveState === 'duplicate' ? 'bg-[#eab308]/10 text-[#eab308] border border-[#eab308]/50 cursor-default'
-                        : saveState === 'error' ? 'bg-[#ba1b24]/10 text-[#ba1b24] border border-[#ba1b24]/50'
-                        : 'bg-gradient-to-r from-[#de4ced] to-[#ff00f0] text-[#002022] hover:brightness-110'}`}
+                      key={opt}
+                      onClick={() => applySuggestion(opt)}
+                      className="px-3 py-1.5 rounded-lg border border-brand-border bg-brand-soft text-brand text-sm font-mono hover:border-brand transition-colors"
                     >
-                      {saveState === 'saving' && <><Loader2 size={12} className="animate-spin"/> Saving...</>}
-                      {saveState === 'saved' && <><CheckCircle2 size={12}/> Saved to Portfolio</>}
-                      {saveState === 'duplicate' && <><CheckCircle2 size={12}/> Already Saved</>}
-                      {saveState === 'error' && <>Save Failed — Retry</>}
-                      {saveState === 'idle' && <><BookmarkPlus size={12}/> Save to Portfolio</>}
+                      {opt}
                     </button>
-                  )}
-                  <Link href={`/property/SURVEY-${surveyNo}`} className="flex-1 py-3 text-center text-[#0a0a0a] bg-[#4edea3] hover:bg-[#dbfcff] text-[10px] font-bold tracking-[0.2em] uppercase transition-colors">Explore Intel</Link>
-                  <Link href="/dashboard" className="flex-1 py-3 text-center text-[#dbfcff] border border-[#3b494b] bg-black/40 hover:border-[#00f0ff]/50 hover:text-[#00f0ff] text-[10px] font-bold tracking-[0.2em] uppercase transition-colors">View Portfolio</Link>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button
+              onClick={() => launchJob()}
+              className="btn btn-primary w-fit"
+            >
+              <RotateCcw size={13} /> Retry Search
+            </button>
+          </div>
+        )}
+
+        {/* Auto scrape — full ownership report */}
+        {autoPhase === 'done' && autoReport && (
+          <div className="flex flex-col gap-4">
+            <TitleReportView report={autoReport} />
+            <div className="flex flex-col md:flex-row gap-3">
+              <button
+                onClick={handleSaveToPortfolio}
+                disabled={saveState === 'saving' || saveState === 'saved' || saveState === 'duplicate'}
+                className={`btn flex-1
+                  ${saveState === 'saved' ? 'bg-success-soft text-success border border-success-border cursor-default'
+                  : saveState === 'duplicate' ? 'bg-warning-soft text-warning border border-warning-border cursor-default'
+                  : saveState === 'error' ? 'bg-danger-soft text-danger border border-danger-border'
+                  : 'btn-primary'}`}
+              >
+                {saveState === 'saving' && <><Loader2 size={14} className="animate-spin"/> Saving...</>}
+                {saveState === 'saved' && <><CheckCircle2 size={14}/> Saved to Portfolio</>}
+                {saveState === 'duplicate' && <><CheckCircle2 size={14}/> Already Saved</>}
+                {saveState === 'error' && <>Save Failed — Retry</>}
+                {saveState === 'idle' && <><BookmarkPlus size={14}/> Save to Portfolio</>}
+              </button>
+              <Link
+                href={
+                  `/property/SURVEY-${encodeURIComponent(autoReport.record.survey_no || surveyNo.trim())}` +
+                  `?district=${encodeURIComponent(autoReport.record.district || district)}` +
+                  `&taluka=${encodeURIComponent(autoReport.record.taluka || taluka)}` +
+                  `&village=${encodeURIComponent(autoReport.record.village || village)}` +
+                  `&record_type=${encodeURIComponent(recordType)}`
+                }
+                className="btn btn-outline flex-1 text-center"
+              >
+                Open Full Property View
+              </Link>
+              <Link href="/dashboard" className="btn btn-ghost flex-1 text-center">View Portfolio</Link>
+            </div>
+          </div>
+        )}
+
+        {/* Manual OCR result */}
+        {result && (
+           <div className="card p-6 border-l-4 border-l-success flex flex-col gap-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                 <div className="flex items-center gap-2 text-success font-semibold text-sm"><ShieldCheck size={16}/> Record Retrieved Successfully</div>
+                 <span className="badge bg-success-soft text-success border border-success-border">Verified &amp; translated</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                 <div><span className="eyebrow">Owner</span><div className="text-sm text-ink font-medium mt-0.5">{result.owner_name}</div></div>
+                 <div><span className="eyebrow">Survey No</span><div className="text-sm text-ink font-mono mt-0.5">{result.survey_no}</div></div>
+                 <div><span className="eyebrow">Tenure Type</span><div className="text-sm text-ink mt-0.5">{result.tenure_type}</div></div>
+                 <div><span className="eyebrow">Encumbrances</span><div className="text-sm text-danger font-medium mt-0.5">{result.encumbrances}</div></div>
+              </div>
+              <div className="flex flex-col md:flex-row gap-3 mt-2 pt-4 border-t border-border">
+                  <Link href="/dashboard" className="btn btn-outline flex-1 text-center">View Portfolio</Link>
               </div>
            </div>
         )}
       </div>
-      <div className="pointer-events-none absolute inset-0 z-0 opacity-[0.03] bg-[linear-gradient(rgba(0,0,0,0)_50%,_rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]"></div>
     </div>
   );
 }

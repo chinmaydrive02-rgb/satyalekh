@@ -38,37 +38,39 @@ function PaymentSuccessContent() {
   }, []);
 
   return (
-    <div className="z-10 w-full max-w-[520px] glass-panel p-10 border border-[#4edea3]/30 flex flex-col items-center gap-6 text-center">
-      <CheckCircle2 size={56} className="text-[#4edea3]" />
+    <div className="card w-full max-w-[520px] p-8 sm:p-10 flex flex-col items-center gap-6 text-center">
+      <span className="w-16 h-16 rounded-full bg-success-soft flex items-center justify-center">
+        <CheckCircle2 size={34} className="text-success" />
+      </span>
       <div>
-        <h1 className="text-3xl font-display uppercase tracking-tight mb-2">Payment Successful</h1>
-        <p className="text-xs text-[#849495] uppercase tracking-widest leading-relaxed">
+        <h1 className="text-2xl font-bold text-ink mb-2">Payment Successful</h1>
+        <p className="text-sm text-muted leading-relaxed">
           Your search credit has been added to your account.
         </p>
       </div>
 
       {sessionId && (
-        <div className="w-full text-[9px] font-mono text-[#3b494b] break-all border border-[#3b494b]/30 bg-[#111]/60 px-3 py-2">
+        <div className="w-full text-xs font-mono text-faint break-all border border-border rounded-lg bg-surface-soft px-3 py-2">
           TXN REF: {sessionId}
         </div>
       )}
 
-      <div className="w-full flex items-center justify-center gap-2 text-xs font-mono py-3 border border-[#3b494b]/40 bg-[#1c1b1b]/60">
-        <Wallet size={14} className="text-[#00f0ff]" />
+      <div className="w-full flex items-center justify-center gap-2 text-sm py-3 border border-border rounded-lg bg-surface-soft">
+        <Wallet size={15} className="text-brand" />
         {loadingCredits ? (
-          <span className="flex items-center gap-2 text-[#849495]"><Loader2 size={12} className="animate-spin" /> Updating credit balance…</span>
+          <span className="flex items-center gap-2 text-muted"><Loader2 size={13} className="animate-spin" /> Updating credit balance…</span>
         ) : creditsInfo ? (
-          <span className="text-[#dbfcff]">Current balance: <span className="text-[#4edea3] font-bold">{creditsInfo.credits} search credit{creditsInfo.credits === 1 ? '' : 's'}</span></span>
+          <span className="text-ink">Current balance: <span className="text-success font-bold">{creditsInfo.credits} search credit{creditsInfo.credits === 1 ? '' : 's'}</span></span>
         ) : (
-          <span className="text-[#849495]">Credits will appear within a minute — check the pricing page.</span>
+          <span className="text-muted">Credits will appear within a minute — check the pricing page.</span>
         )}
       </div>
 
       <div className="w-full flex flex-col gap-3 mt-2">
-        <Link href="/upload" className="w-full py-4 text-center text-[#002022] bg-gradient-to-r from-[#00dbe9] to-[#00f0ff] hover:brightness-110 text-xs font-bold tracking-[0.2em] uppercase transition-all flex items-center justify-center gap-2">
-          <Search size={14} /> Start Searching
+        <Link href="/upload" className="btn btn-primary w-full py-3">
+          <Search size={15} /> Start Searching
         </Link>
-        <Link href="/pricing" className="w-full py-3 text-center text-[#dbfcff] border border-[#3b494b] bg-black/40 hover:border-[#00f0ff]/50 hover:text-[#00f0ff] text-[10px] font-bold tracking-[0.2em] uppercase transition-colors">
+        <Link href="/pricing" className="btn btn-outline w-full">
           Back to Pricing
         </Link>
       </div>
@@ -78,12 +80,11 @@ function PaymentSuccessContent() {
 
 export default function PaymentSuccess() {
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] flex flex-col items-center justify-center pt-24 pb-12 px-6 relative overflow-hidden">
+    <main className="min-h-screen bg-bg text-ink flex flex-col items-center justify-center pt-24 pb-12 px-4 sm:px-6">
       <TopNav />
-      <Suspense fallback={<Loader2 size={32} className="text-[#00f0ff] animate-spin z-10" />}>
+      <Suspense fallback={<Loader2 size={32} className="text-brand animate-spin" />}>
         <PaymentSuccessContent />
       </Suspense>
-      <div className="pointer-events-none absolute inset-0 z-0 opacity-[0.03] bg-[linear-gradient(rgba(0,0,0,0)_50%,_rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]"></div>
     </main>
   );
 }

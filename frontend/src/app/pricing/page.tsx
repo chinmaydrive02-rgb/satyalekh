@@ -80,7 +80,7 @@ export default function Pricing() {
     const body = encodeURIComponent(
       `Name: ${formData.name}\nEmail: ${formData.email}\nCompany: ${formData.company}\nTier: ${contactTier}\n\nMessage:\n${formData.message}`
     );
-    
+
     // Open mailto link
     window.open(`mailto:chinmaydrive02@gmail.com?subject=${subject}&body=${body}`, '_blank');
 
@@ -108,66 +108,67 @@ export default function Pricing() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] pt-24 pb-10 px-10 flex flex-col items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen bg-bg text-ink pt-24 pb-16 px-4 sm:px-6 flex flex-col items-center">
       <TopNav />
 
-      <div className="z-10 mb-12 text-center flex flex-col items-center">
-        <h1 className="text-5xl font-display uppercase tracking-tight mb-4">Architectural Pricing</h1>
-        <p className="text-[#849495] font-sans tracking-widest uppercase text-sm max-w-[600px]">
-          Secure title intelligence tiers. Choose on-demand queries for individual plots
-          or bulk enterprise API access for financial institutions.
+      <div className="mb-12 text-center flex flex-col items-center max-w-[640px]">
+        <p className="eyebrow mb-2">Pricing</p>
+        <h1 className="text-3xl sm:text-4xl font-bold text-ink mb-4">Simple, per-search pricing</h1>
+        <p className="text-muted text-base leading-relaxed">
+          On-demand title checks for individual plots, or bulk enterprise access
+          for banks and law firms.
         </p>
-        <p className="mt-4 text-[#4edea3] text-[11px] font-mono border border-[#4edea3]/30 bg-[#4edea3]/5 px-4 py-2">
+        <p className="mt-5 text-success text-sm border border-success-border bg-success-soft rounded-lg px-4 py-2.5">
           New users get free trial searches automatically — just enter your email and run your first search.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 z-10 w-full max-w-[900px]">
-        
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-[900px]">
+
         {/* Pay as You Go */}
-        <div className="glass-panel p-8 flex flex-col relative group overflow-hidden bg-[#1c1b1b]/80 border-[#3b494b]/40 border">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-30 transition-opacity">
+        <div className="card p-7 sm:p-8 flex flex-col relative group overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-[0.04] text-brand">
             <Zap size={100} />
           </div>
-          <h2 className="text-2xl font-display uppercase mb-2">Per-Query Access</h2>
-          <div className="text-[#00f0ff] font-display text-4xl mb-6">₹1,500 <span className="text-sm text-[#849495] tracking-widest uppercase">/ plot</span></div>
-          
-          <ul className="flex flex-col gap-4 mb-6 text-sm text-[#dbfcff]/80 font-sans mt-4">
-            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> Title Clearance Score + printable report</li>
-            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> Prohibited-category & encumbrance screen</li>
-            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4edea3]"/> 5-pack = full Title Pack: 7/12 + VF-6 mutation history + VF-8A khata + owner-name search</li>
+          <h2 className="text-xl font-semibold text-ink mb-1">Per-Query Access</h2>
+          <div className="text-brand font-display text-4xl font-bold mb-6">₹1,500 <span className="text-sm text-muted font-normal">/ plot</span></div>
+
+          <ul className="flex flex-col gap-3 mb-6 text-sm text-ink-soft">
+            <li className="flex items-start gap-3"><ShieldCheck size={16} className="text-success shrink-0 mt-0.5"/> Title Clearance Score + printable report</li>
+            <li className="flex items-start gap-3"><ShieldCheck size={16} className="text-success shrink-0 mt-0.5"/> Prohibited-category &amp; encumbrance screen</li>
+            <li className="flex items-start gap-3"><ShieldCheck size={16} className="text-success shrink-0 mt-0.5"/> 5-pack = full Title Pack: 7/12 + VF-6 mutation history + VF-8A khata + owner-name search</li>
           </ul>
 
           {/* Email + credits */}
           <div className="flex flex-col gap-3 mb-5 relative z-10">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Your Email (credits are linked to it)</label>
+              <label className="label">Your email (credits are linked to it)</label>
               <div className="flex gap-2">
                 <input
                   type="email"
                   value={buyEmail}
                   onChange={e => setBuyEmail(e.target.value)}
                   placeholder="you@email.com"
-                  className="flex-1 bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]"
+                  className="input flex-1"
                 />
                 <button
                   type="button"
                   onClick={handleCheckCredits}
                   disabled={checkingCredits || !validEmail}
-                  className="px-3 py-2.5 border border-[#3b494b] text-[#849495] text-[10px] font-bold tracking-widest uppercase hover:border-[#00f0ff]/50 hover:text-[#00f0ff] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap"
+                  className="btn btn-outline whitespace-nowrap px-3 text-sm"
                 >
-                  {checkingCredits ? <Loader2 size={12} className="animate-spin"/> : <Wallet size={12}/>} Check Credits
+                  {checkingCredits ? <Loader2 size={13} className="animate-spin"/> : <Wallet size={13}/>} Check Credits
                 </button>
               </div>
             </div>
             {creditsInfo && (
-              <div className={`text-[10px] font-mono px-3 py-2 border ${creditsInfo.payments_enabled ? 'border-[#4edea3]/40 text-[#4edea3] bg-[#4edea3]/5' : 'border-[#eab308]/40 text-[#eab308] bg-[#eab308]/5'}`}>
+              <div className={`text-sm px-3 py-2 rounded-lg border ${creditsInfo.payments_enabled ? 'border-success-border text-success bg-success-soft' : 'border-warning-border text-warning bg-warning-soft'}`}>
                 {creditsInfo.payments_enabled
                   ? <>Remaining credits for {creditsInfo.email}: <span className="font-bold">{creditsInfo.credits}</span></>
                   : <>Payments are not enabled yet — searches are currently free during beta.</>}
               </div>
             )}
-            {payError && <div className="text-[10px] font-mono text-[#ba1b24] px-3 py-2 border border-[#ba1b24]/40 bg-[#ba1b24]/5">{payError}</div>}
+            {payError && <div className="text-sm text-danger px-3 py-2 rounded-lg border border-danger-border bg-danger-soft">{payError}</div>}
           </div>
 
           {/* Buy buttons */}
@@ -175,45 +176,46 @@ export default function Pricing() {
             <button
               onClick={() => handleBuy(1)}
               disabled={buyLoading !== 0}
-              className="w-full py-4 text-[#002022] font-bold text-sm tracking-[0.15em] uppercase bg-gradient-to-r from-[#00dbe9] to-[#00f0ff] hover:brightness-110 transition-all border-none outline-none flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn btn-primary w-full py-3"
             >
               {buyLoading === 1 ? <Loader2 size={14} className="animate-spin"/> : <CreditCard size={14}/>} Buy 1 Search — ₹1,500
             </button>
             <button
               onClick={() => handleBuy(5)}
               disabled={buyLoading !== 0}
-              className="w-full py-3 text-[#00f0ff] font-bold text-xs tracking-[0.15em] uppercase bg-transparent border border-[#00f0ff]/60 hover:bg-[#00f0ff]/10 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn btn-outline w-full text-brand border-brand-border hover:border-brand"
             >
-              {buyLoading === 5 ? <Loader2 size={12} className="animate-spin"/> : <CreditCard size={12}/>} Buy 5 Searches — ₹6,000 <span className="text-[#4edea3] normal-case">(save 20%)</span>
+              {buyLoading === 5 ? <Loader2 size={13} className="animate-spin"/> : <CreditCard size={13}/>} Buy 5 Searches — ₹6,000 <span className="text-success font-medium">(save 20%)</span>
             </button>
             <button
               onClick={() => openContact('Per-Query Access (₹1,500/plot)')}
-              className="w-full py-2 text-[#849495] text-[10px] tracking-[0.15em] uppercase hover:text-[#dbfcff] transition-colors flex items-center justify-center gap-2"
+              className="btn btn-ghost w-full py-2 text-sm"
             >
-              <Send size={10}/> Questions? Contact us instead
+              <Send size={12}/> Questions? Contact us instead
             </button>
           </div>
         </div>
 
         {/* Enterprise */}
-        <div className="glass-panel p-8 flex flex-col relative group overflow-hidden bg-[#2a2a2a]/60 border-[#00f0ff]/50 border drop-shadow-[0_0_15px_rgba(0,240,255,0.1)]">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-30 transition-opacity">
+        <div className="card p-7 sm:p-8 flex flex-col relative group overflow-hidden border-brand shadow-md">
+          <div className="absolute top-0 right-0 p-4 opacity-[0.04] text-brand">
             <Database size={100} />
           </div>
-          <h2 className="text-2xl font-display uppercase mb-2 text-[#00f0ff]">Bank Bulk Deals</h2>
-          <div className="text-[#dbfcff] font-display text-4xl mb-6">Custom <span className="text-sm text-[#4edea3] tracking-widest uppercase">/ annual</span></div>
-          
-          <ul className="flex flex-col gap-4 mb-8 text-sm text-[#dbfcff]/80 font-sans mt-4">
-            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#00f0ff]"/> Unlimited Regional Queries</li>
-            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#00f0ff]"/> Direct PostGIS API Access</li>
-            <li className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#00f0ff]"/> Advanced Risk Aggregation</li>
+          <span className="badge bg-brand-soft text-brand border border-brand-border w-fit mb-3">For banks &amp; firms</span>
+          <h2 className="text-xl font-semibold text-ink mb-1">Enterprise Bulk Access</h2>
+          <div className="text-ink font-display text-4xl font-bold mb-6">Custom <span className="text-sm text-muted font-normal">/ annual</span></div>
+
+          <ul className="flex flex-col gap-3 mb-8 text-sm text-ink-soft">
+            <li className="flex items-start gap-3"><ShieldCheck size={16} className="text-brand shrink-0 mt-0.5"/> Unlimited regional queries</li>
+            <li className="flex items-start gap-3"><ShieldCheck size={16} className="text-brand shrink-0 mt-0.5"/> Direct API access</li>
+            <li className="flex items-start gap-3"><ShieldCheck size={16} className="text-brand shrink-0 mt-0.5"/> Advanced risk aggregation &amp; portfolio monitoring</li>
           </ul>
 
-          <button 
+          <button
             onClick={() => openContact('Enterprise Bulk Deal (Custom/Annual)')}
-            className="mt-auto w-full py-4 text-[#00f0ff] font-bold text-sm tracking-[0.15em] uppercase bg-transparent border border-[#00f0ff] hover:bg-[#00f0ff]/10 transition-all relative z-10 flex items-center justify-center gap-2"
+            className="btn btn-primary mt-auto w-full py-3 relative z-10"
           >
-            <Send size={14}/> Contact Authority
+            <Send size={14}/> Talk to Sales
           </button>
         </div>
 
@@ -221,28 +223,28 @@ export default function Pricing() {
 
       {/* CONTACT MODAL */}
       {showContactModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
-          <div className="glass-panel w-full max-w-[480px] border border-[#00f0ff]/30 relative">
-            
-            <button 
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink/40 backdrop-blur-sm px-4">
+          <div className="card w-full max-w-[480px] relative shadow-xl max-h-[90vh] overflow-y-auto">
+
+            <button
               onClick={() => setShowContactModal(false)}
-              className="absolute top-4 right-4 text-[#849495] hover:text-[#dbfcff] transition-colors"
+              className="absolute top-4 right-4 p-1.5 text-muted hover:text-ink transition-colors"
             >
               <X size={18}/>
             </button>
 
             <div className="p-8 flex flex-col gap-6">
-              
+
               {isSent ? (
                 <div className="flex flex-col items-center gap-4 py-8 text-center">
-                  <CheckCircle2 size={48} className="text-[#4edea3]" />
-                  <h3 className="text-xl font-display uppercase">Message Sent</h3>
-                  <p className="text-xs text-[#849495] uppercase tracking-widest">
-                    Your inquiry has been forwarded. We'll respond within 24 hours.
+                  <CheckCircle2 size={48} className="text-success" />
+                  <h3 className="text-xl font-semibold text-ink">Message Sent</h3>
+                  <p className="text-sm text-muted">
+                    Your inquiry has been forwarded. We&apos;ll respond within 24 hours.
                   </p>
-                  <button 
+                  <button
                     onClick={() => setShowContactModal(false)}
-                    className="mt-4 px-8 py-3 bg-[#4edea3] text-[#0a0a0a] text-xs font-bold uppercase tracking-widest hover:bg-[#dbfcff] transition-colors"
+                    className="btn btn-primary mt-2 px-8"
                   >
                     Close
                   </button>
@@ -250,52 +252,52 @@ export default function Pricing() {
               ) : (
                 <>
                   <div>
-                    <h3 className="text-xl font-display uppercase mb-1">Send Inquiry</h3>
-                    <p className="text-[10px] text-[#00f0ff] uppercase tracking-widest font-bold">{contactTier}</p>
+                    <h3 className="text-xl font-semibold text-ink mb-1">Send Inquiry</h3>
+                    <p className="text-sm text-brand font-medium">{contactTier}</p>
                   </div>
 
                   <form onSubmit={handleSend} className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Full Name</label>
-                      <input 
+                      <label className="label">Full Name</label>
+                      <input
                         type="text" required
                         value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
-                        className="w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-sans text-sm focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]"
+                        className="input"
                         placeholder="Your name"
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Email Address</label>
-                      <input 
+                      <label className="label">Email Address</label>
+                      <input
                         type="email" required
                         value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}
-                        className="w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-sans text-sm focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]"
+                        className="input"
                         placeholder="you@company.com"
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Company / Organization</label>
-                      <input 
+                      <label className="label">Company / Organization</label>
+                      <input
                         type="text"
                         value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})}
-                        className="w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-sans text-sm focus:outline-none focus:border-[#00f0ff] transition-colors placeholder:text-[#3b494b]"
+                        className="input"
                         placeholder="Optional"
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] uppercase tracking-widest font-bold text-[#849495]">Message</label>
-                      <textarea 
+                      <label className="label">Message</label>
+                      <textarea
                         required rows={4}
                         value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})}
-                        className="w-full bg-[#111] border border-[#3b494b] text-[#dbfcff] px-3 py-2.5 font-sans text-sm focus:outline-none focus:border-[#00f0ff] transition-colors resize-none placeholder:text-[#3b494b]"
+                        className="input resize-none"
                         placeholder="Tell us about your use case..."
                       />
                     </div>
-                    
-                    <button 
+
+                    <button
                       type="submit"
                       disabled={isSending}
-                      className="w-full py-4 text-[#002022] font-bold text-sm tracking-[0.15em] uppercase bg-gradient-to-r from-[#de4ced] to-[#ff00f0] disabled:opacity-50 hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                      className="btn btn-primary w-full py-3"
                     >
                       {isSending ? <><Loader2 size={14} className="animate-spin"/> Sending...</> : <><Send size={14}/> Send Message</>}
                     </button>
@@ -306,8 +308,6 @@ export default function Pricing() {
           </div>
         </div>
       )}
-
-      <div className="pointer-events-none absolute inset-0 z-0 opacity-[0.03] bg-[linear-gradient(rgba(0,0,0,0)_50%,_rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]"></div>
     </div>
   );
 }

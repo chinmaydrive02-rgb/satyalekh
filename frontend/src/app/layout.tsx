@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
-import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import ServerWarmup from '@/components/ServerWarmup';
+import DemoBanner from '@/components/DemoBanner';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
-const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk' });
+// Fonts are loaded via <link> (runtime) rather than next/font (build-time
+// fetch) so the app builds in offline/CI environments. globals.css defines
+// --font-sans (Inter) and --font-display (Space Grotesk) with system
+// fallbacks, so the UI degrades gracefully while fonts stream in.
 
 export const metadata: Metadata = {
   title: 'Satya-Lekh — India’s Land Title Clearance Checker | Gujarat 7/12 in English',
@@ -30,9 +32,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${spaceGrotesk.variable} antialiased bg-[#0a0a0a] text-[#dbfcff]`}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="antialiased bg-bg text-ink">
         {children}
         <ServerWarmup />
+        <DemoBanner />
       </body>
     </html>
   );

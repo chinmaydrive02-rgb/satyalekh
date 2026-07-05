@@ -11,7 +11,7 @@ import TopNav from '@/components/TopNav';
 import Link from 'next/link';
 import { API_BASE_URL } from '@/lib/api';
 import { analyzeInfra, METRO_STATIONS, InfraIntel } from '@/lib/ahmedabadInfra';
-import { Ruler, Sparkles, Trash2, Undo2, Loader2, Printer, Search, MapPin, AlertTriangle, Droplets, Mountain, CloudRain, Route, Scale, TrendingUp, Landmark, TrainFront, FileSignature, Building2, FileText } from 'lucide-react';
+import { Ruler, Trash2, Undo2, Loader2, Printer, Search, MapPin, AlertTriangle, Droplets, Mountain, CloudRain, Route, Scale, TrendingUp, Landmark, TrainFront, FileSignature, Building2, FileText } from 'lucide-react';
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
   'pk.eyJ1IjoiY2hpbm1heTEyMDYiLCJhIjoiY21rOW5neGw3MXF1MjNkc2M2NTRpaW93dSJ9.Iyf99AosQ3obQDU6JIwFOA';
@@ -165,9 +165,9 @@ export default function LandIntel() {
   ];
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] pt-[60px] relative">
+    <main className="min-h-screen bg-bg text-ink pt-16 relative">
       <TopNav />
-      <div className="flex flex-col lg:flex-row h-[calc(100vh-60px)]">
+      <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)]">
 
         {/* Map */}
         <div className="relative flex-1 min-h-[50vh]">
@@ -183,15 +183,15 @@ export default function LandIntel() {
             <GeolocateControl position="bottom-right" />
             <Source id="metro" type="geojson" data={metroGeojson as any}>
               <Layer id="metro-pts" type="circle"
-                paint={{ 'circle-radius': 3.5, 'circle-color': '#de4ced', 'circle-stroke-color': '#0a0a0a', 'circle-stroke-width': 1 }} />
+                paint={{ 'circle-radius': 3.5, 'circle-color': '#f59e0b', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1 }} />
             </Source>
             <Source id="draw" type="geojson" data={geojson as any}>
               <Layer id="draw-fill" type="fill" filter={['==', '$type', 'Polygon']}
-                paint={{ 'fill-color': '#00f0ff', 'fill-opacity': 0.15 }} />
+                paint={{ 'fill-color': '#2dd4bf', 'fill-opacity': 0.18 }} />
               <Layer id="draw-line" type="line" filter={['!=', '$type', 'Point']}
-                paint={{ 'line-color': '#00f0ff', 'line-width': 2 }} />
+                paint={{ 'line-color': '#2dd4bf', 'line-width': 2 }} />
               <Layer id="draw-pts" type="circle" filter={['==', '$type', 'Point']}
-                paint={{ 'circle-radius': 4, 'circle-color': '#00f0ff', 'circle-stroke-color': '#002022', 'circle-stroke-width': 1.5 }} />
+                paint={{ 'circle-radius': 4, 'circle-color': '#2dd4bf', 'circle-stroke-color': '#115e59', 'circle-stroke-width': 1.5 }} />
             </Source>
           </Mapbox>
 
@@ -200,21 +200,21 @@ export default function LandIntel() {
             <form onSubmit={searchPlace} className="flex gap-2">
               <input value={query} onChange={e => setQuery(e.target.value)}
                 placeholder="Search place — e.g. Shela, Ahmedabad"
-                className="flex-1 bg-[#0a0a0a]/90 backdrop-blur border border-[#3b494b] text-[#dbfcff] px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#00f0ff]" />
-              <button type="submit" className="px-3 bg-[#00f0ff] text-[#002022]"><Search size={14}/></button>
+                className="input flex-1 shadow-md" />
+              <button type="submit" className="btn btn-primary px-3.5 shadow-md"><Search size={15}/></button>
             </form>
             <div className="flex gap-2">
               <button onClick={() => { setPoints(p => p.slice(0, -1)); setReport(null); }}
-                className="flex-1 py-2 bg-[#0a0a0a]/90 backdrop-blur border border-[#3b494b] text-[#849495] text-[10px] font-bold uppercase tracking-widest hover:text-[#dbfcff] flex items-center justify-center gap-1.5">
-                <Undo2 size={12}/> Undo
+                className="btn btn-outline flex-1 py-2 text-sm shadow-md">
+                <Undo2 size={13}/> Undo
               </button>
               <button onClick={() => { setPoints([]); setReport(null); }}
-                className="flex-1 py-2 bg-[#0a0a0a]/90 backdrop-blur border border-[#3b494b] text-[#849495] text-[10px] font-bold uppercase tracking-widest hover:text-[#ba1b24] flex items-center justify-center gap-1.5">
-                <Trash2 size={12}/> Clear
+                className="btn btn-outline flex-1 py-2 text-sm shadow-md hover:text-danger hover:border-danger-border">
+                <Trash2 size={13}/> Clear
               </button>
             </div>
             {points.length < 3 && (
-              <div className="bg-[#0a0a0a]/90 backdrop-blur border border-[#00f0ff]/30 px-3 py-2 text-[10px] text-[#00f0ff]">
+              <div className="card px-3 py-2.5 text-sm text-ink-soft shadow-md">
                 Tap the map to drop boundary points around your land ({points.length}/3 minimum)
               </div>
             )}
@@ -222,78 +222,79 @@ export default function LandIntel() {
         </div>
 
         {/* Side panel */}
-        <div className="w-full lg:w-[420px] border-l border-[#3b494b]/40 bg-[#111]/95 overflow-y-auto p-5 flex flex-col gap-5">
+        <div className="w-full lg:w-[420px] border-l border-border bg-surface overflow-y-auto p-5 flex flex-col gap-5">
           <div>
-            <h1 className="text-2xl font-display uppercase tracking-tight text-[#00f0ff]">Land Intel</h1>
-            <p className="text-[10px] text-[#849495] uppercase tracking-[0.2em] mt-1">Draw · Measure · Due Diligence — anywhere in India</p>
+            <p className="eyebrow mb-1">Land Intel</p>
+            <h1 className="text-2xl font-bold text-ink">Draw · Measure · Assess</h1>
+            <p className="text-sm text-muted mt-1">Due diligence for any parcel in India — no land records needed.</p>
           </div>
 
           {/* Measurements */}
-          <div className="glass-panel border border-[#3b494b]/40 p-4">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-[#849495] mb-3 flex items-center gap-2"><Ruler size={13}/> Measurements</h2>
+          <div className="card p-4">
+            <h2 className="text-sm font-semibold text-ink mb-3 flex items-center gap-2"><Ruler size={14} className="text-brand"/> Measurements</h2>
             {area > 0 ? (
               <div className="grid grid-cols-2 gap-3 text-sm font-mono">
-                <div><span className="text-[#3b494b] text-[9px] uppercase block">Sq Metres</span><span className="text-[#dbfcff]">{fmt(area, 0)}</span></div>
-                <div><span className="text-[#3b494b] text-[9px] uppercase block">Sq Yards</span><span className="text-[#dbfcff]">{fmt(area * 1.19599, 0)}</span></div>
-                <div><span className="text-[#3b494b] text-[9px] uppercase block">Acres</span><span className="text-[#4edea3]">{fmt(area / 4046.86, 3)}</span></div>
-                <div><span className="text-[#3b494b] text-[9px] uppercase block">Hectares</span><span className="text-[#dbfcff]">{fmt(area / 10000, 3)}</span></div>
-                <div><span className="text-[#3b494b] text-[9px] uppercase block">Guntha</span><span className="text-[#dbfcff]">{fmt(area / 101.17, 2)}</span></div>
-                <div><span className="text-[#3b494b] text-[9px] uppercase block">Bigha (Guj.)</span><span className="text-[#dbfcff]">{fmt(area / 1618.74, 3)}</span></div>
-                <div className="col-span-2"><span className="text-[#3b494b] text-[9px] uppercase block">Perimeter</span><span className="text-[#dbfcff]">{fmt(perimeter, 0)} m</span></div>
+                <div><span className="eyebrow block">Sq Metres</span><span className="text-ink">{fmt(area, 0)}</span></div>
+                <div><span className="eyebrow block">Sq Yards</span><span className="text-ink">{fmt(area * 1.19599, 0)}</span></div>
+                <div><span className="eyebrow block">Acres</span><span className="text-success font-semibold">{fmt(area / 4046.86, 3)}</span></div>
+                <div><span className="eyebrow block">Hectares</span><span className="text-ink">{fmt(area / 10000, 3)}</span></div>
+                <div><span className="eyebrow block">Guntha</span><span className="text-ink">{fmt(area / 101.17, 2)}</span></div>
+                <div><span className="eyebrow block">Bigha (Guj.)</span><span className="text-ink">{fmt(area / 1618.74, 3)}</span></div>
+                <div className="col-span-2"><span className="eyebrow block">Perimeter</span><span className="text-ink">{fmt(perimeter, 0)} m</span></div>
               </div>
             ) : (
-              <p className="text-[10px] text-[#3b494b]">Draw at least 3 points on the map to measure your plot.</p>
+              <p className="text-sm text-muted">Draw at least 3 points on the map to measure your plot.</p>
             )}
           </div>
 
           {/* Resolved locality */}
           {placeName && (
-            <div className="text-[10px] font-mono text-[#4edea3] border border-[#4edea3]/30 bg-[#4edea3]/5 px-3 py-2 flex items-start gap-2">
-              <MapPin size={11} className="mt-0.5 shrink-0"/> {placeName}
+            <div className="text-sm text-success border border-success-border bg-success-soft rounded-lg px-3 py-2 flex items-start gap-2">
+              <MapPin size={13} className="mt-0.5 shrink-0"/> {placeName}
             </div>
           )}
 
           {/* Deterministic infrastructure & transit analysis */}
           {infra?.inCoverage && infra.rows.length > 0 && (
-            <div className="glass-panel border border-[#3b494b]/40 p-4">
-              <h2 className="text-xs font-bold uppercase tracking-widest text-[#849495] mb-3 flex items-center gap-2"><TrainFront size={13}/> Infrastructure & Transit</h2>
+            <div className="card p-4">
+              <h2 className="text-sm font-semibold text-ink mb-3 flex items-center gap-2"><TrainFront size={14} className="text-brand"/> Infrastructure &amp; Transit</h2>
               <div className="flex flex-col gap-2">
                 {infra.rows.map((r, i) => (
-                  <div key={i} className="flex justify-between gap-3 text-[11px] border-b border-[#3b494b]/15 pb-1.5">
-                    <span className="text-[#849495]">{r.label}</span>
-                    <span className={`font-mono text-right ${r.flag === 'good' ? 'text-[#4edea3]' : r.flag === 'warn' ? 'text-[#eab308]' : r.flag === 'bad' ? 'text-[#ba1b24]' : 'text-[#dbfcff]'}`}>{r.value}</span>
+                  <div key={i} className="flex justify-between gap-3 text-sm border-b border-border pb-1.5">
+                    <span className="text-muted">{r.label}</span>
+                    <span className={`font-mono text-right ${r.flag === 'good' ? 'text-success' : r.flag === 'warn' ? 'text-warning' : r.flag === 'bad' ? 'text-danger' : 'text-ink'}`}>{r.value}</span>
                   </div>
                 ))}
               </div>
-              <p className="text-[8px] text-[#3b494b] mt-2">Measured from parcel centroid · indicative positions (±300 m) · metro stations shown as magenta dots on map</p>
+              <p className="text-xs text-faint mt-2">Measured from parcel centroid · indicative positions (±300 m) · metro stations shown as amber dots on map</p>
             </div>
           )}
 
           {/* Generate */}
           <button onClick={generateReport} disabled={!centroid || loading}
-            className="w-full py-4 bg-gradient-to-r from-[#0bd9e4] to-[#00f0ff] text-[#002022] text-sm font-bold tracking-[0.15em] uppercase hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 print:hidden">
+            className="btn btn-primary w-full py-3.5 print:hidden">
             {loading ? <><Loader2 size={15} className="animate-spin"/> Preparing Report…</> : <><FileText size={15}/> Generate Due Diligence Report</>}
           </button>
-          {loading && <p className="text-[9px] text-[#3b494b] text-center -mt-3">Surveying parcel parameters and compiling the assessment (~20-40s)…</p>}
-          {error && <div className="text-[10px] font-mono text-[#ba1b24] px-3 py-2 border border-[#ba1b24]/40 bg-[#ba1b24]/5">{error}</div>}
+          {loading && <p className="text-xs text-faint text-center -mt-3">Surveying parcel parameters and compiling the assessment (~20-40s)…</p>}
+          {error && <div className="text-sm text-danger px-3 py-2 rounded-lg border border-danger-border bg-danger-soft">{error}</div>}
 
           {/* Report */}
           {report && (
             <div className="flex flex-col gap-3">
               {/* Formal report header */}
-              <div className="border border-[#3b494b]/60 bg-[#0d0d0d] p-4">
+              <div className="card p-4 bg-surface-soft/60">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h2 className="text-sm font-display uppercase tracking-wide text-[#dbfcff]">Preliminary Land Due Diligence Report</h2>
-                    <p className="text-[9px] font-mono text-[#849495] mt-1">
-                      Ref {refNo} · {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · Satya-Lekh Title Intelligence
+                    <h2 className="text-base font-semibold text-ink">Preliminary Land Due Diligence Report</h2>
+                    <p className="text-xs font-mono text-muted mt-1">
+                      Ref {refNo} · {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · Satya-Lekh
                     </p>
                   </div>
-                  <button onClick={() => window.print()} className="text-[#00f0ff] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:text-[#dbfcff] print:hidden shrink-0">
+                  <button onClick={() => window.print()} className="text-brand text-xs font-semibold flex items-center gap-1 hover:text-brand-strong print:hidden shrink-0">
                     <Printer size={12}/> Print
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 text-[9px] font-mono text-[#849495]">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 text-xs font-mono text-muted">
                   <span>Coordinates: {centroid ? `${centroid[1].toFixed(5)}, ${centroid[0].toFixed(5)}` : '—'}</span>
                   <span>Extent: {fmt(area / 4046.86, 2)} acres</span>
                   {report.elevation_m != null && <span>Elevation: {fmt(report.elevation_m, 0)} m AMSL</span>}
@@ -302,9 +303,9 @@ export default function LandIntel() {
               </div>
 
               {report.report.executive_summary && (
-                <div className="glass-panel border-l-2 border-l-[#00f0ff] border border-[#3b494b]/40 p-4">
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#00f0ff] mb-1.5">Executive Summary</h3>
-                  <p className="text-[11px] text-[#dbfcff] leading-relaxed">{report.report.executive_summary}</p>
+                <div className="card border-l-4 border-l-brand p-4">
+                  <h3 className="text-xs font-semibold text-brand mb-1.5 uppercase tracking-wide">Executive Summary</h3>
+                  <p className="text-sm text-ink-soft leading-relaxed">{report.report.executive_summary}</p>
                 </div>
               )}
 
@@ -312,50 +313,50 @@ export default function LandIntel() {
               {report.report.suitability && (
                 <div className="grid grid-cols-3 gap-2">
                   {(['agriculture', 'residential', 'commercial'] as const).map(k => (
-                    <div key={k} className="glass-panel border border-[#3b494b]/40 p-3 text-center">
-                      <div className="text-2xl font-display text-[#00f0ff]">{report.report.suitability[k]}<span className="text-[10px] text-[#3b494b]">/10</span></div>
-                      <div className="text-[8px] uppercase tracking-widest text-[#849495] mt-1">{k}</div>
+                    <div key={k} className="card p-3 text-center">
+                      <div className="text-2xl font-bold font-mono text-brand">{report.report.suitability[k]}<span className="text-xs text-faint">/10</span></div>
+                      <div className="eyebrow mt-1">{k}</div>
                     </div>
                   ))}
                 </div>
               )}
 
               {sections.map((s, i) => s.text && (
-                <div key={i} className="glass-panel border border-[#3b494b]/40 p-4">
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#00f0ff] mb-1.5 flex items-center gap-2">{s.icon} {s.title}</h3>
-                  <p className="text-[11px] text-[#b8c8c9] leading-relaxed">{s.text}</p>
+                <div key={i} className="card p-4">
+                  <h3 className="text-xs font-semibold text-brand mb-1.5 uppercase tracking-wide flex items-center gap-2">{s.icon} {s.title}</h3>
+                  <p className="text-sm text-ink-soft leading-relaxed">{s.text}</p>
                 </div>
               ))}
 
               {allRedFlags.length > 0 && (
-                <div className="glass-panel border border-[#ba1b24]/40 bg-[#ba1b24]/5 p-4">
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#ba1b24] mb-2 flex items-center gap-2"><AlertTriangle size={13}/> Matters Requiring Attention</h3>
+                <div className="card border-danger-border bg-danger-soft/50 p-4">
+                  <h3 className="text-xs font-semibold text-danger mb-2 uppercase tracking-wide flex items-center gap-2"><AlertTriangle size={13}/> Matters Requiring Attention</h3>
                   <ul className="flex flex-col gap-1.5">
                     {allRedFlags.map((f: string, i: number) => (
-                      <li key={i} className="text-[11px] text-[#b8c8c9] leading-relaxed flex gap-2"><span className="text-[#ba1b24]">▸</span>{f}</li>
+                      <li key={i} className="text-sm text-ink-soft leading-relaxed flex gap-2"><span className="text-danger">▸</span>{f}</li>
                     ))}
                   </ul>
                 </div>
               )}
 
               {/* Certified report upsell */}
-              <div className="border border-[#eab308]/40 bg-[#eab308]/5 p-4 print:hidden">
-                <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#eab308] mb-1.5 flex items-center gap-2"><FileSignature size={13}/> Advocate-Certified Report</h3>
-                <p className="text-[10px] text-[#b8c8c9] leading-relaxed mb-3">
+              <div className="card border-warning-border bg-warning-soft/50 p-4 print:hidden">
+                <h3 className="text-xs font-semibold text-warning mb-1.5 uppercase tracking-wide flex items-center gap-2"><FileSignature size={13}/> Advocate-Certified Report</h3>
+                <p className="text-sm text-ink-soft leading-relaxed mb-3">
                   Need this opinion stamped and signed for a bank, court, or transaction? Our empanelled
                   advocate reviews the parcel against the official 7/12 record, index-2 and encumbrance
                   search, and issues a certified due-diligence report on letterhead.
                 </p>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-lg font-display text-[#eab308]">₹4,999 <span className="text-[9px] text-[#849495] uppercase tracking-widest">· 48 hrs</span></span>
-                  <Link href="/contact" className="px-4 py-2 bg-[#eab308] text-[#1a1500] text-[10px] font-bold uppercase tracking-widest hover:brightness-110">Request Certification</Link>
+                  <span className="text-lg font-bold text-warning">₹4,999 <span className="text-xs text-muted font-normal">· 48 hrs</span></span>
+                  <Link href="/contact" className="btn btn-primary py-2 px-4 text-sm">Request Certification</Link>
                 </div>
               </div>
 
-              <Link href="/" className="text-center text-[10px] text-[#4edea3] border border-[#4edea3]/30 bg-[#4edea3]/5 px-3 py-2.5 hover:bg-[#4edea3]/10 transition-colors">
+              <Link href="/" className="text-center text-sm text-success border border-success-border bg-success-soft rounded-lg px-3 py-2.5 hover:bg-success-soft/70 transition-colors">
                 Have the survey number? Run the official Title Clearance check on the 7/12 record →
               </Link>
-              <p className="text-[8px] text-[#3b494b] leading-relaxed">
+              <p className="text-xs text-faint leading-relaxed">
                 This preliminary assessment is generated from geospatial survey parameters and regional planning
                 data for the stated coordinates. It does not constitute a legal opinion or a title search, and is
                 not a substitute for verification of revenue records, the sanctioned development plan and an

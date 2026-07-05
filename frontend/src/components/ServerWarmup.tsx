@@ -40,33 +40,30 @@ export default function ServerWarmup() {
 
   const config = {
     warming: {
-      dot: "bg-amber-400 animate-pulse",
-      text: "API Warming Up",
-      pill: "border-amber-400/20",
-      label: "text-amber-400/90",
+      dot: "bg-warning animate-pulse",
+      text: "Connecting to server",
+      label: "text-warning",
     },
     ready: {
-      dot: "bg-emerald-400",
-      text: "API Ready",
-      pill: "border-emerald-400/20",
-      label: "text-emerald-400/90",
+      dot: "bg-success",
+      text: "Server ready",
+      label: "text-success",
     },
     error: {
-      dot: "bg-[#849495]",
-      text: "API Offline",
-      pill: "border-[#3b494b]/40",
-      label: "text-[#849495]",
+      dot: "bg-faint",
+      text: "Server offline",
+      label: "text-muted",
     },
   }[status];
 
   return (
     <div
-      className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2 px-3 py-1.5
-        bg-[#0d1314]/90 border ${config.pill} backdrop-blur-md
-        text-[10px] font-bold tracking-widest uppercase
-        transition-opacity duration-700 ${status === "ready" ? "opacity-70" : "opacity-100"}`}
+      className={`fixed bottom-5 right-5 z-[9999] flex items-center gap-2 px-3 py-1.5
+        bg-surface border border-border rounded-full shadow-sm
+        text-xs font-medium print:hidden
+        transition-opacity duration-700 ${status === "ready" ? "opacity-80" : "opacity-100"}`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${config.dot}`} />
+      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${config.dot}`} />
       <span className={config.label}>{config.text}</span>
     </div>
   );

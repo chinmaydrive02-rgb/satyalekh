@@ -8,14 +8,31 @@ services:
     dockerfilePath: Dockerfile
     dockerCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
+      # SUPABASE_URL is public (it ships to every browser) — safe to commit.
       - key: SUPABASE_URL
         value: "https://uvvwqugljoritqbjcryg.supabase.co"
+      # SECURITY F-15: no key values in the repo. Set these in the Render
+      # dashboard BEFORE the next deploy (see SECURITY_TODO.md):
+      #   SUPABASE_SERVICE_KEY = service-role secret (preferred — bypasses RLS)
+      #   SUPABASE_KEY         = publishable key (fallback only)
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
       - key: SUPABASE_KEY
-        value: "sb_publishable_Cv3AzDyBhpa1YUInu796MQ_v-0QHxOR"
+        sync: false
       - key: GOOGLE_API_KEY
         sync: false # Requires manual insertion in dashboard
       - key: FREE_TRIAL_CREDITS
         value: "2"
+      # CORS allowlist (comma-separated). Defaults in code to
+      # localhost:3000 + satyalekh.vercel.app — override here if domains change.
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Watchlist cron auth — REQUIRED or /watchlist/run-checks returns 503.
+      - key: CRON_SECRET
+        sync: false
+      # newsdata.io key for the /news/gujarat proxy (optional; 503 when unset).
+      - key: NEWSDATA_API_KEY
+        sync: false
       # Payment activation (set in Render dashboard when going live):
       - key: STRIPE_ENABLED
         sync: false

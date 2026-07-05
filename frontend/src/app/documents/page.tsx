@@ -74,43 +74,44 @@ const DOCS = [
 export default function DocumentLibrary() {
   const [open, setOpen] = useState<number | null>(0);
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] pt-24 pb-12 px-6 relative">
+    <main className="min-h-screen bg-bg text-ink pt-24 pb-12 px-4 sm:px-6">
       <TopNav />
       <div className="w-full max-w-[860px] mx-auto flex flex-col gap-6">
-        <div className="border-b border-[#3b494b]/40 pb-4">
-          <h1 className="text-4xl font-display uppercase tracking-tight text-[#00f0ff] flex items-center gap-3"><BookOpen size={30}/> Gujarat Document Library</h1>
-          <p className="text-[#849495] text-xs tracking-widest uppercase mt-2">Every land document explained — what it is, why it matters, where to get it</p>
+        <div className="border-b border-border pb-6">
+          <p className="eyebrow mb-1">Reference</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-ink flex items-center gap-3"><BookOpen size={28} className="text-brand"/> Gujarat Document Library</h1>
+          <p className="text-muted text-sm mt-2">Every land document explained — what it is, why it matters, where to get it.</p>
         </div>
 
         <div className="flex flex-col gap-2">
           {DOCS.map((d, i) => (
-            <div key={i} className="glass-panel border border-[#3b494b]/40">
+            <div key={i} className="card overflow-hidden">
               <button onClick={() => setOpen(open === i ? null : i)}
-                className="w-full p-4 flex items-center gap-3 text-left">
-                <span className="flex-1 text-sm font-display uppercase tracking-wide text-[#dbfcff]">{d.name}</span>
+                className="w-full p-4 flex items-center gap-3 text-left hover:bg-surface-soft/50 transition-colors">
+                <span className="flex-1 text-sm font-semibold text-ink">{d.name}</span>
                 {d.autofetch && (
-                  <span className="px-2 py-0.5 text-[8px] uppercase font-bold tracking-widest bg-[#4edea3]/10 text-[#4edea3] border border-[#4edea3]/40 flex items-center gap-1">
-                    <Zap size={9}/> Auto-fetch
+                  <span className="badge bg-success-soft text-success border border-success-border shrink-0">
+                    <Zap size={10}/> Auto-fetch
                   </span>
                 )}
-                <ChevronDown size={14} className={`text-[#849495] transition-transform ${open === i ? 'rotate-180' : ''}`}/>
+                <ChevronDown size={15} className={`text-muted transition-transform shrink-0 ${open === i ? 'rotate-180' : ''}`}/>
               </button>
               {open === i && (
-                <div className="px-4 pb-4 flex flex-col gap-3 border-t border-[#3b494b]/20 pt-3">
-                  <div><span className="text-[9px] uppercase tracking-widest font-bold text-[#00f0ff]">What it is</span>
-                    <p className="text-[11px] text-[#b8c8c9] leading-relaxed mt-1">{d.what}</p></div>
-                  <div><span className="text-[9px] uppercase tracking-widest font-bold text-[#de4ced]">Why it matters</span>
-                    <p className="text-[11px] text-[#b8c8c9] leading-relaxed mt-1">{d.why}</p></div>
+                <div className="px-4 pb-4 flex flex-col gap-3 border-t border-border pt-3">
+                  <div><span className="eyebrow text-brand">What it is</span>
+                    <p className="text-sm text-ink-soft leading-relaxed mt-1">{d.what}</p></div>
+                  <div><span className="eyebrow text-warning">Why it matters</span>
+                    <p className="text-sm text-ink-soft leading-relaxed mt-1">{d.why}</p></div>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex-1 min-w-[200px]"><span className="text-[9px] uppercase tracking-widest font-bold text-[#4edea3]">How to get it</span>
-                      <p className="text-[11px] text-[#b8c8c9] leading-relaxed mt-1">{d.how}</p></div>
+                    <div className="flex-1 min-w-[200px]"><span className="eyebrow text-success">How to get it</span>
+                      <p className="text-sm text-ink-soft leading-relaxed mt-1">{d.how}</p></div>
                     <div className="flex gap-2">
                       <a href={d.link} target="_blank" rel="noopener noreferrer"
-                        className="px-3 py-2 border border-[#3b494b] text-[#849495] text-[9px] font-bold uppercase tracking-widest hover:text-[#dbfcff] flex items-center gap-1.5">
-                        Official Portal <ExternalLink size={9}/>
+                        className="btn btn-outline py-2 px-3 text-xs">
+                        Official Portal <ExternalLink size={10}/>
                       </a>
                       {d.autofetch && (
-                        <Link href="/" className="px-3 py-2 bg-[#00f0ff] text-[#002022] text-[9px] font-bold uppercase tracking-widest hover:brightness-110">
+                        <Link href="/" className="btn btn-primary py-2 px-3 text-xs">
                           Fetch in English →
                         </Link>
                       )}
@@ -122,12 +123,12 @@ export default function DocumentLibrary() {
           ))}
         </div>
 
-        <div className="glass-panel border border-[#00f0ff]/30 bg-[#00f0ff]/5 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <p className="flex-1 text-[11px] text-[#b8c8c9] leading-relaxed">
-            Got these documents already? Keep them safe in your <span className="text-[#00f0ff]">Property Locker</span> —
+        <div className="card border-brand-border bg-brand-soft/50 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <p className="flex-1 text-sm text-ink-soft leading-relaxed">
+            Got these documents already? Keep them safe in your <span className="text-brand font-medium">Property Locker</span> —
             organised by type, available on any device.
           </p>
-          <Link href="/locker" className="px-5 py-2.5 bg-gradient-to-r from-[#0bd9e4] to-[#00f0ff] text-[#002022] text-[10px] font-bold uppercase tracking-widest">Open Locker</Link>
+          <Link href="/locker" className="btn btn-primary whitespace-nowrap">Open Locker</Link>
         </div>
       </div>
     </main>

@@ -112,6 +112,114 @@ ALTER TABLE locker_documents ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "backend access" ON locker_documents;
 CREATE POLICY "backend access" ON locker_documents FOR ALL USING (true) WITH CHECK (true);
 
+-- ── Title Reports (async job pipeline result cache) ──────────
+-- Finished /jobs/title-report results are mirrored here so they survive
+-- Render restarts. Repeat lookups for the same parcel within 7 days are
+-- served from this table instantly and do NOT consume a credit.
+CREATE TABLE IF NOT EXISTS title_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    location_key TEXT NOT NULL,              -- "district|taluka|village|survey_no" lowercase
+    district TEXT,
+    taluka TEXT,
+    village TEXT,
+    survey_no TEXT,
+    record_type TEXT DEFAULT 'OLD_SCAN_712',
+    report JSONB NOT NULL,                   -- full TitleReport object
+    user_email TEXT,                         -- who triggered the scrape (may be null)
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_title_reports_key ON title_reports (location_key, created_at DESC);
+ALTER TABLE title_reports ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "backend access" ON title_reports;
+CREATE POLICY "backend access" ON title_reports FOR ALL USING (true) WITH CHECK (true);
+
+-- ── Watchlist (parcel change monitoring) ─────────────────────
+CREATE TABLE IF NOT EXISTS watchlist (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_email TEXT NOT NULL,
+    district TEXT NOT NULL,
+    taluka TEXT NOT NULL,
+    village TEXT NOT NULL,
+    survey_no TEXT NOT NULL,
+    record_type TEXT DEFAULT 'OLD_SCAN_712',
+    last_snapshot JSONB,                     -- last fetched record (key fields)
+    last_checked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (user_email, district, taluka, village, survey_no, record_type)
+);
+CREATE INDEX IF NOT EXISTS idx_watchlist_email ON watchlist (user_email);
+ALTER TABLE watchlist ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "backend access" ON watchlist;
+CREATE POLICY "backend access" ON watchlist FOR ALL USING (true) WITH CHECK (true);
+
+-- ── Watchlist alerts (diffs detected by /watchlist/run-checks) ──
+CREATE TABLE IF NOT EXISTS watchlist_alerts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    watchlist_id UUID NOT NULL REFERENCES watchlist (id) ON DELETE CASCADE,
+    changes JSONB NOT NULL,                  -- {field: {"old":..,"new":..}}
+    seen BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_watchlist_alerts_wid ON watchlist_alerts (watchlist_id, created_at DESC);
+ALTER TABLE watchlist_alerts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "backend access" ON watchlist_alerts;
+CREATE POLICY "backend access" ON watchlist_alerts FOR ALL USING (true) WITH CHECK (true);
+
 -- ── Legacy geometry table (keep for reference, not used by app) ──
 -- CREATE EXTENSION IF NOT EXISTS postgis;
 -- CREATE TABLE IF NOT EXISTS land_parcels ( ... );
+
+
+-- ============================================================
+-- SECURITY: run this  (RLS lockdown — see SECURITY_TODO.md)
+-- ============================================================
+-- The blanket "backend access ... USING (true)" policies above date from
+-- when the backend shared the browser's publishable (anon) key. They let
+-- ANY visitor read/write every table (including granting themselves free
+-- credits). Run the block below in the Supabase SQL Editor AFTER you have
+-- set SUPABASE_SERVICE_KEY (the service-role secret) in the Render
+-- dashboard — the backend prefers that key and it BYPASSES RLS, so the
+-- backend keeps working while the anon key is locked out.
+--
+-- Designed for the current no-auth architecture:
+--   * money/identity/watchlist/report tables → service-role (backend) only
+--   * caches the frontend reads directly     → anon read-only
+--   * portfolio_assets & locker_documents    → still browser-accessed
+--     directly (no auth yet), so they stay open — accepted risk until
+--     Supabase Auth lands. Do not store sensitive data there meanwhile.
+
+-- 1) Money & identity: backend (service key) only. No anon access at all.
+DROP POLICY IF EXISTS "backend access" ON user_credits;
+DROP POLICY IF EXISTS "backend access" ON payments;
+REVOKE ALL ON user_credits, payments FROM anon;
+-- (RLS stays ENABLED; with no policy + no grant, anon can do nothing;
+--  the service-role key bypasses RLS so the backend still reads/writes.)
+
+-- 2) Watchlist / alerts / title reports: written & read by the backend only.
+DROP POLICY IF EXISTS "backend access" ON watchlist;
+DROP POLICY IF EXISTS "backend access" ON watchlist_alerts;
+DROP POLICY IF EXISTS "backend access" ON title_reports;
+REVOKE ALL ON watchlist, watchlist_alerts, title_reports FROM anon;
+
+-- 3) Caches: the frontend may read them directly but must never write.
+DROP POLICY IF EXISTS "backend access" ON village_cache;
+DROP POLICY IF EXISTS "backend access" ON survey_options;
+DROP POLICY IF EXISTS "anon read caches" ON village_cache;
+DROP POLICY IF EXISTS "anon read caches" ON survey_options;
+CREATE POLICY "anon read caches" ON village_cache FOR SELECT TO anon USING (true);
+CREATE POLICY "anon read caches" ON survey_options FOR SELECT TO anon USING (true);
+REVOKE INSERT, UPDATE, DELETE ON village_cache, survey_options FROM anon;
+
+-- 4) Locker bucket: stop serving documents from long-lived public URLs.
+--    (Frontend must switch getPublicUrl → createSignedUrl; see
+--    SECURITY_TODO.md step 6 before running this line.)
+-- UPDATE storage.buckets SET public = false WHERE id = 'lockers';
+
+-- 5) portfolio_assets / locker_documents: the browser queries these
+--    DIRECTLY today with no identity claim, so they cannot be locked
+--    without breaking the dashboard/locker pages. ACCEPTED RISK until
+--    real auth ships. When Supabase Auth lands, replace with:
+--      USING (user_email = auth.jwt()->>'email')
+-- ============================================================
+-- END SECURITY section
+-- ============================================================

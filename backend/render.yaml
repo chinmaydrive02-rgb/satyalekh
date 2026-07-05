@@ -9,7 +9,15 @@ services:
         sync: false
       - key: SUPABASE_URL
         sync: false
-      - key: SUPABASE_KEY
+      - key: SUPABASE_SERVICE_KEY   # service-role secret (preferred)
+        sync: false
+      - key: SUPABASE_KEY           # publishable fallback
+        sync: false
+      - key: ALLOWED_ORIGINS        # CORS allowlist (comma-separated)
+        sync: false
+      - key: CRON_SECRET            # required for /watchlist/run-checks
+        sync: false
+      - key: NEWSDATA_API_KEY       # /news/gujarat proxy (optional)
         sync: false
       - key: STRIPE_ENABLED
         sync: false

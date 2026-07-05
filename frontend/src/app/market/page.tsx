@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, BarChart2, Activity, Map, ArrowRight, Flame, Newspaper, RefreshCw, ExternalLink, Clock } from 'lucide-react';
+import { TrendingUp, BarChart2, Map, ArrowRight, Flame, Newspaper, RefreshCw, ExternalLink, Clock } from 'lucide-react';
 import TopNav from '@/components/TopNav';
+import { API_BASE_URL } from '@/lib/api';
 
 // Static market data (verified from web research)
 const REGIONS = [
@@ -22,106 +23,92 @@ interface NewsArticle {
   date?: string;
 }
 
+// Semantic tag colors from the design system
+const TAG_COLORS = {
+  danger: "#b42318",
+  warning: "#b54708",
+  success: "#027a48",
+  brand: "#0f766e",
+};
+
 // Fallback hardcoded news (always available) — with real source URLs
 const STATIC_NEWS: NewsArticle[] = [
   {
     source: "Ahmedabad Mirror",
     title: "Shela Jantri Rates Proposed to Increase by 621%",
     desc: "The draft jantri rates for open plots in the Shela region are proposed to undergo a staggering 621% hike, translating to an effective 2,030% FSI cost jump compared to pre-2023 levels.",
-    tag: "REGULATION", color: "#ba1b24", date: "Apr 2025",
+    tag: "REGULATION", color: TAG_COLORS.danger, date: "Apr 2025",
     url: "https://www.google.com/search?q=Shela+jantri+rates+621+percent+increase+Gujarat"
   },
   {
     source: "Economic Times",
     title: "Sanand Land Rates Spike Following Micron Chip Plant",
     desc: "Land rates in Sanand have increased by a massive 162.5% over the last five years and 425% over the last ten years, driven by the new semiconductor manufacturing district.",
-    tag: "INDUSTRIAL", color: "#de4ced", date: "Q1 2025",
+    tag: "INDUSTRIAL", color: TAG_COLORS.warning, date: "Q1 2025",
     url: "https://www.google.com/search?q=Sanand+land+rates+Micron+chip+plant+Gujarat"
   },
   {
     source: "NHB Housing Index",
     title: "Ahmedabad Witnesses 7.9% Property Appreciation",
     desc: "Quarterly trends demonstrate sustained momentum as Ahmedabad properties saw an overall 7.9% growth, bolstered by Metro Phase 2 inaugurations and NRI investments.",
-    tag: "RESIDENTIAL", color: "#4edea3", date: "Q2 FY 24-25",
+    tag: "RESIDENTIAL", color: TAG_COLORS.success, date: "Q2 FY 24-25",
     url: "https://www.google.com/search?q=Ahmedabad+property+appreciation+7.9+percent+NHB"
   },
   {
     source: "Gujarat Samachar",
     title: "Developers Rush Approvals Ahead of Jantri Hike",
     desc: "Gujarat's real estate sector saw a 6% increase in new project registrations as developers attempt to bypass the anticipated 100-200% state-wide jantri revision expected in late 2025.",
-    tag: "FINANCE", color: "#00f0ff", date: "Nov 2024",
+    tag: "FINANCE", color: TAG_COLORS.brand, date: "Nov 2024",
     url: "https://www.google.com/search?q=Gujarat+developers+approvals+jantri+hike+2025"
   }
 ];
 
 export default function MarketIntelligence() {
-  const [newsItems, setNewsItems] = useState<NewsArticle[]>(STATIC_NEWS);
   const [liveNews, setLiveNews] = useState<NewsArticle[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<string>("");
-  
+
   const calculateWidth = (val: number, max: number) => `${Math.min(100, (val / max) * 100)}%`;
   const MAX_MARKET_VAL = 90000;
 
-  // Fetch live news from free news APIs
+  // Fetch live news via the backend proxy (GET /news/gujarat).
+  // SECURITY: the newsdata.io API key lives server-side only (NEWSDATA_API_KEY
+  // env on the backend). If the proxy is unconfigured (503) or errors, this
+  // degrades gracefully to the curated static articles below.
   const fetchLiveNews = async () => {
     setIsRefreshing(true);
     try {
-      // Use Google News RSS via a proxy/RSS parser
-      const queries = [
-        "Gujarat+real+estate+land+prices",
-        "Ahmedabad+property+market",
-        "Gujarat+jantri+rates+land"
-      ];
-      
-      const allArticles: NewsArticle[] = [];
-      
-      for (const query of queries) {
-        try {
-          const res = await fetch(
-            `https://newsdata.io/api/1/latest?apikey=pub_864271a4b9ba15d0c12b34e0ebac6c1e74432&q=${query}&country=in&language=en&category=business`,
-            { signal: AbortSignal.timeout(5000) }
-          );
-          
-          if (res.ok) {
-            const data = await res.json();
-            if (data.results) {
-              for (const article of data.results.slice(0, 3)) {
-                const tags = ["MARKET", "POLICY", "DEVELOPMENT", "INVESTMENT", "REGULATION"];
-                const colors = ["#00f0ff", "#de4ced", "#4edea3", "#eab308", "#ba1b24"];
-                const idx = Math.floor(Math.random() * tags.length);
-                
-                allArticles.push({
-                  source: article.source_name || article.source_id || "News Wire",
-                  title: article.title || "Untitled",
-                  desc: article.description || article.content?.substring(0, 200) || "No description available.",
-                  tag: tags[idx],
-                  color: colors[idx],
-                  url: article.link || `https://www.google.com/search?q=${encodeURIComponent(article.title || '')}`,
-                  date: article.pubDate ? new Date(article.pubDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : "Recent"
-                });
-              }
-            }
-          }
-        } catch {
-          // Individual query failed, continue
+      const res = await fetch(`${API_BASE_URL}/news/gujarat`, {
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const tags = ["MARKET", "POLICY", "DEVELOPMENT", "INVESTMENT", "REGULATION"];
+        const colors = [TAG_COLORS.brand, TAG_COLORS.warning, TAG_COLORS.success, TAG_COLORS.warning, TAG_COLORS.danger];
+        interface ProxyArticle { source?: string; title?: string; desc?: string; url?: string; date?: string }
+        const articles: NewsArticle[] = ((data.articles || []) as ProxyArticle[]).map((article) => {
+          const idx = Math.floor(Math.random() * tags.length);
+          return {
+            source: article.source || "News Wire",
+            title: article.title || "Untitled",
+            desc: article.desc || "No description available.",
+            tag: tags[idx],
+            color: colors[idx],
+            url: article.url || `https://www.google.com/search?q=${encodeURIComponent(article.title || '')}`,
+            date: article.date
+              ? new Date(article.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+              : "Recent",
+          };
+        });
+        if (articles.length > 0) {
+          setLiveNews(articles.slice(0, 6));
+          setLastUpdate(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
         }
       }
-      
-      if (allArticles.length > 0) {
-        // Deduplicate by title
-        const seen = new Set<string>();
-        const unique = allArticles.filter(a => {
-          const key = a.title.toLowerCase().substring(0, 40);
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        setLiveNews(unique.slice(0, 6));
-      }
-      
-      setLastUpdate(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
-    } catch (err) {
+      // Non-OK (503 = news feed not configured, 429 = rate limited, etc.)
+      // → keep showing the static articles; no error surfaced to the user.
+    } catch {
       console.log("Live news fetch failed, using static data");
     } finally {
       setIsRefreshing(false);
@@ -139,85 +126,84 @@ export default function MarketIntelligence() {
   const displayedNews = liveNews.length > 0 ? [...liveNews, ...STATIC_NEWS] : STATIC_NEWS;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] flex flex-col pt-24 pb-12 px-6 relative overflow-hidden">
+    <main className="min-h-screen bg-bg text-ink flex flex-col pt-24 pb-12 px-4 sm:px-6">
       <TopNav />
-      
-      <div className="z-10 w-full max-w-[1400px] mx-auto flex flex-col gap-8">
+
+      <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-8">
         {/* Header Block */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-[#3b494b]/40 pb-6 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-border pb-6 gap-4">
            <div>
-              <div className="flex items-center gap-3 mb-2">
-                 <h1 className="text-5xl font-display uppercase tracking-tight">Market Intelligence</h1>
-                 <span className="px-3 py-1 text-[10px] uppercase font-bold tracking-widest bg-[#ba1b24]/20 text-[#ba1b24] border border-[#ba1b24]/50 flex items-center gap-2 animate-pulse">
-                    <Activity size={12}/> LIVE DATA FEED
-                 </span>
+              <p className="eyebrow mb-1">Market Intelligence</p>
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                 <h1 className="text-3xl sm:text-4xl font-bold text-ink">Gujarat land market</h1>
+                 <span className="badge bg-success-soft text-success border border-success-border">Live data feed</span>
               </div>
-              <p className="text-[#849495] font-sans text-sm tracking-widest uppercase flex items-center gap-2">
-                 <Map size={14} className="text-[#00f0ff]"/> Regional Jantri (Government) vs Real Market Value Analysis
+              <p className="text-muted text-sm flex items-center gap-2">
+                 <Map size={14} className="text-brand"/> Regional jantri (government) vs real market value analysis
               </p>
            </div>
         </div>
 
         {/* Global Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-           <div className="glass-panel p-6 border-l-2 border-l-[#00f0ff] flex flex-col justify-between h-[120px]">
-              <span className="text-[10px] text-[#849495] font-sans tracking-[0.2em] uppercase">Ahmedabad Prop Rates (2018-24)</span>
-              <span className="text-4xl font-display text-[#dbfcff]">49<span className="text-lg text-[#00f0ff]">%</span></span>
-              <span className="text-[10px] text-[#00f0ff] font-sans tracking-widest uppercase mt-1">Sustained Appreciation Rate</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+           <div className="card p-6 border-l-4 border-l-brand flex flex-col justify-between min-h-[120px]">
+              <span className="eyebrow">Ahmedabad prop rates (2018–24)</span>
+              <span className="text-4xl font-bold font-mono text-ink">49<span className="text-lg text-brand">%</span></span>
+              <span className="text-xs text-brand font-medium mt-1">Sustained appreciation rate</span>
            </div>
-           <div className="glass-panel p-6 border-l-2 border-l-[#ba1b24] flex flex-col justify-between h-[120px] bg-[#ba1b24]/5">
-              <span className="text-[10px] text-[#849495] font-sans tracking-[0.2em] uppercase">Expected Jantri Hike (2025)</span>
-              <span className="text-3xl font-display text-[#ba1b24] uppercase">100 - 200%</span>
-              <span className="text-[10px] text-[#ba1b24] font-sans tracking-widest uppercase mt-1">Pending Govt Notification</span>
+           <div className="card p-6 border-l-4 border-l-danger flex flex-col justify-between min-h-[120px]">
+              <span className="eyebrow">Expected jantri hike (2025)</span>
+              <span className="text-3xl font-bold font-mono text-danger">100–200%</span>
+              <span className="text-xs text-danger font-medium mt-1">Pending govt notification</span>
            </div>
-           <div className="glass-panel p-6 border-l-2 border-l-[#de4ced] flex flex-col justify-between h-[120px]">
-              <span className="text-[10px] text-[#849495] font-sans tracking-[0.2em] uppercase">Highest Capital Growth (10 YR)</span>
-              <span className="text-3xl font-display text-[#dbfcff]">Sanand</span>
-              <span className="text-[10px] text-[#de4ced] font-sans tracking-widest uppercase mt-1">Land rate surged by 425%</span>
+           <div className="card p-6 border-l-4 border-l-warning flex flex-col justify-between min-h-[120px]">
+              <span className="eyebrow">Highest capital growth (10 yr)</span>
+              <span className="text-3xl font-bold text-ink">Sanand</span>
+              <span className="text-xs text-warning font-medium mt-1">Land rate surged by 425%</span>
            </div>
         </div>
 
         {/* Main Split Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-           
+
            {/* Left Engine: Charts & Heatmap */}
            <div className="lg:col-span-2 flex flex-col gap-6">
-              
+
               {/* The Differential Charts */}
-              <div className="glass-panel border-[#3b494b]/40">
-                 <div className="flex items-center justify-between p-6 border-b border-[#3b494b]/40 bg-[#131313]/60">
-                    <h2 className="text-xl font-display uppercase tracking-tight flex items-center gap-3">
-                       <BarChart2 size={18} className="text-[#00f0ff]"/> Micro-Market Discrepancy Matrix
+              <div className="card">
+                 <div className="flex items-center justify-between p-6 border-b border-border flex-wrap gap-3">
+                    <h2 className="text-lg font-semibold text-ink flex items-center gap-2.5">
+                       <BarChart2 size={18} className="text-brand"/> Jantri vs Market Rates
                     </h2>
-                    <div className="flex items-center gap-4 text-[10px] uppercase font-bold tracking-widest text-[#849495]">
-                       <div className="flex items-center gap-2"><div className="w-3 h-3 bg-[#4edea3]"></div> Jantri Rate</div>
-                       <div className="flex items-center gap-2"><div className="w-3 h-3 bg-[#00f0ff]"></div> Market Rate</div>
+                    <div className="flex items-center gap-4 text-xs font-medium text-muted">
+                       <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-success"></div> Jantri rate</div>
+                       <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-brand"></div> Market rate</div>
                     </div>
                  </div>
 
                  <div className="p-6 flex flex-col gap-8">
                     {REGIONS.map((region, idx) => (
                        <div key={idx} className="flex flex-col gap-3">
-                          <div className="flex justify-between items-end">
-                             <span className="text-sm font-bold tracking-widest uppercase text-[#dbfcff]">{region.name}</span>
-                             <span className="text-[10px] text-[#00f0ff] font-bold tracking-widest bg-[#00f0ff]/10 px-2 py-1 flex items-center gap-1">
+                          <div className="flex justify-between items-end gap-2">
+                             <span className="text-sm font-semibold text-ink">{region.name}</span>
+                             <span className="badge bg-brand-soft text-brand border border-brand-border">
                                 <TrendingUp size={12}/> {region.growth}
                              </span>
                           </div>
 
-                          <div className="flex flex-col gap-2 relative border-l border-[#3b494b]/40 pl-4 py-1">
+                          <div className="flex flex-col gap-2 relative border-l border-border pl-4 py-1">
                              <div className="flex items-center gap-4 w-full">
-                                <div className="h-4 bg-[#4edea3]/80 relative flex items-center overflow-hidden group transition-all" style={{ width: calculateWidth(region.jantri, MAX_MARKET_VAL) }}></div>
-                                <span className="text-[10px] font-mono text-[#849495]">₹{region.jantri.toLocaleString()}/sqm</span>
+                                <div className="h-4 rounded-r bg-success/70" style={{ width: calculateWidth(region.jantri, MAX_MARKET_VAL) }}></div>
+                                <span className="text-xs font-mono text-muted whitespace-nowrap">₹{region.jantri.toLocaleString()}/sqm</span>
                              </div>
 
                              <div className="flex items-center gap-4 w-full">
-                                <div className="h-4 bg-[#00f0ff] relative flex items-center overflow-hidden shadow-[0_0_15px_rgba(0,240,255,0.2)] transition-all" style={{ width: calculateWidth(region.market, MAX_MARKET_VAL) }}></div>
-                                <span className="text-[10px] font-mono text-[#00f0ff] font-bold">₹{region.market.toLocaleString()}/sqm</span>
+                                <div className="h-4 rounded-r bg-brand" style={{ width: calculateWidth(region.market, MAX_MARKET_VAL) }}></div>
+                                <span className="text-xs font-mono text-brand font-semibold whitespace-nowrap">₹{region.market.toLocaleString()}/sqm</span>
                              </div>
 
-                             <div className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] text-[#849495] font-sans tracking-widest uppercase flex items-center gap-2 border border-[#3b494b]/40 bg-[#0a0a0a] px-3 py-1 opacity-60 hover:opacity-100 transition-opacity cursor-help">
-                                Spread: {Math.round(region.market / region.jantri)}x <ArrowRight size={10} className="text-[#00f0ff]"/>
+                             <div className="absolute right-0 top-1/2 -translate-y-1/2 hidden sm:flex text-xs text-muted items-center gap-1.5 border border-border rounded-lg bg-surface px-3 py-1 shadow-sm">
+                                Spread: {Math.round(region.market / region.jantri)}x <ArrowRight size={10} className="text-brand"/>
                              </div>
                           </div>
                        </div>
@@ -226,32 +212,32 @@ export default function MarketIntelligence() {
               </div>
 
               {/* Demand Heatmap */}
-              <div className="glass-panel border-[#3b494b]/40">
-                 <div className="flex items-center justify-between p-6 border-b border-[#3b494b]/40 bg-[#131313]/60">
-                    <h2 className="text-xl font-display uppercase tracking-tight flex items-center gap-3">
-                       <Flame size={18} className="text-[#ba1b24]"/> Territorial Demand Heatmap
+              <div className="card">
+                 <div className="flex items-center justify-between p-6 border-b border-border">
+                    <h2 className="text-lg font-semibold text-ink flex items-center gap-2.5">
+                       <Flame size={18} className="text-danger"/> Territorial Demand Heatmap
                     </h2>
                  </div>
                  <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-[#ba1b24]/20 border border-[#ba1b24]/50 p-4 flex flex-col items-center justify-center text-center gap-2 transition-all hover:bg-[#ba1b24]/30 cursor-pointer">
-                       <span className="text-2xl font-display text-[#ba1b24]">SHELA</span>
-                       <span className="text-[10px] text-[#dbfcff] font-bold uppercase tracking-widest border border-[#ba1b24] px-2 py-1">CRITICAL DEMAND</span>
-                       <span className="text-[10px] text-[#849495] font-sans">Jantri set to spike 621%</span>
+                    <div className="rounded-xl bg-danger-soft border border-danger-border p-4 flex flex-col items-center justify-center text-center gap-2">
+                       <span className="text-xl font-display font-bold text-danger">SHELA</span>
+                       <span className="badge bg-surface text-danger border border-danger-border">Critical demand</span>
+                       <span className="text-xs text-muted">Jantri set to spike 621%</span>
                     </div>
-                    <div className="bg-[#de4ced]/20 border border-[#de4ced]/50 p-4 flex flex-col items-center justify-center text-center gap-2 transition-all hover:bg-[#de4ced]/30 cursor-pointer">
-                       <span className="text-2xl font-display text-[#de4ced]">SANAND</span>
-                       <span className="text-[10px] text-[#dbfcff] font-bold uppercase tracking-widest border border-[#de4ced] px-2 py-1">HIGH MOMENTUM</span>
-                       <span className="text-[10px] text-[#849495] font-sans">Micron Semi-Conductor Effect</span>
+                    <div className="rounded-xl bg-warning-soft border border-warning-border p-4 flex flex-col items-center justify-center text-center gap-2">
+                       <span className="text-xl font-display font-bold text-warning">SANAND</span>
+                       <span className="badge bg-surface text-warning border border-warning-border">High momentum</span>
+                       <span className="text-xs text-muted">Micron semiconductor effect</span>
                     </div>
-                    <div className="bg-[#de4ced]/20 border border-[#de4ced]/50 p-4 flex flex-col items-center justify-center text-center gap-2 transition-all hover:bg-[#de4ced]/30 cursor-pointer">
-                       <span className="text-2xl font-display text-[#de4ced]">SG HIGHWAY</span>
-                       <span className="text-[10px] text-[#dbfcff] font-bold uppercase tracking-widest border border-[#de4ced] px-2 py-1">HIGH MOMENTUM</span>
-                       <span className="text-[10px] text-[#849495] font-sans">Corporate Expansions</span>
+                    <div className="rounded-xl bg-warning-soft border border-warning-border p-4 flex flex-col items-center justify-center text-center gap-2">
+                       <span className="text-xl font-display font-bold text-warning">SG HIGHWAY</span>
+                       <span className="badge bg-surface text-warning border border-warning-border">High momentum</span>
+                       <span className="text-xs text-muted">Corporate expansions</span>
                     </div>
-                    <div className="bg-[#4edea3]/10 border border-[#4edea3]/30 p-4 flex flex-col items-center justify-center text-center gap-2 transition-all hover:bg-[#4edea3]/20 cursor-pointer">
-                       <span className="text-2xl font-display text-[#4edea3]">GIFT CITY</span>
-                       <span className="text-[10px] text-[#4edea3] font-bold uppercase tracking-widest border border-[#4edea3]/50 px-2 py-1">STABILIZING</span>
-                       <span className="text-[10px] text-[#849495] font-sans">Consistent FII Inflows</span>
+                    <div className="rounded-xl bg-success-soft border border-success-border p-4 flex flex-col items-center justify-center text-center gap-2">
+                       <span className="text-xl font-display font-bold text-success">GIFT CITY</span>
+                       <span className="badge bg-surface text-success border border-success-border">Stabilizing</span>
+                       <span className="text-xs text-muted">Consistent FII inflows</span>
                     </div>
                  </div>
               </div>
@@ -259,35 +245,35 @@ export default function MarketIntelligence() {
            </div>
 
            {/* Right Column: Live News Source Feed */}
-           <div className="glass-panel border-[#3b494b]/40 flex flex-col h-full bg-[#111111]/80 relative">
-              <div className="flex items-center justify-between p-6 border-b border-[#3b494b]/40 bg-[#131313] sticky top-0 z-10 w-full">
-                 <h2 className="text-xl font-display uppercase tracking-tight flex items-center gap-3">
-                    <Newspaper size={18} className="text-[#00f0ff]"/> News Feed
+           <div className="card flex flex-col h-full relative">
+              <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 z-10 w-full bg-surface rounded-t-xl">
+                 <h2 className="text-lg font-semibold text-ink flex items-center gap-2.5">
+                    <Newspaper size={18} className="text-brand"/> News Feed
                  </h2>
                  <div className="flex items-center gap-2">
                     {lastUpdate && (
-                      <span className="text-[9px] text-[#849495] font-mono flex items-center gap-1">
-                        <Clock size={9}/> {lastUpdate}
+                      <span className="text-xs text-faint font-mono flex items-center gap-1">
+                        <Clock size={10}/> {lastUpdate}
                       </span>
                     )}
-                    <button 
-                      onClick={fetchLiveNews} 
+                    <button
+                      onClick={fetchLiveNews}
                       disabled={isRefreshing}
-                      className="p-2 text-[#849495] hover:text-[#00f0ff] transition-colors disabled:opacity-50"
+                      className="p-2 rounded-lg text-muted hover:text-brand hover:bg-brand-soft transition-colors disabled:opacity-50"
                       title="Refresh live news"
                     >
                       <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
                     </button>
                  </div>
               </div>
-              
+
               <div className="p-6 flex flex-col gap-6 overflow-y-auto max-h-[800px]">
-                 
+
                  {/* Live news badge */}
                  {liveNews.length > 0 && (
-                   <div className="text-[9px] uppercase tracking-widest font-bold text-[#4edea3] border-b border-[#3b494b]/20 pb-2 flex items-center gap-2">
-                     <div className="w-2 h-2 bg-[#4edea3] rounded-full animate-pulse"></div>
-                     Live Intelligence — {liveNews.length} articles from web sources
+                   <div className="text-xs font-medium text-success border-b border-border pb-2 flex items-center gap-2">
+                     <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+                     Live — {liveNews.length} articles from web sources
                    </div>
                  )}
 
@@ -297,33 +283,31 @@ export default function MarketIntelligence() {
                       href={news.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex flex-col gap-2 relative pl-4 border-l-2 border-[#3b494b] group hover:border-[#00f0ff] transition-colors pb-4 border-b border-b-[#3b494b]/20 cursor-pointer no-underline"
+                      className="flex flex-col gap-2 relative pl-4 border-l-2 border-border group hover:border-brand transition-colors pb-4 border-b border-b-border/60 cursor-pointer no-underline"
                     >
                        <div className="absolute w-2 h-2 rounded-full -left-[5px] top-1" style={{ backgroundColor: news.color }}></div>
-                       <div className="flex justify-between items-center text-[10px] uppercase tracking-widest font-bold font-sans">
-                           <span className="text-[#849495]">{news.source} {news.date && `(${news.date})`}</span>
-                           <span style={{ color: news.color, borderColor: `${news.color}40` }} className="bg-black/40 px-2 py-1 border">{news.tag}</span>
+                       <div className="flex justify-between items-center text-xs gap-2 flex-wrap">
+                           <span className="text-muted">{news.source} {news.date && `(${news.date})`}</span>
+                           <span style={{ color: news.color, borderColor: `${news.color}40` }} className="bg-surface-soft rounded-full px-2 py-0.5 border font-medium">{news.tag}</span>
                        </div>
-                       <h3 className="text-sm font-display leading-tight text-[#dbfcff] group-hover:text-[#00f0ff] transition-colors mt-1">{news.title}</h3>
-                       <p className="text-xs text-[#849495] font-serif leading-relaxed mt-2">{news.desc}</p>
-                       <span className="text-[9px] text-[#00f0ff] hover:text-[#dbfcff] flex items-center gap-1 mt-1 uppercase tracking-widest font-bold transition-colors">
-                         Read Full Article <ExternalLink size={9}/>
+                       <h3 className="text-sm font-semibold leading-snug text-ink group-hover:text-brand transition-colors">{news.title}</h3>
+                       <p className="text-xs text-muted leading-relaxed">{news.desc}</p>
+                       <span className="text-xs text-brand group-hover:underline flex items-center gap-1 mt-1 font-medium">
+                         Read full article <ExternalLink size={10}/>
                        </span>
                     </a>
                  ))}
 
                  {/* Auto-refresh notice */}
-                 <div className="text-[9px] text-[#3b494b] font-mono text-center py-4 border-t border-[#3b494b]/20">
-                   Auto-refreshes every 6 hours • Click ↻ to refresh now
+                 <div className="text-xs text-faint text-center py-3 border-t border-border">
+                   Auto-refreshes every 6 hours · Click ↻ to refresh now
                  </div>
-                 
+
               </div>
            </div>
 
         </div>
       </div>
-      
-      <div className="pointer-events-none absolute inset-0 z-0 opacity-[0.03] bg-[linear-gradient(rgba(0,0,0,0)_50%,_rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]"></div>
     </main>
   );
 }

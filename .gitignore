@@ -28,3 +28,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Agent/session dirs
+.claire/
+.claude/
+.vercel/

@@ -57,7 +57,7 @@ export default function Map({ onPlotSelect }: { onPlotSelect: (plot: any) => voi
           pitch: 45,
           bearing: -17.6
         }}
-        mapStyle="mapbox://styles/mapbox/dark-v11"
+        mapStyle="mapbox://styles/mapbox/light-v11"
         mapboxAccessToken="pk.eyJ1IjoiY2hpbm1heTEyMDYiLCJhIjoiY21rOW5neGw3MXF1MjNkc2M2NTRpaW93dSJ9.Iyf99AosQ3obQDU6JIwFOA"
         interactiveLayerIds={['plots-fill']}
         onClick={onClick}
@@ -100,10 +100,10 @@ export default function Map({ onPlotSelect }: { onPlotSelect: (plot: any) => voi
             filter={filterHeritage}
             paint={{
               'circle-radius': { "base": 2, "stops": [[12, 10], [16, 200]] },
-              'circle-color': '#ba1b24',
-              'circle-opacity': 0.2,
+              'circle-color': '#b42318',
+              'circle-opacity': 0.15,
               'circle-stroke-width': 2,
-              'circle-stroke-color': '#ba1b24',
+              'circle-stroke-color': '#b42318',
             }}
           />
 
@@ -113,7 +113,7 @@ export default function Map({ onPlotSelect }: { onPlotSelect: (plot: any) => voi
             type="line"
             filter={filterPipeline}
             paint={{
-              'line-color': '#eab308', /* Yellow for pipeline */
+              'line-color': '#b54708', /* Amber for pipeline */
               'line-width': 4,
               'line-dasharray': [2, 1]
             }}
@@ -141,9 +141,9 @@ export default function Map({ onPlotSelect }: { onPlotSelect: (plot: any) => voi
               transform: 'translate(-50%, -100%)',
               pointerEvents: 'none'
             }}
-            className="glass-panel px-3 py-2 text-xs font-bold text-[#dbfcff] border-none uppercase tracking-widest z-50 whitespace-nowrap"
+            className="card px-3 py-2 text-xs font-semibold text-ink shadow-md z-50 whitespace-nowrap"
           >
-            SURVEY NO: {hoverInfo.feature.properties.survey_number}
+            Survey No: {hoverInfo.feature.properties.survey_number}
           </div>
         )}
       </Mapbox>

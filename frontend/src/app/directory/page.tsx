@@ -1,8 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Phone, Mail, MapPin, Scale, Shield, Award } from 'lucide-react';
-import Link from 'next/link';
+import { Phone, MapPin, Scale, Shield } from 'lucide-react';
 import TopNav from '@/components/TopNav';
 
 export default function Directory() {
@@ -10,11 +9,11 @@ export default function Directory() {
     {
       name: "Chinmay Mistry",
       specialty: "Lead Counsel & System Architect",
-      rating: "Verified Authority",
+      rating: "Verified",
       address: "Ahmedabad, Gujarat",
       contact: "+91 7487070961",
-      tier: "LEVEL 5",
-      icon: <Scale className="text-[#00f0ff]" size={24}/>
+      tier: "Advocate",
+      icon: <Scale className="text-brand" size={22}/>
     },
     {
       name: "NIC Gujarat Point of Contact",
@@ -22,59 +21,58 @@ export default function Directory() {
       rating: "Govt. Authenticated",
       address: "Gandhinagar, Gujarat",
       contact: "1800-XXX-GOVT",
-      tier: "GOVERNMENT",
-      icon: <Shield className="text-[#4edea3]" size={24}/>
+      tier: "Government",
+      icon: <Shield className="text-success" size={22}/>
     }
   ];
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-[#dbfcff] flex flex-col pt-24 pb-12 px-6 relative overflow-hidden">
+    <main className="min-h-screen bg-bg text-ink flex flex-col pt-24 pb-12 px-4 sm:px-6">
       <TopNav />
-      
-      <div className="z-10 w-full max-w-[1000px] mx-auto flex flex-col gap-8">
-        <div className="flex flex-col gap-2 border-l-4 border-[#00f0ff] pl-6 mb-4">
-           <h1 className="text-4xl font-display uppercase tracking-tight">Legal Authority Directory</h1>
-           <p className="text-[#849495] font-sans text-xs tracking-widest uppercase">
+
+      <div className="w-full max-w-[1000px] mx-auto flex flex-col gap-8">
+        <div className="border-b border-border pb-6">
+           <p className="eyebrow mb-1">Directory</p>
+           <h1 className="text-3xl sm:text-4xl font-bold text-ink mb-2">Legal Counsel Directory</h1>
+           <p className="text-muted text-sm">
               Verified legal counsel for resolving title disputes, lifting encumbrances, and NA conversions.
            </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {firms.map((firm, idx) => (
-            <div key={idx} className="glass-panel p-6 flex flex-col gap-4 border border-[#3b494b]/40 relative group hover:border-[#00f0ff]/50 transition-colors">
+            <div key={idx} className="card p-6 flex flex-col gap-4 hover:border-brand transition-colors">
                <div className="flex justify-between items-start">
-                  {firm.icon}
-                  <span className={`text-[10px] font-bold tracking-widest px-2 py-1 uppercase ${firm.tier === 'PREMIUM' ? 'bg-[#00f0ff]/10 text-[#00f0ff] border border-[#00f0ff]/30' : 'bg-[#1c1b1b] text-[#849495] border border-[#3b494b]'}`}>
+                  <span className="w-10 h-10 rounded-lg bg-surface-soft flex items-center justify-center">{firm.icon}</span>
+                  <span className="badge bg-surface-soft text-muted border border-border">
                      {firm.tier}
                   </span>
                </div>
-               
+
                <div className="flex flex-col">
-                  <h3 className="text-xl font-display text-[#dbfcff] uppercase tracking-tight">{firm.name}</h3>
-                  <span className="text-xs text-[#00f0ff] tracking-widest font-sans mt-1">{firm.specialty}</span>
+                  <h3 className="text-lg font-semibold text-ink">{firm.name}</h3>
+                  <span className="text-sm text-brand mt-0.5">{firm.specialty}</span>
                </div>
 
-               <div className="flex flex-col gap-2 mt-4">
-                  <div className="flex items-center gap-2 text-xs text-[#849495] font-sans uppercase tracking-[0.1em]">
-                     <MapPin size={12}/> {firm.address}
+               <div className="flex flex-col gap-2 mt-2">
+                  <div className="flex items-center gap-2 text-sm text-muted">
+                     <MapPin size={13}/> {firm.address}
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-[#849495] font-sans uppercase tracking-[0.1em]">
-                     <Phone size={12}/> {firm.contact}
+                  <div className="flex items-center gap-2 text-sm text-muted">
+                     <Phone size={13}/> {firm.contact}
                   </div>
                </div>
 
-               <div className="mt-auto pt-4 border-t border-[#3b494b]/40 flex justify-between items-center">
-                  <div className="text-xs font-bold text-[#4edea3] tracking-widest uppercase">{firm.rating}</div>
-                  <button className="text-[10px] font-bold text-[#0a0a0a] bg-[#dbfcff] px-4 py-2 hover:bg-[#00f0ff] transition-colors uppercase tracking-[0.15em]">
-                     Dispatch Brief
+               <div className="mt-auto pt-4 border-t border-border flex justify-between items-center gap-3">
+                  <span className="text-xs font-semibold text-success">{firm.rating}</span>
+                  <button className="btn btn-outline py-2 px-4 text-sm">
+                     Contact
                   </button>
                </div>
             </div>
           ))}
         </div>
       </div>
-      
-      <div className="pointer-events-none absolute inset-0 z-0 opacity-[0.03] bg-[linear-gradient(rgba(0,0,0,0)_50%,_rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]"></div>
     </main>
   );
 }

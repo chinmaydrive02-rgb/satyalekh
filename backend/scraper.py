@@ -514,11 +514,18 @@ async def scrape_anyror_data(
     village: str,
     survey_number: str,
     record_type: str = "OLD_SCAN_712",
-    max_captcha_attempts: int = 5
+    max_captcha_attempts: int = 5,
+    progress=None,
 ):
     """
     Automates fetching Land Records from AnyROR Gujarat using Playwright.
     Uses Gemini Vision to solve CAPTCHAs and parse results.
+
+    progress: optional callback(stage: str, label: str, pct: int) invoked as
+    the scrape advances (stages: connecting, selecting_location,
+    solving_captcha, reading_record). Exceptions in the callback are
+    swallowed — it must never break a scrape. The synchronous /fetch-anyror
+    endpoint simply omits it.
 
     Key improvements over v1:
     - Screenshot-based Gemini Vision parsing for OLD_SCAN_712 (scanned images)
@@ -533,6 +540,15 @@ async def scrape_anyror_data(
     print(f"  AnyROR Scraper: {record_type}")
     print(f"  {district} > {taluka} > {village} > Survey {survey_number}")
     print(f"{'='*60}")
+
+    def _report(stage: str, label: str, pct: int):
+        """Fire the progress callback; never let it break the scrape."""
+        if progress is None:
+            return
+        try:
+            progress(stage, label, pct)
+        except Exception as e:
+            print(f"    progress callback error (ignored): {e}")
 
     async def _run_scrape():
         async with async_playwright() as p:
@@ -566,6 +582,7 @@ async def scrape_anyror_data(
 
             # ── Step 1: Navigate ──────────────────────────────────────────────
             print("  [1/8] Navigating to AnyROR...")
+            _report("connecting", "Contacting AnyROR portal…", 5)
             nav_ok = False
             # AnyROR responds slowly (sometimes >60s) to data-center IPs, so use
             # the most lenient wait ("commit" = first response byte) with a long
@@ -605,6 +622,7 @@ async def scrape_anyror_data(
 
             # ── Step 3: Select District (Gujarati labels) ─────────────────────
             print(f"  [3/8] Selecting district: {district}")
+            _report("selecting_location", f"Locating {village}, {taluka}…", 20)
             if not await _select_cascading_option(
                 page, ELEMENTS["district"], district, "District",
                 next_selector=ELEMENTS["taluka"]
@@ -699,6 +717,9 @@ async def scrape_anyror_data(
 
             for attempt in range(1, max_captcha_attempts + 1):
                 print(f"  [7/8] CAPTCHA attempt {attempt}/{max_captcha_attempts}...")
+                _report("solving_captcha",
+                        f"Solving the security CAPTCHA (attempt {attempt}/{max_captcha_attempts})…",
+                        min(45 + attempt * 4, 62))
 
                 if attempt > 1:
                     refresh_btn = page.locator(ELEMENTS["refresh_captcha"])
@@ -770,6 +791,7 @@ async def scrape_anyror_data(
                     )
 
             print("  [8/8] Parsing result with Gemini AI...")
+            _report("reading_record", "Reading the land record…", 68)
 
             if record_type == "OLD_SCAN_712":
                 # The result is a SCANNED IMAGE embedded in the page.
