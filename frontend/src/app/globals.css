@@ -1,44 +1,57 @@
 @import "tailwindcss";
 
 /* ─────────────────────────────────────────────────────────────
-   Satya-Lekh design tokens — "professional trust" system
-   Light fintech/legal-tech look: white surfaces, ink text,
-   one deep-teal brand color, restrained semantic colors.
+   Satya-Lekh design tokens — "crafted legal document" system
+   Warm paper canvas, evergreen ink, deep-teal brand, one gold
+   "seal" accent. Editorial serif (Fraunces) for display type,
+   Space Grotesk for UI headings, Inter for body.
    Tailwind v4 CSS-config: every --color-* token below becomes
    a utility (bg-brand, text-ink, border-border, …).
    ───────────────────────────────────────────────────────────── */
 @theme {
-  /* Core neutrals */
-  --color-bg: #f7f8fa;              /* page background */
-  --color-surface: #ffffff;         /* cards, nav, panels */
-  --color-surface-soft: #f2f4f7;    /* subtle wells, table heads */
-  --color-border: #e4e7ec;          /* hairline borders */
-  --color-border-strong: #cfd6df;   /* emphasised borders */
-  --color-ink: #101828;             /* primary text */
-  --color-ink-soft: #344054;        /* secondary text */
-  --color-muted: #667085;           /* tertiary text */
-  --color-faint: #98a2b3;           /* placeholders, footnotes */
+  /* Core neutrals — warm paper, not flat gray */
+  --color-bg: #f8f7f2;              /* page background (warm paper) */
+  --color-surface: #fffefb;         /* cards, nav, panels */
+  --color-surface-soft: #f1efe7;    /* subtle wells, table heads */
+  --color-border: #e6e2d6;          /* hairline borders */
+  --color-border-strong: #d3cfbf;   /* emphasised borders */
+  --color-ink: #16241f;             /* primary text — evergreen ink */
+  --color-ink-soft: #3c4c46;        /* secondary text */
+  --color-muted: #5f6d67;           /* tertiary text */
+  --color-faint: #96a09a;           /* placeholders, footnotes */
 
   /* Brand — deep trustworthy teal */
   --color-brand: #0f766e;
-  --color-brand-strong: #115e59;
-  --color-brand-soft: #f0fdfa;
-  --color-brand-border: #99f6e4;
+  --color-brand-strong: #0b5d56;
+  --color-brand-soft: #eaf5f1;
+  --color-brand-border: #b9ddd3;
+
+  /* Accent — registrar's gold (seals, ref numbers, rules) */
+  --color-accent: #8f6a24;
+  --color-accent-soft: #f7efdc;
+  --color-accent-border: #e4d2a4;
+  --color-accent-bright: #d9b56a;   /* gold on dark bands */
+
+  /* Dark band — deep evergreen ink for hero/CTA/footer rhythm */
+  --color-pine: #0b1f1a;
+  --color-pine-soft: #123129;
+  --color-pine-line: #23443a;
 
   /* Semantic */
   --color-success: #027a48;
-  --color-success-soft: #ecfdf3;
-  --color-success-border: #abefc6;
+  --color-success-soft: #ebf7ef;
+  --color-success-border: #a9e2c0;
   --color-warning: #b54708;
-  --color-warning-soft: #fffaeb;
-  --color-warning-border: #fedf89;
+  --color-warning-soft: #fdf6e3;
+  --color-warning-border: #f0d98d;
   --color-danger: #b42318;
-  --color-danger-soft: #fef3f2;
-  --color-danger-border: #fecdca;
+  --color-danger-soft: #fdf1ef;
+  --color-danger-border: #f2c6c0;
 
   /* Typography */
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Fraunces', 'Georgia', 'Times New Roman', serif;
 }
 
 /* Plain aliases for non-Tailwind CSS + JS access */
@@ -50,42 +63,84 @@
   --muted: var(--color-muted);
   --brand: var(--color-brand);
   --brand-strong: var(--color-brand-strong);
+  --accent: var(--color-accent);
   --success: var(--color-success);
   --warning: var(--color-warning);
   --danger: var(--color-danger);
+
+  /* Layered shadow scale — soft, paper-like */
+  --shadow-xs: 0 1px 2px rgba(22, 36, 31, 0.05);
+  --shadow-sm: 0 1px 2px rgba(22, 36, 31, 0.05), 0 2px 8px -2px rgba(22, 36, 31, 0.06);
+  --shadow-md: 0 1px 2px rgba(22, 36, 31, 0.05), 0 6px 16px -6px rgba(22, 36, 31, 0.1);
+  --shadow-lg: 0 2px 4px rgba(22, 36, 31, 0.05), 0 12px 32px -8px rgba(22, 36, 31, 0.14);
+  --shadow-xl: 0 4px 8px rgba(22, 36, 31, 0.05), 0 24px 56px -12px rgba(22, 36, 31, 0.2);
+
+  /* Grain texture (CSS-only, SVG turbulence) */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
 }
 
 @layer base {
+  html { scroll-behavior: smooth; }
+
   body {
     background-color: var(--color-bg);
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'cv11', 'ss01';
   }
 
-  h1, h2, h3 {
+  /* Display serif for the big editorial voice; Space Grotesk for UI headings */
+  h1, h2 {
+    font-family: var(--font-serif);
+    font-variation-settings: 'opsz' 72;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+  }
+  h3 {
     font-family: var(--font-display);
     letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-brand) 22%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 }
 
 @layer components {
-  /* Card — the standard surface. `.glass-panel` kept as a legacy
-     alias so older markup still renders sensibly. */
+  /* Card — the standard surface: paper with a 1px hairline and a
+     layered soft shadow. `.glass-panel` kept as a legacy alias. */
   .card,
   .glass-panel {
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 0.75rem;
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    border-radius: 0.875rem;
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Interactive card — hover lift + shadow bloom */
+  .card-lift {
+    transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
+                box-shadow 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
+                border-color 0.25s;
+  }
+  .card-lift:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
   }
 
   /* Section eyebrow — the only place uppercase-tracking survives */
   .eyebrow {
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 650;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.13em;
     color: var(--color-muted);
   }
 
@@ -100,17 +155,18 @@
     width: 100%;
     background-color: var(--color-surface);
     border: 1px solid var(--color-border-strong);
-    border-radius: 0.5rem;
+    border-radius: 0.625rem;
     padding: 0.625rem 0.75rem;
     font-size: 0.875rem;
     color: var(--color-ink);
+    box-shadow: inset 0 1px 2px rgba(22, 36, 31, 0.03);
     transition: border-color 0.15s, box-shadow 0.15s;
   }
   .input::placeholder { color: var(--color-faint); }
   .input:focus {
     outline: none;
     border-color: var(--color-brand);
-    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 14%, transparent);
   }
   .input:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -119,29 +175,34 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: 0.5rem;
+    border-radius: 0.625rem;
     font-size: 0.875rem;
     font-weight: 600;
     padding: 0.625rem 1.125rem;
-    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s,
+                box-shadow 0.2s, transform 0.1s;
     cursor: pointer;
   }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .btn-primary {
+    background-image: linear-gradient(to bottom, #128179, var(--color-brand) 55%, #0d6a63);
     background-color: var(--color-brand);
     color: #ffffff;
-    border: 1px solid var(--color-brand);
+    border: 1px solid var(--color-brand-strong);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(11, 93, 86, 0.35);
   }
   .btn-primary:hover:not(:disabled) {
-    background-color: var(--color-brand-strong);
-    border-color: var(--color-brand-strong);
+    background-image: linear-gradient(to bottom, var(--color-brand), var(--color-brand-strong));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 3px 10px -2px rgba(11, 93, 86, 0.45);
   }
 
   .btn-outline {
     background-color: var(--color-surface);
     color: var(--color-ink-soft);
     border: 1px solid var(--color-border-strong);
+    box-shadow: var(--shadow-xs);
   }
   .btn-outline:hover:not(:disabled) {
     border-color: var(--color-brand);
@@ -164,9 +225,117 @@
     font-size: 12px;
     font-weight: 600;
   }
+
+  /* ── Dark evergreen band (hero rhythm / CTA / footer) ─────── */
+  .section-dark {
+    position: relative;
+    background-color: var(--color-pine);
+    background-image:
+      radial-gradient(52rem 26rem at 85% -10%, rgba(15, 118, 110, 0.34), transparent 60%),
+      radial-gradient(40rem 22rem at 0% 110%, rgba(169, 127, 47, 0.12), transparent 55%);
+    color: #f4f6f3;
+  }
+  .section-dark::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--grain);
+    background-size: 160px 160px;
+    opacity: 0.05;
+    pointer-events: none;
+  }
+
+  /* Warm mesh backdrop for the light hero */
+  .hero-mesh {
+    background-image:
+      radial-gradient(46rem 24rem at 12% -8%, rgba(15, 118, 110, 0.075), transparent 60%),
+      radial-gradient(38rem 22rem at 96% 12%, rgba(169, 127, 47, 0.07), transparent 55%),
+      linear-gradient(to bottom, #f4f3ec, var(--color-bg) 70%);
+  }
+
+  /* Ruled-paper texture — the product is documents */
+  .doc-rules {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 27px,
+      color-mix(in srgb, var(--color-border) 55%, transparent) 27px,
+      color-mix(in srgb, var(--color-border) 55%, transparent) 28px
+    );
+  }
+
+  /* Tabular figures for scores, survey nos, money */
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* Dotted ledger leader (between a label and its value) */
+  .leader {
+    flex: 1 1 auto;
+    min-width: 1.5rem;
+    border-bottom: 1px dotted var(--color-border-strong);
+    transform: translateY(-0.3em);
+  }
+
+  /* Scroll-reveal (driven by IntersectionObserver adding .is-visible) */
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.7s cubic-bezier(0.22, 0.61, 0.36, 1),
+                transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0s);
+  }
+  .reveal.is-visible { opacity: 1; transform: none; }
+
+  /* Progress shimmer sweep */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.45) 50%, transparent 80%);
+    transform: translateX(-100%);
+    animation: sl-shimmer 1.8s ease-in-out infinite;
+  }
 }
 
-/* Custom scrollbar — subtle, light */
+/* ── Keyframes ─────────────────────────────────────────────── */
+@keyframes sl-slide-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes sl-fade-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes sl-shimmer {
+  to { transform: translateX(100%); }
+}
+@keyframes sl-pop {
+  0% { opacity: 0; transform: scale(0.6) rotate(-6deg); }
+  60% { opacity: 1; transform: scale(1.06) rotate(1deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes sl-dial {
+  from { stroke-dashoffset: var(--dial-c, 289); }
+}
+@keyframes sl-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .card-lift, .card-lift:hover { transform: none; transition: none; }
+  .shimmer::after { animation: none; }
+  /* Decorative entrance/float animations off; spinners stay (loading feedback) */
+  .sl-anim { animation: none !important; }
+}
+
+/* Custom scrollbar — subtle, warm */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: 4px; }
@@ -187,10 +356,6 @@
   }
   * { color: #111111 !important; text-shadow: none !important; }
   h1, h2, h3 { color: #000000 !important; }
-}
-
-/* Welcome intro animation */
-@keyframes sl-slide-in {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
+  .reveal { opacity: 1 !important; transform: none !important; }
+  .shimmer::after { display: none !important; }
 }

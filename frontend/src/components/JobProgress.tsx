@@ -50,17 +50,17 @@ export default function JobProgress({
         )}
       </div>
 
-      {/* Progress bar */}
+      {/* Progress bar — animated shimmer sweep while working */}
       <div>
         <div className="flex justify-between items-center mb-1.5">
           <span className="text-xs text-muted">
             {queued ? 'Queued — waiting for a worker…' : job?.stage_label || 'Working…'}
           </span>
-          <span className="text-sm font-mono text-brand font-semibold">{progress}%</span>
+          <span className="text-sm font-mono tnum text-brand font-semibold">{progress}%</span>
         </div>
-        <div className="w-full h-2 bg-surface-soft border border-border rounded-full overflow-hidden">
+        <div className="w-full h-2.5 bg-surface-soft border border-border rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(22,36,31,0.06)]">
           <div
-            className="h-full bg-brand rounded-full transition-all duration-700 ease-out"
+            className="shimmer h-full rounded-full bg-gradient-to-r from-brand-strong via-brand to-brand transition-all duration-700 ease-out"
             style={{ width: `${Math.max(progress, 2)}%` }}
           />
         </div>
@@ -72,13 +72,18 @@ export default function JobProgress({
           const isDone = currentIdx > i || (job?.status === 'done');
           const isCurrent = currentIdx === i && job?.status === 'running';
           return (
-            <li key={stage.key} className="flex items-center gap-3 text-sm">
+            <li
+              key={stage.key}
+              className={`flex items-center gap-3 text-sm rounded-lg px-2 py-1.5 -mx-2 transition-colors ${
+                isCurrent ? 'bg-brand-soft/60' : ''
+              }`}
+            >
               <span
-                className={`w-5 h-5 shrink-0 flex items-center justify-center rounded-full border ${
+                className={`w-5 h-5 shrink-0 flex items-center justify-center rounded-full border transition-colors ${
                   isDone
                     ? 'border-success bg-success-soft text-success'
                     : isCurrent
-                      ? 'border-brand text-brand'
+                      ? 'border-brand text-brand shadow-[0_0_0_3px_rgba(15,118,110,0.12)]'
                       : 'border-border text-faint'
                 }`}
               >

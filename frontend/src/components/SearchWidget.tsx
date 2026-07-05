@@ -170,9 +170,12 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect?: (plot: a
   const inputCls  = "input";
 
   return (
-    <div className="card w-full p-6 sm:p-7 flex flex-col gap-5 shadow-lg">
+    <div className="card relative w-full p-6 sm:p-7 flex flex-col gap-5 overflow-hidden" style={{ boxShadow: 'var(--shadow-xl)' }}>
+      {/* Brand rule across the top — the "form header" line */}
+      <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-brand via-brand/50 to-accent/50" aria-hidden="true" />
       <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-semibold text-ink">Check a land title</h2>
+        <span className="eyebrow text-brand">Start here</span>
+        <h2 className="font-serif text-2xl font-semibold text-ink">Check a land title</h2>
         <p className="text-sm text-muted">Official 7/12 record, in English, with risk analysis.</p>
       </div>
 

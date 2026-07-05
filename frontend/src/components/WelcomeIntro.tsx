@@ -77,7 +77,7 @@ export default function WelcomeIntro() {
             {STEPS.map((s, i) => (
               <div
                 key={i}
-                className="border border-border rounded-lg p-4 flex items-start gap-4 bg-surface-soft/50"
+                className="sl-anim border border-border rounded-xl p-4 flex items-start gap-4 bg-surface-soft/50"
                 style={{ animation: `sl-slide-in 0.4s ease ${i * 0.1}s both` }}
               >
                 <div className="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center bg-brand-soft text-brand">

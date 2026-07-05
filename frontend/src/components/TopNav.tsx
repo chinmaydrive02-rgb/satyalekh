@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Search, UploadCloud, Phone, LayoutDashboard, TrendingUp, ShieldCheck, Menu, X,
-  Wallet, Sparkles, Vault, BookOpen, Bell, ChevronDown, Users, ShieldCheck as Shield,
+  Wallet, Sparkles, Vault, BookOpen, Bell, ChevronDown, Users,
 } from 'lucide-react';
 import { getUserEmail, fetchCredits, fetchUnseenAlertCount, CreditsInfo, isDemoActive } from '@/lib/api';
 
@@ -67,12 +67,17 @@ export default function TopNav() {
     }`;
 
   return (
-    <nav className="fixed top-0 left-0 w-full z-[999] bg-surface/95 backdrop-blur border-b border-border">
+    <nav className="fixed top-0 left-0 w-full z-[999] bg-surface/90 backdrop-blur-md border-b border-border shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_1px_8px_-4px_rgba(22,36,31,0.08)]">
        <div className="max-w-[1280px] mx-auto px-4 h-16 flex justify-between items-center gap-4">
           {/* Brand */}
-          <Link href="/" className="flex items-center gap-2 whitespace-nowrap group">
-             <span className="w-8 h-8 rounded-lg bg-brand text-white flex items-center justify-center">
-               <Shield size={17} />
+          <Link href="/" className="flex items-center gap-2.5 whitespace-nowrap group">
+             {/* Shield mark: document rules + check, matches the favicon */}
+             <span className="w-8 h-8 rounded-lg bg-gradient-to-b from-brand to-brand-strong text-white flex items-center justify-center shadow-sm ring-1 ring-brand-strong/60 transition-transform group-hover:scale-105">
+               <svg width="18" height="18" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                 <path d="M16 5.5l7.5 3v7c0 5.2-3.2 9-7.5 11-4.3-2-7.5-5.8-7.5-11v-7l7.5-3z" fill="rgba(255,255,255,0.14)" stroke="white" strokeWidth="1.6" strokeLinejoin="round" />
+                 <path d="M12.6 12h6.8M12.6 14.8h6.8" stroke="rgba(255,255,255,0.55)" strokeWidth="1.3" strokeLinecap="round" />
+                 <path d="M12.7 18.6l2.3 2.3 4.5-4.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+               </svg>
              </span>
              <span className="font-display text-lg font-bold text-ink tracking-tight">Satya-Lekh</span>
              {demoActive && (
