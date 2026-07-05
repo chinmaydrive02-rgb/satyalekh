@@ -30,10 +30,8 @@ def _fast_and_pristine(monkeypatch):
         return None
     monkeypatch.setattr(demo, "_sleep", _instant)
     demo.reset_demo_state()
-    demo._tokens.clear()
     yield
     demo.reset_demo_state()
-    demo._tokens.clear()
 
 
 @pytest.fixture()
@@ -93,7 +91,24 @@ class TestTokens:
 
         clock["t"] += 2  # past the 24h TTL
         assert not demo.is_valid_token(token)
-        assert token not in demo._tokens  # purged, not just rejected
+
+    def test_token_survives_restart(self, monkeypatch):
+        """Signed tokens must stay valid across process restarts (Render
+        free tier cold-starts constantly) — no in-memory state allowed."""
+        token, _ = demo.issue_token()
+        import importlib
+        importlib.reload(demo)
+        try:
+            assert demo.is_valid_token(token)
+        finally:
+            importlib.reload(demo)
+
+    def test_tampered_token_rejected(self):
+        token, _ = demo.issue_token()
+        payload, sig = token.rsplit(".", 1)
+        exp = str(int(payload.split(".", 1)[0]) + 99999)
+        assert not demo.is_valid_token(exp + "." + payload.split(".", 1)[1] + "." + sig)
+        assert not demo.is_valid_token(payload + "." + sig[:-4] + "beef")
 
 
 # ── Login + session endpoints ────────────────────────────────────────────────

@@ -11,6 +11,7 @@
 # Gemini) so it is fully unit-testable and instant to deploy.
 
 import asyncio
+import hashlib
 import hmac
 import os
 import secrets
@@ -21,7 +22,13 @@ from typing import Optional
 from title_report import compose_title_report, parse_mutation_entries
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Credentials + token store (in-memory, 24h TTL)
+# Credentials + stateless signed tokens (24h TTL)
+#
+# Tokens are HMAC-signed ("<expiry>.<sig>") rather than stored in memory, so
+# they survive server restarts — critical on Render's free tier, which spins
+# the process down after 15 minutes of idle. A stored-token approach silently
+# invalidated live demo sessions on every cold start, dropping demo users onto
+# the real (blocked) scraper path.
 # ──────────────────────────────────────────────────────────────────────────────
 
 DEMO_USERNAME = os.getenv("DEMO_USERNAME", "chinmay2004")
@@ -29,7 +36,13 @@ DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "satyalekh")
 TOKEN_TTL_SECONDS = 24 * 3600
 
 _clock = time.time          # monkeypatch-able in tests
-_tokens: dict = {}          # token -> expiry unix ts
+
+
+def _signing_key() -> bytes:
+    """Deterministic per-deployment key: stable across restarts, changes when
+    the demo credentials are rotated. DEMO_TOKEN_SECRET env overrides."""
+    secret = os.getenv("DEMO_TOKEN_SECRET") or f"{DEMO_USERNAME}:{DEMO_PASSWORD}"
+    return hashlib.sha256(("satyalekh-demo|" + secret).encode("utf-8")).digest()
 
 
 def verify_credentials(username: str, password: str) -> bool:
@@ -41,26 +54,31 @@ def verify_credentials(username: str, password: str) -> bool:
     return ok_user and ok_pass
 
 
-def _purge_expired():
-    now = _clock()
-    for t in list(_tokens.keys()):
-        if _tokens[t] <= now:
-            del _tokens[t]
+def _sign(payload: str) -> str:
+    return hmac.new(_signing_key(), payload.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def issue_token() -> tuple:
     """Create a fresh demo session token. Returns (token, expires_in_seconds)."""
-    _purge_expired()
-    token = secrets.token_urlsafe(32)
-    _tokens[token] = _clock() + TOKEN_TTL_SECONDS
-    return token, TOKEN_TTL_SECONDS
+    expiry = int(_clock()) + TOKEN_TTL_SECONDS
+    payload = f"{expiry}.{secrets.token_urlsafe(8)}"
+    return f"{payload}.{_sign(payload)}", TOKEN_TTL_SECONDS
 
 
 def is_valid_token(token: Optional[str]) -> bool:
     if not token:
         return False
-    _purge_expired()
-    return token in _tokens
+    parts = str(token).rsplit(".", 1)
+    if len(parts) != 2:
+        return False
+    payload, sig = parts
+    if not hmac.compare_digest(_sign(payload), sig):
+        return False
+    try:
+        expiry = int(payload.split(".", 1)[0])
+    except (ValueError, IndexError):
+        return False
+    return _clock() < expiry
 
 
 # ──────────────────────────────────────────────────────────────────────────────
