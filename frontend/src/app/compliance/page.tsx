@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import TopNav from '@/components/TopNav';
+import { Reveal } from '@/components/motion';
 import { Shield, Calculator, AlertTriangle, Ruler, Building2, IndianRupee, Info, Landmark } from 'lucide-react';
 
 // ── CGDCR-2017 (Gujarat Comprehensive GDCR) indicative zone parameters ──
@@ -77,6 +78,7 @@ export default function ComplianceCalculator() {
       <div className="w-full max-w-[1100px] mx-auto flex flex-col gap-8">
 
         {/* Header */}
+        <Reveal>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-border pb-6 gap-4">
           <div>
             <p className="eyebrow mb-1">Compliance</p>
@@ -91,11 +93,13 @@ export default function ComplianceCalculator() {
             </p>
           </div>
         </div>
+        </Reveal>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
           {/* Inputs */}
-          <div className="lg:col-span-2 card p-6 sm:p-8 flex flex-col gap-5 h-fit">
+          <Reveal variant="reveal-left" delay={80} className="lg:col-span-2">
+          <div className="card p-6 sm:p-8 flex flex-col gap-5 h-fit">
             <h2 className="text-base font-semibold text-ink border-b border-border pb-3 flex items-center gap-2">
               <Ruler size={16} className="text-brand"/> Plot Parameters
             </h2>
@@ -125,9 +129,11 @@ export default function ComplianceCalculator() {
               <p className="text-faint text-xs leading-relaxed">Used to estimate the chargeable-FSI premium (≈40% of jantri per extra sq m of built-up area). The jantri rate appears in your Satya-Lekh property report.</p>
             </div>
           </div>
+          </Reveal>
 
           {/* Results */}
-          <div className="lg:col-span-3 flex flex-col gap-6">
+          <Reveal variant="reveal-right" delay={160} className="lg:col-span-3">
+          <div className="flex flex-col gap-6">
             {zone.maxFsi === 0 ? (
               <div className="card p-10 border-danger-border bg-danger-soft/50 flex flex-col items-center gap-4 text-center">
                 <AlertTriangle size={36} className="text-danger" />
@@ -146,17 +152,17 @@ export default function ComplianceCalculator() {
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="card p-6 border-l-4 border-l-success flex flex-col gap-1">
+                  <div className="sl-anim card card-lift p-6 border-l-4 border-l-success flex flex-col gap-1" style={{ animation: 'sl-fade-up 0.45s cubic-bezier(0.22,0.61,0.36,1) both' }}>
                     <span className="eyebrow">Base FSI (free)</span>
                     <span className="text-3xl font-bold font-mono text-success">{result.baseFsi.toFixed(1)}</span>
                     <span className="text-xs text-muted font-mono">{fmt(result.baseBuiltUp)} sq m buildable</span>
                   </div>
-                  <div className="card p-6 border-l-4 border-l-brand flex flex-col gap-1">
+                  <div className="sl-anim card card-lift p-6 border-l-4 border-l-brand flex flex-col gap-1" style={{ animation: 'sl-fade-up 0.45s cubic-bezier(0.22,0.61,0.36,1) 80ms both' }}>
                     <span className="eyebrow">Max FSI (with premium)</span>
                     <span className="text-3xl font-bold font-mono text-brand">{result.maxFsi.toFixed(1)}</span>
                     <span className="text-xs text-muted font-mono">{fmt(result.maxBuiltUp)} sq m buildable</span>
                   </div>
-                  <div className="card p-6 border-l-4 border-l-warning flex flex-col gap-1">
+                  <div className="sl-anim card card-lift p-6 border-l-4 border-l-warning flex flex-col gap-1" style={{ animation: 'sl-fade-up 0.45s cubic-bezier(0.22,0.61,0.36,1) 160ms both' }}>
                     <span className="eyebrow">Max Ground Coverage</span>
                     <span className="text-3xl font-bold font-mono text-warning">{Math.round(zone.coverage * 100)}%</span>
                     <span className="text-xs text-muted font-mono">{fmt(result.groundCoverage)} sq m footprint</span>
@@ -220,7 +226,10 @@ export default function ComplianceCalculator() {
                 </label>
               </div>
               {duty && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div
+                  className="sl-anim grid grid-cols-1 md:grid-cols-3 gap-4"
+                  style={{ animation: 'sl-fade-up 0.45s cubic-bezier(0.22,0.61,0.36,1) both' }}
+                >
                   <div className="flex flex-col gap-1 p-4 rounded-lg bg-surface-soft border-l-4 border-brand">
                     <span className="eyebrow">Stamp Duty (4.9%)</span>
                     <span className="text-lg font-bold font-mono text-ink">₹{fmt(duty.stamp)}</span>
@@ -247,6 +256,7 @@ export default function ComplianceCalculator() {
               </p>
             </div>
           </div>
+          </Reveal>
         </div>
       </div>
     </main>

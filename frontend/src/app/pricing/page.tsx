@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Database, ShieldCheck, Zap, Send, X, CheckCircle2, Loader2, CreditCard, Wallet } from 'lucide-react';
 import TopNav from '@/components/TopNav';
+import { Reveal } from '@/components/motion';
 import { API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, CreditsInfo } from '@/lib/api';
 
 export default function Pricing() {
@@ -111,22 +112,25 @@ export default function Pricing() {
     <div className="min-h-screen bg-bg text-ink pt-24 pb-16 px-4 sm:px-6 flex flex-col items-center">
       <TopNav />
 
-      <div className="mb-12 text-center flex flex-col items-center max-w-[640px]">
-        <p className="eyebrow mb-2">Pricing</p>
-        <h1 className="text-3xl sm:text-4xl font-bold text-ink mb-4">Simple, per-search pricing</h1>
-        <p className="text-muted text-base leading-relaxed">
-          On-demand title checks for individual plots, or bulk enterprise access
-          for banks and law firms.
-        </p>
-        <p className="mt-5 text-success text-sm border border-success-border bg-success-soft rounded-lg px-4 py-2.5">
-          New users get free trial searches automatically — just enter your email and run your first search.
-        </p>
-      </div>
+      <Reveal className="flex flex-col items-center">
+        <div className="mb-12 text-center flex flex-col items-center max-w-[640px]">
+          <p className="eyebrow mb-2">Pricing</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-ink mb-4">Simple, per-search pricing</h1>
+          <p className="text-muted text-base leading-relaxed">
+            On-demand title checks for individual plots, or bulk enterprise access
+            for banks and law firms.
+          </p>
+          <p className="mt-5 text-success text-sm border border-success-border bg-success-soft rounded-lg px-4 py-2.5">
+            New users get free trial searches automatically — just enter your email and run your first search.
+          </p>
+        </div>
+      </Reveal>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-[900px]">
 
         {/* Pay as You Go */}
-        <div className="card p-7 sm:p-8 flex flex-col relative group overflow-hidden">
+        <Reveal delay={80} className="h-full">
+        <div className="card card-lift p-7 sm:p-8 flex flex-col relative group overflow-hidden h-full">
           <div className="absolute top-0 right-0 p-4 opacity-[0.04] text-brand">
             <Zap size={100} />
           </div>
@@ -195,9 +199,11 @@ export default function Pricing() {
             </button>
           </div>
         </div>
+        </Reveal>
 
-        {/* Enterprise */}
-        <div className="card p-7 sm:p-8 flex flex-col relative group overflow-hidden border-brand shadow-md">
+        {/* Enterprise — featured tier */}
+        <Reveal delay={200} variant="reveal-scale" className="h-full">
+        <div className="card card-lift tier-glow p-7 sm:p-8 flex flex-col relative group overflow-hidden border-brand shadow-md h-full">
           <div className="absolute top-0 right-0 p-4 opacity-[0.04] text-brand">
             <Database size={100} />
           </div>
@@ -218,13 +224,17 @@ export default function Pricing() {
             <Send size={14}/> Talk to Sales
           </button>
         </div>
+        </Reveal>
 
       </div>
 
       {/* CONTACT MODAL */}
       {showContactModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink/40 backdrop-blur-sm px-4">
-          <div className="card w-full max-w-[480px] relative shadow-xl max-h-[90vh] overflow-y-auto">
+          <div
+            className="sl-anim card w-full max-w-[480px] relative shadow-xl max-h-[90vh] overflow-y-auto"
+            style={{ animation: 'sl-fade-up 0.35s cubic-bezier(0.22,0.61,0.36,1) both' }}
+          >
 
             <button
               onClick={() => setShowContactModal(false)}

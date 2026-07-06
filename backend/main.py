@@ -1342,6 +1342,141 @@ async def gujarat_news(http_request: Request):
     return {"articles": _news_cache["articles"], "cached": False}
 
 
+# ─── Pan-India coverage: state registry + document router ──────────────────
+# PAN_INDIA_PLAYBOOK.md: every search is a document_request routed to
+# cache | digilocker | scrape | manual based on (state, document type),
+# with the per-channel SLA shown up front. GET /states serializes the full
+# registry for the frontend coverage page.
+
+from adapters.registry import STATE_REGISTRY, get_adapter
+from router import DOC_TYPE_ROR, MANUAL_SKUS, MANUAL_LIVE_STATES, DocumentRouter
+
+DOCUMENT_ROUTER = DocumentRouter()
+
+
+@app.get("/states")
+def states_endpoint():
+    """Full state coverage registry: portal, RoR document names, roadmap
+    status, and the ordered fulfilment channels with per-channel SLAs."""
+    states = []
+    for adapter in STATE_REGISTRY.values():
+        entry = adapter.describe()
+        entry["channels"] = [p.as_dict() for p in
+                             DOCUMENT_ROUTER.route(adapter.state_code, DOC_TYPE_ROR)]
+        states.append(entry)
+    return {
+        "states": states,
+        "counts": {status: sum(1 for a in STATE_REGISTRY.values() if a.status == status)
+                   for status in ("live", "next", "planned")},
+        "manual_skus": MANUAL_SKUS,
+    }
+
+
+# ─── Manual fulfilment orders (playbook channel 3) ──────────────────────────
+# Certified/offline documents fetched by a human partner (v1: one document
+# writer in Ahmedabad, two SKUs, 2-5 working days). Same email-scoped auth
+# semantics as the watchlist: the owning email is supplied by the client.
+
+MAX_ORDER_NOTES_LEN = 1000
+
+
+class ManualOrderCreateRequest(BaseModel):
+    email: str
+    state: str = "GJ"
+    district: str
+    taluka: str
+    village: str
+    survey_no: str
+    sku: str
+    notes: Optional[str] = ""
+
+
+class ManualOrderItem(BaseModel):
+    id: str
+    user_email: str
+    state: str
+    district: str
+    taluka: str
+    village: str
+    survey_no: str
+    sku: str
+    price_inr: int
+    status: str
+    notes: Optional[str] = ""
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ManualOrdersListResponse(BaseModel):
+    orders: List[ManualOrderItem]
+
+
+@app.post("/manual-orders", response_model=ManualOrderItem)
+def create_manual_order(body: ManualOrderCreateRequest, http_request: Request):
+    """Place a manual-fulfilment order (certified copy / 30-year search
+    report). Status starts at 'pending'; the partner walks it through
+    quoted → in_progress → delivered over 2-5 working days."""
+    _enforce_rate_limit(http_request, "manual-orders", limit=5)
+
+    email = _validate_email(body.email)
+    _validate_location_fields(
+        ("District", body.district, MAX_LOCATION_LEN),
+        ("Taluka", body.taluka, MAX_LOCATION_LEN),
+        ("Village", body.village, MAX_LOCATION_LEN),
+        ("Survey number", body.survey_no, MAX_SURVEY_LEN),
+    )
+    state = (body.state or "GJ").strip().upper()
+    if get_adapter(state) is None:
+        raise HTTPException(status_code=400, detail=f"Unknown state code '{body.state}' — see GET /states")
+    if state not in MANUAL_LIVE_STATES:
+        raise HTTPException(
+            status_code=400,
+            detail="Manual fulfilment currently covers Gujarat only — more states as partners come online.")
+    if body.sku not in MANUAL_SKUS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown SKU '{body.sku}' — valid SKUs: {', '.join(sorted(MANUAL_SKUS))}")
+    notes = (body.notes or "").strip()
+    if len(notes) > MAX_ORDER_NOTES_LEN:
+        raise HTTPException(status_code=400, detail=f"Notes are too long (max {MAX_ORDER_NOTES_LEN} characters)")
+
+    sb = _require_supabase()
+    try:
+        res = sb.table("manual_orders").insert({
+            "user_email": email,
+            "state": state,
+            "district": body.district.strip(), "taluka": body.taluka.strip(),
+            "village": body.village.strip(), "survey_no": body.survey_no.strip(),
+            "sku": body.sku,
+            "price_inr": MANUAL_SKUS[body.sku]["price_inr"],  # server-side price, never client's
+            "status": "pending",
+            "notes": notes,
+        }).execute()
+        return ManualOrderItem(**res.data[0])
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[manual-orders] write failed: {e}")
+        raise HTTPException(status_code=502, detail="Order could not be placed. Please try again.")
+
+
+@app.get("/manual-orders", response_model=ManualOrdersListResponse)
+def list_manual_orders(http_request: Request, email: str = ""):
+    """All manual-fulfilment orders for an email, newest first."""
+    _enforce_rate_limit(http_request, "manual-orders-list", limit=30)
+    email = email.strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="email query param is required")
+    sb = _require_supabase()
+    try:
+        res = (sb.table("manual_orders").select("*").eq("user_email", email)
+               .order("created_at", desc=True).execute())
+        return ManualOrdersListResponse(orders=[ManualOrderItem(**r) for r in (res.data or [])])
+    except Exception as e:
+        print(f"[manual-orders] read failed: {e}")
+        raise HTTPException(status_code=502, detail="Order read failed. Please try again.")
+
+
 # ─── Health Check ──────────────────────────────────────────────────────────
 
 @app.get("/")

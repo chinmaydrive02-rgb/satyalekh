@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, BarChart2, Map, ArrowRight, Flame, Newspaper, RefreshCw, ExternalLink, Clock } from 'lucide-react';
 import TopNav from '@/components/TopNav';
+import { Reveal } from '@/components/motion';
 import { API_BASE_URL } from '@/lib/api';
 
 // Static market data (verified from web research)
@@ -131,6 +132,7 @@ export default function MarketIntelligence() {
 
       <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-8">
         {/* Header Block */}
+        <Reveal>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-border pb-6 gap-4">
            <div>
               <p className="eyebrow mb-1">Market Intelligence</p>
@@ -143,24 +145,31 @@ export default function MarketIntelligence() {
               </p>
            </div>
         </div>
+        </Reveal>
 
         {/* Global Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-           <div className="card p-6 border-l-4 border-l-brand flex flex-col justify-between min-h-[120px]">
+           <Reveal delay={60} className="h-full">
+           <div className="card card-lift p-6 border-l-4 border-l-brand flex flex-col justify-between min-h-[120px] h-full">
               <span className="eyebrow">Ahmedabad prop rates (2018–24)</span>
               <span className="text-4xl font-bold font-mono text-ink">49<span className="text-lg text-brand">%</span></span>
               <span className="text-xs text-brand font-medium mt-1">Sustained appreciation rate</span>
            </div>
-           <div className="card p-6 border-l-4 border-l-danger flex flex-col justify-between min-h-[120px]">
+           </Reveal>
+           <Reveal delay={150} className="h-full">
+           <div className="card card-lift p-6 border-l-4 border-l-danger flex flex-col justify-between min-h-[120px] h-full">
               <span className="eyebrow">Expected jantri hike (2025)</span>
               <span className="text-3xl font-bold font-mono text-danger">100–200%</span>
               <span className="text-xs text-danger font-medium mt-1">Pending govt notification</span>
            </div>
-           <div className="card p-6 border-l-4 border-l-warning flex flex-col justify-between min-h-[120px]">
+           </Reveal>
+           <Reveal delay={240} className="h-full">
+           <div className="card card-lift p-6 border-l-4 border-l-warning flex flex-col justify-between min-h-[120px] h-full">
               <span className="eyebrow">Highest capital growth (10 yr)</span>
               <span className="text-3xl font-bold text-ink">Sanand</span>
               <span className="text-xs text-warning font-medium mt-1">Land rate surged by 425%</span>
            </div>
+           </Reveal>
         </div>
 
         {/* Main Split Layout */}
@@ -170,6 +179,7 @@ export default function MarketIntelligence() {
            <div className="lg:col-span-2 flex flex-col gap-6">
 
               {/* The Differential Charts */}
+              <Reveal variant="reveal-left">
               <div className="card">
                  <div className="flex items-center justify-between p-6 border-b border-border flex-wrap gap-3">
                     <h2 className="text-lg font-semibold text-ink flex items-center gap-2.5">
@@ -193,12 +203,12 @@ export default function MarketIntelligence() {
 
                           <div className="flex flex-col gap-2 relative border-l border-border pl-4 py-1">
                              <div className="flex items-center gap-4 w-full">
-                                <div className="h-4 rounded-r bg-success/70" style={{ width: calculateWidth(region.jantri, MAX_MARKET_VAL) }}></div>
+                                <div className="sl-anim bar-grow h-4 rounded-r bg-success/70" style={{ width: calculateWidth(region.jantri, MAX_MARKET_VAL), animationDelay: `${idx * 120}ms` }}></div>
                                 <span className="text-xs font-mono text-muted whitespace-nowrap">₹{region.jantri.toLocaleString()}/sqm</span>
                              </div>
 
                              <div className="flex items-center gap-4 w-full">
-                                <div className="h-4 rounded-r bg-brand" style={{ width: calculateWidth(region.market, MAX_MARKET_VAL) }}></div>
+                                <div className="sl-anim bar-grow h-4 rounded-r bg-brand" style={{ width: calculateWidth(region.market, MAX_MARKET_VAL), animationDelay: `${idx * 120 + 100}ms` }}></div>
                                 <span className="text-xs font-mono text-brand font-semibold whitespace-nowrap">₹{region.market.toLocaleString()}/sqm</span>
                              </div>
 
@@ -210,8 +220,10 @@ export default function MarketIntelligence() {
                     ))}
                  </div>
               </div>
+              </Reveal>
 
               {/* Demand Heatmap */}
+              <Reveal variant="reveal-left" delay={100}>
               <div className="card">
                  <div className="flex items-center justify-between p-6 border-b border-border">
                     <h2 className="text-lg font-semibold text-ink flex items-center gap-2.5">
@@ -241,10 +253,12 @@ export default function MarketIntelligence() {
                     </div>
                  </div>
               </div>
+              </Reveal>
 
            </div>
 
            {/* Right Column: Live News Source Feed */}
+           <Reveal variant="reveal-right" delay={120} className="h-full">
            <div className="card flex flex-col h-full relative">
               <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 z-10 w-full bg-surface rounded-t-xl">
                  <h2 className="text-lg font-semibold text-ink flex items-center gap-2.5">
@@ -305,6 +319,7 @@ export default function MarketIntelligence() {
 
               </div>
            </div>
+           </Reveal>
 
         </div>
       </div>

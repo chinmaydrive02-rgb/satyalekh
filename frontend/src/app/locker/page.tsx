@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TopNav from '@/components/TopNav';
+import { Reveal } from '@/components/motion';
 import { createClient } from '@/utils/supabase/client';
 import { getUserEmail, setUserEmail } from '@/lib/api';
 import { Vault, UploadCloud, FileText, Trash2, Download, Loader2, Mail, ShieldCheck } from 'lucide-react';
@@ -87,19 +88,36 @@ export default function Locker() {
 
   const fmtSize = (b: number) => b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.ceil(b / 1024)} KB`;
 
+  // Staggered entrance for document rows on first load only — uploads and
+  // refreshes afterwards render instantly so nothing re-animates.
+  const entranceDone = useRef(false);
+  useEffect(() => {
+    if (!busy && docs.length > 0) {
+      const t = setTimeout(() => { entranceDone.current = true; }, 1400);
+      return () => clearTimeout(t);
+    }
+  }, [busy, docs.length]);
+  const rowAnim = (i: number): React.CSSProperties | undefined =>
+    entranceDone.current
+      ? undefined
+      : { animation: `sl-slide-in 0.5s cubic-bezier(0.22,0.61,0.36,1) ${Math.min(i * 60, 480)}ms both` };
+
   return (
     <main className="min-h-screen bg-bg text-ink pt-24 pb-12 px-4 sm:px-6">
       <TopNav />
       <div className="w-full max-w-[860px] mx-auto flex flex-col gap-6">
-        <div className="border-b border-border pb-6">
-          <p className="eyebrow mb-1">Documents</p>
-          <h1 className="text-3xl sm:text-4xl font-bold text-ink flex items-center gap-3"><Vault size={28} className="text-brand"/> Property Locker</h1>
-          <p className="text-muted text-sm mt-2">Your land documents — stored, organised, available anywhere.</p>
-        </div>
+        <Reveal>
+          <div className="border-b border-border pb-6">
+            <p className="eyebrow mb-1">Documents</p>
+            <h1 className="text-3xl sm:text-4xl font-bold text-ink flex items-center gap-3"><Vault size={28} className="text-brand"/> Property Locker</h1>
+            <p className="text-muted text-sm mt-2">Your land documents — stored, organised, available anywhere.</p>
+          </div>
+        </Reveal>
 
         {!entered ? (
           <form
-            className="card p-8 flex flex-col gap-4 max-w-md"
+            className="sl-anim card p-8 flex flex-col gap-4 max-w-md"
+            style={{ animation: 'sl-fade-up 0.5s cubic-bezier(0.22,0.61,0.36,1) 0.1s both' }}
             onSubmit={e => { e.preventDefault(); const em = email.trim().toLowerCase(); if (!em.includes('@')) return; setUserEmail(em); setEmail(em); setEntered(true); }}>
             <p className="text-sm text-muted leading-relaxed">Your locker is linked to your email — the same one used for search credits.</p>
             <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com"
@@ -111,7 +129,10 @@ export default function Locker() {
         ) : (
           <>
             {/* Upload */}
-            <div className="card p-6 flex flex-col sm:flex-row gap-4 items-start sm:items-end flex-wrap">
+            <div
+              className="sl-anim card p-6 flex flex-col sm:flex-row gap-4 items-start sm:items-end flex-wrap"
+              style={{ animation: 'sl-fade-up 0.5s cubic-bezier(0.22,0.61,0.36,1) 0.08s both' }}
+            >
               <div className="flex flex-col gap-1.5">
                 <label className="label">Document Type</label>
                 <select value={docType} onChange={e => setDocType(e.target.value)}
@@ -133,13 +154,16 @@ export default function Locker() {
             {busy ? (
               <div className="flex justify-center py-12"><Loader2 size={24} className="text-brand animate-spin"/></div>
             ) : docs.length === 0 ? (
-              <div className="card p-12 text-center text-muted text-sm">
+              <div
+                className="sl-anim card p-12 text-center text-muted text-sm"
+                style={{ animation: 'sl-fade-up 0.5s cubic-bezier(0.22,0.61,0.36,1) both' }}
+              >
                 Your locker is empty — upload your 7/12, sale deed, NA order or any property document to keep it safe and reachable anywhere.
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                {docs.map(d => (
-                  <div key={d.id} className="card p-4 flex items-center gap-4">
+                {docs.map((d, i) => (
+                  <div key={d.id} className="sl-anim card card-lift p-4 flex items-center gap-4" style={rowAnim(i)}>
                     <FileText size={18} className="text-brand shrink-0"/>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-ink font-medium truncate">{d.file_name}</div>

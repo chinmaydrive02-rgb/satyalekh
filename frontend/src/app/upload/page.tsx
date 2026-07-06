@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { UploadCloud, Loader2, Cpu, ShieldCheck, BookmarkPlus, CheckCircle2, ChevronDown, AlertCircle, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import TopNav from '@/components/TopNav';
+import { Reveal } from '@/components/motion';
 import JobProgress from '@/components/JobProgress';
 import TitleReportView from '@/components/TitleReport';
 import {
@@ -293,20 +294,28 @@ export default function DocumentUpload() {
     <div className="min-h-screen bg-bg text-ink pt-24 pb-10 px-4 sm:px-6 flex flex-col items-center">
       <TopNav />
       <div className="w-full max-w-[640px] flex flex-col gap-6">
-        <div className="text-center">
-           <p className="eyebrow mb-1">Title Scanner</p>
-           <h1 className="text-3xl font-bold text-ink mb-2">Fetch or scan a land record</h1>
-           <p className="text-muted text-sm">Fetch it live from AnyROR, or upload a document for OCR analysis.</p>
-        </div>
+        <Reveal>
+          <div className="text-center">
+             <p className="eyebrow mb-1">Title Scanner</p>
+             <h1 className="text-3xl font-bold text-ink mb-2">Fetch or scan a land record</h1>
+             <p className="text-muted text-sm">Fetch it live from AnyROR, or upload a document for OCR analysis.</p>
+          </div>
+        </Reveal>
 
         {/* Tab Controls */}
+        <Reveal delay={80}>
         <div className="flex bg-surface-soft border border-border rounded-xl p-1">
           <button onClick={() => setActiveTab('auto')} className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'auto' ? 'bg-surface text-brand shadow-sm border border-border' : 'text-muted hover:text-ink'}`}>Fetch from AnyROR</button>
           <button onClick={() => setActiveTab('manual')} className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'manual' ? 'bg-surface text-brand shadow-sm border border-border' : 'text-muted hover:text-ink'}`}>Upload document (OCR)</button>
         </div>
+        </Reveal>
 
         {activeTab === 'manual' ? (
-          <form onSubmit={handleUpload} className="card p-6 sm:p-8 flex flex-col gap-6">
+          <form
+            onSubmit={handleUpload}
+            className="sl-anim card p-6 sm:p-8 flex flex-col gap-6"
+            style={{ animation: 'sl-fade-up 0.4s cubic-bezier(0.22,0.61,0.36,1) both' }}
+          >
              <div className="w-full h-40 border-2 border-dashed border-border-strong rounded-xl flex flex-col items-center justify-center text-muted hover:border-brand transition-colors relative cursor-pointer group">
                 <input type="file" accept="image/*,application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                 <UploadCloud size={36} className="mb-3 group-hover:text-brand transition-colors" />
@@ -317,7 +326,11 @@ export default function DocumentUpload() {
              </button>
           </form>
         ) : (
-          <form onSubmit={handleAutomate} className="card p-6 sm:p-8 flex flex-col gap-5">
+          <form
+            onSubmit={handleAutomate}
+            className="sl-anim card p-6 sm:p-8 flex flex-col gap-5"
+            style={{ animation: 'sl-fade-up 0.4s cubic-bezier(0.22,0.61,0.36,1) 0.08s both' }}
+          >
             {/* AnyROR Record Type */}
             <div className="flex flex-col gap-1.5">
               <label className="label">Record type (કોઇ એક પસંદ કરો)</label>
@@ -423,7 +436,10 @@ export default function DocumentUpload() {
 
         {/* Auto scrape — error + recovery */}
         {autoPhase === 'error' && (
-          <div className="card p-6 border-danger-border flex flex-col gap-4">
+          <div
+            className="sl-anim card p-6 border-danger-border flex flex-col gap-4"
+            style={{ animation: 'sl-fade-up 0.4s cubic-bezier(0.22,0.61,0.36,1) both' }}
+          >
             <div className="flex items-start gap-3">
               <AlertCircle size={16} className="text-danger mt-0.5 shrink-0" />
               <div>
@@ -460,7 +476,10 @@ export default function DocumentUpload() {
 
         {/* Auto scrape — full ownership report */}
         {autoPhase === 'done' && autoReport && (
-          <div className="flex flex-col gap-4">
+          <div
+            className="sl-anim flex flex-col gap-4"
+            style={{ animation: 'sl-fade-up 0.5s cubic-bezier(0.22,0.61,0.36,1) both' }}
+          >
             <TitleReportView report={autoReport} />
             <div className="flex flex-col md:flex-row gap-3">
               <button
@@ -497,7 +516,10 @@ export default function DocumentUpload() {
 
         {/* Manual OCR result */}
         {result && (
-           <div className="card p-6 border-l-4 border-l-success flex flex-col gap-4">
+           <div
+             className="sl-anim card p-6 border-l-4 border-l-success flex flex-col gap-4"
+             style={{ animation: 'sl-fade-up 0.45s cubic-bezier(0.22,0.61,0.36,1) both' }}
+           >
               <div className="flex items-center justify-between flex-wrap gap-2">
                  <div className="flex items-center gap-2 text-success font-semibold text-sm"><ShieldCheck size={16}/> Record Retrieved Successfully</div>
                  <span className="badge bg-success-soft text-success border border-success-border">Verified &amp; translated</span>

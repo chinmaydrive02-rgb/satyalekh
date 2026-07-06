@@ -165,6 +165,33 @@ ALTER TABLE watchlist_alerts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "backend access" ON watchlist_alerts;
 CREATE POLICY "backend access" ON watchlist_alerts FOR ALL USING (true) WITH CHECK (true);
 
+-- ── Manual fulfilment orders (playbook channel 3) ────────────
+-- Certified/offline documents fetched by a human partner (v1: one document
+-- writer in Ahmedabad, two SKUs). Created via POST /manual-orders; the
+-- status walks pending → quoted → in_progress → delivered (or cancelled)
+-- as the partner works the order — the job-polling UI already handles
+-- "in progress for days" gracefully.
+CREATE TABLE IF NOT EXISTS manual_orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_email TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'GJ',        -- registry state code
+    district TEXT NOT NULL,
+    taluka TEXT NOT NULL,
+    village TEXT NOT NULL,
+    survey_no TEXT NOT NULL,
+    sku TEXT NOT NULL CHECK (sku IN ('certified_712_index2', 'search_report_30yr')),
+    price_inr INT NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'quoted', 'in_progress', 'delivered', 'cancelled')),
+    notes TEXT DEFAULT '',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_manual_orders_email ON manual_orders (user_email, created_at DESC);
+ALTER TABLE manual_orders ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "backend access" ON manual_orders;
+CREATE POLICY "backend access" ON manual_orders FOR ALL USING (true) WITH CHECK (true);
+
 -- ── Legacy geometry table (keep for reference, not used by app) ──
 -- CREATE EXTENSION IF NOT EXISTS postgis;
 -- CREATE TABLE IF NOT EXISTS land_parcels ( ... );
@@ -195,11 +222,13 @@ REVOKE ALL ON user_credits, payments FROM anon;
 -- (RLS stays ENABLED; with no policy + no grant, anon can do nothing;
 --  the service-role key bypasses RLS so the backend still reads/writes.)
 
--- 2) Watchlist / alerts / title reports: written & read by the backend only.
+-- 2) Watchlist / alerts / title reports / manual orders: written & read by
+--    the backend only.
 DROP POLICY IF EXISTS "backend access" ON watchlist;
 DROP POLICY IF EXISTS "backend access" ON watchlist_alerts;
 DROP POLICY IF EXISTS "backend access" ON title_reports;
-REVOKE ALL ON watchlist, watchlist_alerts, title_reports FROM anon;
+DROP POLICY IF EXISTS "backend access" ON manual_orders;
+REVOKE ALL ON watchlist, watchlist_alerts, title_reports, manual_orders FROM anon;
 
 -- 3) Caches: the frontend may read them directly but must never write.
 DROP POLICY IF EXISTS "backend access" ON village_cache;

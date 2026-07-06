@@ -4,9 +4,10 @@
 // Backend: POST /watchlist, GET /watchlist, DELETE /watchlist/{id},
 // GET /watchlist/alerts, POST /watchlist/{id}/alerts/seen.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import TopNav from '@/components/TopNav';
+import { Reveal } from '@/components/motion';
 import {
   Bell, BellRing, Loader2, Trash2, Mail, MapPin, Clock, ArrowRight,
   CheckCheck, AlertTriangle, Search, Eye,
@@ -133,6 +134,20 @@ export default function WatchlistPage() {
 
   const unseenCount = alerts.filter(a => !a.seen).length;
 
+  // Staggered entrance for list rows on first load only — later refreshes /
+  // optimistic updates render instantly so live data never flickers.
+  const entranceDone = useRef(false);
+  useEffect(() => {
+    if (!loading && (items.length > 0 || alerts.length > 0)) {
+      const t = setTimeout(() => { entranceDone.current = true; }, 1400);
+      return () => clearTimeout(t);
+    }
+  }, [loading, items.length, alerts.length]);
+  const rowAnim = (i: number): React.CSSProperties | undefined =>
+    entranceDone.current
+      ? undefined
+      : { animation: `sl-slide-in 0.5s cubic-bezier(0.22,0.61,0.36,1) ${Math.min(i * 60, 480)}ms both` };
+
   const parcelHref = (p: { survey_no?: string; district?: string; taluka?: string; village?: string; record_type?: string | null }) =>
     `/property/SURVEY-${encodeURIComponent(p.survey_no || '')}` +
     `?district=${encodeURIComponent(p.district || '')}` +
@@ -146,20 +161,26 @@ export default function WatchlistPage() {
       <div className="w-full max-w-[1100px] mx-auto flex flex-col gap-8">
 
         {/* Header */}
-        <div className="border-b border-border pb-6">
-          <p className="eyebrow mb-1">Monitoring</p>
-          <h1 className="text-3xl sm:text-4xl font-bold text-ink flex items-center gap-3">
-            <Bell size={28} className="text-brand" /> Watchlist
-          </h1>
-          <p className="text-muted text-sm mt-2 max-w-2xl leading-relaxed">
-            We re-check your parcels daily and alert you on any mutation, encumbrance or
-            ownership change — so nothing on the government record moves without you knowing.
-          </p>
-        </div>
+        <Reveal>
+          <div className="border-b border-border pb-6">
+            <p className="eyebrow mb-1">Monitoring</p>
+            <h1 className="text-3xl sm:text-4xl font-bold text-ink flex items-center gap-3">
+              <Bell size={28} className="text-brand" /> Watchlist
+            </h1>
+            <p className="text-muted text-sm mt-2 max-w-2xl leading-relaxed">
+              We re-check your parcels daily and alert you on any mutation, encumbrance or
+              ownership change — so nothing on the government record moves without you knowing.
+            </p>
+          </div>
+        </Reveal>
 
         {/* Email capture */}
         {hasEmail === false && (
-          <form onSubmit={handleEmailSubmit} className="card p-8 flex flex-col gap-4 max-w-md">
+          <form
+            onSubmit={handleEmailSubmit}
+            className="sl-anim card p-8 flex flex-col gap-4 max-w-md"
+            style={{ animation: 'sl-fade-up 0.5s cubic-bezier(0.22,0.61,0.36,1) 0.1s both' }}
+          >
             <div className="flex items-center gap-3">
               <span className="w-10 h-10 rounded-lg bg-brand-soft text-brand flex items-center justify-center shrink-0">
                 <Mail size={18} />
@@ -209,7 +230,10 @@ export default function WatchlistPage() {
                   </div>
 
                   {items.length === 0 && !loadError ? (
-                    <div className="card p-10 flex flex-col items-center gap-4 text-center">
+                    <div
+                      className="sl-anim card p-10 flex flex-col items-center gap-4 text-center"
+                      style={{ animation: 'sl-fade-up 0.5s cubic-bezier(0.22,0.61,0.36,1) both' }}
+                    >
                       <span className="w-12 h-12 rounded-full bg-brand-soft text-brand flex items-center justify-center">
                         <Bell size={22} />
                       </span>
@@ -227,8 +251,8 @@ export default function WatchlistPage() {
                     </div>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      {items.map(item => (
-                        <div key={item.id} className="card p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                      {items.map((item, i) => (
+                        <div key={item.id} className="sl-anim card card-lift p-5 flex flex-col sm:flex-row sm:items-center gap-4" style={rowAnim(i)}>
                           <div className="flex-1 min-w-0">
                             <Link href={parcelHref(item)} className="group">
                               <div className="flex items-baseline gap-2 flex-wrap">
@@ -281,7 +305,10 @@ export default function WatchlistPage() {
                   </div>
 
                   {alerts.length === 0 ? (
-                    <div className="card p-8 flex flex-col items-center gap-3 text-center">
+                    <div
+                      className="sl-anim card p-8 flex flex-col items-center gap-3 text-center"
+                      style={{ animation: 'sl-fade-up 0.5s cubic-bezier(0.22,0.61,0.36,1) 0.1s both' }}
+                    >
                       <BellRing size={22} className="text-faint" />
                       <p className="text-sm text-muted leading-relaxed max-w-xs">
                         No changes detected yet. When anything on a watched record changes —
@@ -290,12 +317,13 @@ export default function WatchlistPage() {
                     </div>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      {alerts.map(alert => {
+                      {alerts.map((alert, i) => {
                         const changes = Object.entries(alert.changes || {});
                         return (
                           <div
                             key={alert.id}
-                            className={`card p-4 flex flex-col gap-3 ${!alert.seen ? 'border-warning-border bg-warning-soft/40' : ''}`}
+                            className={`sl-anim card p-4 flex flex-col gap-3 ${!alert.seen ? 'border-warning-border bg-warning-soft/40' : ''}`}
+                            style={rowAnim(i)}
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">

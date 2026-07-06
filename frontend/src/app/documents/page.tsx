@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import TopNav from '@/components/TopNav';
 import Link from 'next/link';
+import { Reveal } from '@/components/motion';
 import { BookOpen, Zap, ExternalLink, ChevronDown } from 'lucide-react';
 
 const DOCS = [
@@ -77,15 +78,21 @@ export default function DocumentLibrary() {
     <main className="min-h-screen bg-bg text-ink pt-24 pb-12 px-4 sm:px-6">
       <TopNav />
       <div className="w-full max-w-[860px] mx-auto flex flex-col gap-6">
-        <div className="border-b border-border pb-6">
-          <p className="eyebrow mb-1">Reference</p>
-          <h1 className="text-3xl sm:text-4xl font-bold text-ink flex items-center gap-3"><BookOpen size={28} className="text-brand"/> Gujarat Document Library</h1>
-          <p className="text-muted text-sm mt-2">Every land document explained — what it is, why it matters, where to get it.</p>
-        </div>
+        <Reveal>
+          <div className="border-b border-border pb-6">
+            <p className="eyebrow mb-1">Reference</p>
+            <h1 className="text-3xl sm:text-4xl font-bold text-ink flex items-center gap-3"><BookOpen size={28} className="text-brand"/> Gujarat Document Library</h1>
+            <p className="text-muted text-sm mt-2">Every land document explained — what it is, why it matters, where to get it.</p>
+          </div>
+        </Reveal>
 
         <div className="flex flex-col gap-2">
           {DOCS.map((d, i) => (
-            <div key={i} className="card overflow-hidden">
+            <div
+              key={i}
+              className="sl-anim card overflow-hidden"
+              style={{ animation: `sl-slide-in 0.5s cubic-bezier(0.22,0.61,0.36,1) ${Math.min(i * 60, 480)}ms both` }}
+            >
               <button onClick={() => setOpen(open === i ? null : i)}
                 className="w-full p-4 flex items-center gap-3 text-left hover:bg-surface-soft/50 transition-colors">
                 <span className="flex-1 text-sm font-semibold text-ink">{d.name}</span>
@@ -97,7 +104,10 @@ export default function DocumentLibrary() {
                 <ChevronDown size={15} className={`text-muted transition-transform shrink-0 ${open === i ? 'rotate-180' : ''}`}/>
               </button>
               {open === i && (
-                <div className="px-4 pb-4 flex flex-col gap-3 border-t border-border pt-3">
+                <div
+                  className="sl-anim px-4 pb-4 flex flex-col gap-3 border-t border-border pt-3"
+                  style={{ animation: 'sl-fade-up 0.3s cubic-bezier(0.22,0.61,0.36,1) both' }}
+                >
                   <div><span className="eyebrow text-brand">What it is</span>
                     <p className="text-sm text-ink-soft leading-relaxed mt-1">{d.what}</p></div>
                   <div><span className="eyebrow text-warning">Why it matters</span>
@@ -123,13 +133,15 @@ export default function DocumentLibrary() {
           ))}
         </div>
 
-        <div className="card border-brand-border bg-brand-soft/50 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <p className="flex-1 text-sm text-ink-soft leading-relaxed">
-            Got these documents already? Keep them safe in your <span className="text-brand font-medium">Property Locker</span> —
-            organised by type, available on any device.
-          </p>
-          <Link href="/locker" className="btn btn-primary whitespace-nowrap">Open Locker</Link>
-        </div>
+        <Reveal delay={100}>
+          <div className="card card-lift border-brand-border bg-brand-soft/50 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <p className="flex-1 text-sm text-ink-soft leading-relaxed">
+              Got these documents already? Keep them safe in your <span className="text-brand font-medium">Property Locker</span> —
+              organised by type, available on any device.
+            </p>
+            <Link href="/locker" className="btn btn-primary whitespace-nowrap">Open Locker</Link>
+          </div>
+        </Reveal>
       </div>
     </main>
   );

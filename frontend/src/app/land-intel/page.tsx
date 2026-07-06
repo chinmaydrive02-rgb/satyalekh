@@ -9,6 +9,7 @@ import Mapbox, { Source, Layer, MapRef, NavigationControl, GeolocateControl } fr
 import 'mapbox-gl/dist/mapbox-gl.css';
 import TopNav from '@/components/TopNav';
 import Link from 'next/link';
+import { Reveal } from '@/components/motion';
 import { API_BASE_URL } from '@/lib/api';
 import { analyzeInfra, METRO_STATIONS, InfraIntel } from '@/lib/ahmedabadInfra';
 import { Ruler, Trash2, Undo2, Loader2, Printer, Search, MapPin, AlertTriangle, Droplets, Mountain, CloudRain, Route, Scale, TrendingUp, Landmark, TrainFront, FileSignature, Building2, FileText } from 'lucide-react';
@@ -223,13 +224,16 @@ export default function LandIntel() {
 
         {/* Side panel */}
         <div className="w-full lg:w-[420px] border-l border-border bg-surface overflow-y-auto p-5 flex flex-col gap-5">
-          <div>
-            <p className="eyebrow mb-1">Land Intel</p>
-            <h1 className="text-2xl font-bold text-ink">Draw · Measure · Assess</h1>
-            <p className="text-sm text-muted mt-1">Due diligence for any parcel in India — no land records needed.</p>
-          </div>
+          <Reveal>
+            <div>
+              <p className="eyebrow mb-1">Land Intel</p>
+              <h1 className="text-2xl font-bold text-ink">Draw · Measure · Assess</h1>
+              <p className="text-sm text-muted mt-1">Due diligence for any parcel in India — no land records needed.</p>
+            </div>
+          </Reveal>
 
           {/* Measurements */}
+          <Reveal delay={90}>
           <div className="card p-4">
             <h2 className="text-sm font-semibold text-ink mb-3 flex items-center gap-2"><Ruler size={14} className="text-brand"/> Measurements</h2>
             {area > 0 ? (
@@ -246,6 +250,7 @@ export default function LandIntel() {
               <p className="text-sm text-muted">Draw at least 3 points on the map to measure your plot.</p>
             )}
           </div>
+          </Reveal>
 
           {/* Resolved locality */}
           {placeName && (
@@ -282,7 +287,10 @@ export default function LandIntel() {
           {report && (
             <div className="flex flex-col gap-3">
               {/* Formal report header */}
-              <div className="card p-4 bg-surface-soft/60">
+              <div
+                className="sl-anim card p-4 bg-surface-soft/60"
+                style={{ animation: 'sl-fade-up 0.45s cubic-bezier(0.22,0.61,0.36,1) both' }}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h2 className="text-base font-semibold text-ink">Preliminary Land Due Diligence Report</h2>
@@ -303,7 +311,10 @@ export default function LandIntel() {
               </div>
 
               {report.report.executive_summary && (
-                <div className="card border-l-4 border-l-brand p-4">
+                <div
+                  className="sl-anim card border-l-4 border-l-brand p-4"
+                  style={{ animation: 'sl-fade-up 0.45s cubic-bezier(0.22,0.61,0.36,1) 60ms both' }}
+                >
                   <h3 className="text-xs font-semibold text-brand mb-1.5 uppercase tracking-wide">Executive Summary</h3>
                   <p className="text-sm text-ink-soft leading-relaxed">{report.report.executive_summary}</p>
                 </div>
@@ -312,8 +323,12 @@ export default function LandIntel() {
               {/* Suitability */}
               {report.report.suitability && (
                 <div className="grid grid-cols-3 gap-2">
-                  {(['agriculture', 'residential', 'commercial'] as const).map(k => (
-                    <div key={k} className="card p-3 text-center">
+                  {(['agriculture', 'residential', 'commercial'] as const).map((k, ki) => (
+                    <div
+                      key={k}
+                      className="sl-anim card p-3 text-center"
+                      style={{ animation: `sl-fade-up 0.45s cubic-bezier(0.22,0.61,0.36,1) ${120 + ki * 70}ms both` }}
+                    >
                       <div className="text-2xl font-bold font-mono text-brand">{report.report.suitability[k]}<span className="text-xs text-faint">/10</span></div>
                       <div className="eyebrow mt-1">{k}</div>
                     </div>
@@ -322,7 +337,11 @@ export default function LandIntel() {
               )}
 
               {sections.map((s, i) => s.text && (
-                <div key={i} className="card p-4">
+                <div
+                  key={i}
+                  className="sl-anim card p-4"
+                  style={{ animation: `sl-slide-in 0.5s cubic-bezier(0.22,0.61,0.36,1) ${Math.min(180 + i * 60, 500)}ms both` }}
+                >
                   <h3 className="text-xs font-semibold text-brand mb-1.5 uppercase tracking-wide flex items-center gap-2">{s.icon} {s.title}</h3>
                   <p className="text-sm text-ink-soft leading-relaxed">{s.text}</p>
                 </div>

@@ -3,6 +3,7 @@
 import React from 'react';
 import { Mail, Phone, User, ChevronRight } from 'lucide-react';
 import TopNav from '@/components/TopNav';
+import { Reveal } from '@/components/motion';
 
 export default function ContactOwner() {
   return (
@@ -11,15 +12,18 @@ export default function ContactOwner() {
 
       <div className="w-full max-w-[720px] mx-auto flex flex-col gap-8 mt-6 items-center">
 
-        <div className="text-center">
-           <p className="eyebrow mb-1">Contact</p>
-           <h1 className="text-3xl sm:text-4xl font-bold text-ink mb-3">Get in touch</h1>
-           <p className="text-muted text-sm">
-              Questions about a report, enterprise access, or certified opinions — we respond within 24 hours.
-           </p>
-        </div>
+        <Reveal>
+          <div className="text-center">
+             <p className="eyebrow mb-1">Contact</p>
+             <h1 className="text-3xl sm:text-4xl font-bold text-ink mb-3">Get in touch</h1>
+             <p className="text-muted text-sm">
+                Questions about a report, enterprise access, or certified opinions — we respond within 24 hours.
+             </p>
+          </div>
+        </Reveal>
 
-        <div className="card w-full p-8 sm:p-10 flex flex-col md:flex-row items-center gap-8">
+        <Reveal delay={120} variant="reveal-scale" className="w-full">
+        <div className="card card-lift w-full p-8 sm:p-10 flex flex-col md:flex-row items-center gap-8">
            <div className="w-24 h-24 rounded-full bg-brand-soft border border-brand-border flex items-center justify-center shrink-0">
               <User size={44} className="text-brand" />
            </div>
@@ -42,6 +46,7 @@ export default function ContactOwner() {
               </div>
            </div>
         </div>
+        </Reveal>
       </div>
     </main>
   );

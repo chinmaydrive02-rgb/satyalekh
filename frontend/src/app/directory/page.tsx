@@ -3,6 +3,7 @@
 import React from 'react';
 import { Phone, MapPin, Scale, Shield } from 'lucide-react';
 import TopNav from '@/components/TopNav';
+import { Reveal } from '@/components/motion';
 
 export default function Directory() {
   const firms = [
@@ -31,17 +32,20 @@ export default function Directory() {
       <TopNav />
 
       <div className="w-full max-w-[1000px] mx-auto flex flex-col gap-8">
-        <div className="border-b border-border pb-6">
-           <p className="eyebrow mb-1">Directory</p>
-           <h1 className="text-3xl sm:text-4xl font-bold text-ink mb-2">Legal Counsel Directory</h1>
-           <p className="text-muted text-sm">
-              Verified legal counsel for resolving title disputes, lifting encumbrances, and NA conversions.
-           </p>
-        </div>
+        <Reveal>
+          <div className="border-b border-border pb-6">
+             <p className="eyebrow mb-1">Directory</p>
+             <h1 className="text-3xl sm:text-4xl font-bold text-ink mb-2">Legal Counsel Directory</h1>
+             <p className="text-muted text-sm">
+                Verified legal counsel for resolving title disputes, lifting encumbrances, and NA conversions.
+             </p>
+          </div>
+        </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {firms.map((firm, idx) => (
-            <div key={idx} className="card p-6 flex flex-col gap-4 hover:border-brand transition-colors">
+            <Reveal key={idx} delay={80 + (idx % 3) * 100} variant="reveal-scale" className="h-full">
+            <div className="card card-lift p-6 flex flex-col gap-4 hover:border-brand transition-colors h-full">
                <div className="flex justify-between items-start">
                   <span className="w-10 h-10 rounded-lg bg-surface-soft flex items-center justify-center">{firm.icon}</span>
                   <span className="badge bg-surface-soft text-muted border border-border">
@@ -70,6 +74,7 @@ export default function Directory() {
                   </button>
                </div>
             </div>
+            </Reveal>
           ))}
         </div>
       </div>

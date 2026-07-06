@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Search, UploadCloud, Phone, LayoutDashboard, TrendingUp, ShieldCheck, Menu, X,
-  Wallet, Sparkles, Vault, BookOpen, Bell, ChevronDown, Users,
+  Wallet, Sparkles, Vault, BookOpen, Bell, ChevronDown, Users, Globe2,
 } from 'lucide-react';
 import { getUserEmail, fetchCredits, fetchUnseenAlertCount, CreditsInfo, isDemoActive } from '@/lib/api';
 
@@ -51,6 +51,7 @@ export default function TopNav() {
   ];
 
   const moreLinks = [
+    { href: '/coverage', label: 'Coverage', icon: <Globe2 size={15}/> },
     { href: '/market', label: 'Market Intel', icon: <TrendingUp size={15}/> },
     { href: '/compliance', label: 'FSI Compliance', icon: <ShieldCheck size={15}/> },
     { href: '/locker', label: 'Property Locker', icon: <Vault size={15}/> },

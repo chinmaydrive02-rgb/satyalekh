@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { FlaskConical, KeyRound, Loader2, LogIn, ShieldCheck, User } from 'lucide-react';
 import TopNav from '@/components/TopNav';
+import { Reveal } from '@/components/motion';
 import { demoLogin, isDemoActive, exitDemo, ApiError } from '@/lib/api';
 
 export default function DemoLoginPage() {
@@ -45,6 +46,7 @@ export default function DemoLoginPage() {
       <TopNav />
       <div className="pt-16 min-h-screen flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
+          <Reveal variant="reveal-scale">
           <div className="card p-7 sm:p-8 flex flex-col gap-5 shadow-lg">
             <div className="flex flex-col gap-2">
               <span className="eyebrow flex items-center gap-1.5">
@@ -134,13 +136,16 @@ export default function DemoLoginPage() {
               </Link>{' '}to request access.
             </p>
           </div>
+          </Reveal>
 
-          <p className="text-center text-xs text-faint mt-4">
-            Looking for real searches?{' '}
-            <Link href="/" className="text-brand hover:text-brand-strong underline underline-offset-2">
-              Back to the live product
-            </Link>
-          </p>
+          <Reveal delay={150}>
+            <p className="text-center text-xs text-faint mt-4">
+              Looking for real searches?{' '}
+              <Link href="/" className="text-brand hover:text-brand-strong underline underline-offset-2">
+                Back to the live product
+              </Link>
+            </p>
+          </Reveal>
         </div>
       </div>
     </main>

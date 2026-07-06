@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Database, AlertTriangle, CheckCircle2, Crosshair, Plus, Loader2, X, FolderOpen, Trash2, Download, RefreshCw, Bell, BellRing } from 'lucide-react';
 import TopNav from '@/components/TopNav';
 import Link from 'next/link';
+import { Reveal } from '@/components/motion';
 import { API_BASE_URL, getUserEmail, setUserEmail, addToWatchlist } from '@/lib/api';
 import { createClient } from '@/utils/supabase/client';
 
@@ -186,6 +187,7 @@ export default function Dashboard() {
       <div className="w-full max-w-[1200px] mx-auto flex flex-col gap-8">
 
         {/* Header */}
+        <Reveal>
         <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-border pb-6">
           <div>
             <p className="eyebrow mb-1">Portfolio</p>
@@ -208,10 +210,15 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+        </Reveal>
 
         {/* Ingest Form */}
         {showIngest && (
-          <form onSubmit={handleIngest} className="card p-6 border-l-4 border-l-brand flex flex-col gap-4">
+          <form
+            onSubmit={handleIngest}
+            className="sl-anim card p-6 border-l-4 border-l-brand flex flex-col gap-4"
+            style={{ animation: 'sl-fade-up 0.4s cubic-bezier(0.22,0.61,0.36,1) both' }}
+          >
             <h2 className="text-base font-semibold text-ink flex items-center gap-2"><Crosshair size={15} className="text-brand"/> Fetch a parcel from AnyROR</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div className="flex flex-col gap-1.5">
@@ -239,21 +246,28 @@ export default function Dashboard() {
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div className="card p-6 border-l-4 border-l-brand flex flex-col justify-between min-h-[110px]">
-            <span className="eyebrow">Total Assets</span>
-            <span className="text-3xl font-bold font-mono text-ink">{isLoadingPortfolio ? '—' : holdings.length}</span>
-          </div>
-          <div className="card p-6 border-l-4 border-l-success flex flex-col justify-between min-h-[110px]">
-            <span className="eyebrow">Clear Title</span>
-            <span className="text-3xl font-bold font-mono text-success">{isLoadingPortfolio ? '—' : totalCleared}</span>
-          </div>
-          <div className="card p-6 border-l-4 border-l-danger flex flex-col justify-between min-h-[110px]">
-            <span className="eyebrow">Encumbered</span>
-            <span className="text-3xl font-bold font-mono text-danger">{isLoadingPortfolio ? '—' : totalRisks}</span>
-          </div>
+          <Reveal delay={60} className="h-full">
+            <div className="card card-lift p-6 border-l-4 border-l-brand flex flex-col justify-between min-h-[110px] h-full">
+              <span className="eyebrow">Total Assets</span>
+              <span className="text-3xl font-bold font-mono text-ink">{isLoadingPortfolio ? '—' : holdings.length}</span>
+            </div>
+          </Reveal>
+          <Reveal delay={150} className="h-full">
+            <div className="card card-lift p-6 border-l-4 border-l-success flex flex-col justify-between min-h-[110px] h-full">
+              <span className="eyebrow">Clear Title</span>
+              <span className="text-3xl font-bold font-mono text-success">{isLoadingPortfolio ? '—' : totalCleared}</span>
+            </div>
+          </Reveal>
+          <Reveal delay={240} className="h-full">
+            <div className="card card-lift p-6 border-l-4 border-l-danger flex flex-col justify-between min-h-[110px] h-full">
+              <span className="eyebrow">Encumbered</span>
+              <span className="text-3xl font-bold font-mono text-danger">{isLoadingPortfolio ? '—' : totalRisks}</span>
+            </div>
+          </Reveal>
         </div>
 
         {/* Portfolio Table */}
+        <Reveal delay={120}>
         <div className="card overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[760px]">
             <thead>
@@ -344,6 +358,7 @@ export default function Dashboard() {
             </tbody>
           </table>
         </div>
+        </Reveal>
       </div>
     </main>
   );
