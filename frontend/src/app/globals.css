@@ -423,6 +423,71 @@
     transform-origin: left center;
     animation: sl-bar-grow 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) both;
   }
+
+  /* ── Fluidity pass additions ── */
+  /* Route-level page entrance (used by src/app/template.tsx) */
+  .page-enter {
+    animation: sl-page-enter 0.35s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  /* Thin scroll-progress bar under the very top edge (scaleX set via rAF) */
+  .scroll-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    z-index: 1001;
+    pointer-events: none;
+    background: linear-gradient(to right, var(--color-brand), var(--color-accent-bright));
+    transform: scaleX(0);
+    transform-origin: left center;
+  }
+
+  /* Animated active/hover underline for nav links (layout-independent) */
+  .nav-underline::after {
+    content: '';
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 3px;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(to right, var(--color-brand), var(--color-accent-bright));
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .nav-underline:hover::after,
+  .nav-underline.nav-active::after { transform: scaleX(1); }
+
+  /* Reverse-direction marquee row (document names) */
+  .marquee-track.marquee-reverse {
+    animation-direction: reverse;
+    animation-duration: 44s;
+  }
+
+  /* Short gold rule that draws in when its Reveal wrapper becomes visible */
+  .rule-draw {
+    display: block;
+    width: 2.75rem;
+    height: 3px;
+    border-radius: 2px;
+    background: linear-gradient(to right, var(--color-accent), var(--color-accent-bright));
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) 0.15s;
+  }
+  .is-visible .rule-draw,
+  .rule-draw.is-visible { transform: scaleX(1); }
+
+  /* Arrow buttons — trailing icon nudges right on hover (opt-in class) */
+  .btn-arrow svg:last-child {
+    transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  @media (hover: hover) {
+    .btn-arrow:hover:not(:disabled) svg:last-child { transform: translateX(3px); }
+  }
 }
 
 /* ── Keyframes ─────────────────────────────────────────────── */
@@ -480,6 +545,19 @@
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
 }
+@keyframes sl-page-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Touch devices — hover transforms must not stick after a tap */
+@media (hover: none) {
+  .card-lift:hover { transform: none; box-shadow: var(--shadow-sm); }
+  .channel-card:hover { transform: none; box-shadow: var(--shadow-sm); }
+  .channel-card:hover::before { transform: scaleY(0); }
+  .state-row:hover { transform: none; }
+  .btn-arrow:hover:not(:disabled) svg:last-child { transform: none; }
+}
 
 /* Respect users who prefer reduced motion */
 @media (prefers-reduced-motion: reduce) {
@@ -496,6 +574,14 @@
   /* Motion pass additions */
   .tier-glow { animation: none; }
   .bar-grow { animation: none; transform: none; }
+  /* Fluidity pass additions */
+  .page-enter { animation: none; }
+  .scroll-progress { display: none; }
+  .nav-underline::after { transition: none; }
+  .marquee-track.marquee-reverse { animation: none; }
+  .rule-draw, .is-visible .rule-draw, .rule-draw.is-visible { transform: none; transition: none; }
+  .btn-arrow svg:last-child { transition: none; transform: none !important; }
+  .parallax { transform: none !important; }
   /* Decorative entrance/float animations off; spinners stay (loading feedback) */
   .sl-anim { animation: none !important; }
 }

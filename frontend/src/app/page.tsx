@@ -5,12 +5,12 @@ import Link from "next/link";
 import SearchWidget from "@/components/SearchWidget";
 import TopNav from "@/components/TopNav";
 import WelcomeIntro from "@/components/WelcomeIntro";
-import { Reveal, CountUp } from "@/components/motion";
+import { Reveal, CountUp, Parallax } from "@/components/motion";
 import {
   Landmark, Languages, ShieldCheck, FileSearch, Bell, GitBranch,
   Vault, Scale, TrendingUp, Search, Cpu, FileCheck2, ArrowRight,
   CheckCircle2, Building2, Gavel, UserCheck, MapPin, Zap, Globe2,
-  FileBadge2, Database, Timer, Stamp, IndianRupee, Route,
+  FileBadge2, Database, Timer, Stamp, IndianRupee, Route, Radar,
 } from "lucide-react";
 
 /* ── Hand-crafted CSS mock of the title report — the product visual.
@@ -170,6 +170,12 @@ const FEATURES = [
     desc: "Jantri-vs-market analysis, FSI calculators and stamp-duty estimates for Gujarat zones.",
     href: "/market",
   },
+  {
+    icon: <Radar size={19} />,
+    title: "Risk Intelligence",
+    desc: "12 restriction layers on every parcel — heritage zones, airport funnels, seismic zones, gas pipelines, GDCR/FSI limits and more.",
+    href: "/risk-intel",
+  },
 ];
 
 const AUDIENCES = [
@@ -247,6 +253,13 @@ const PORTAL_MARQUEE = [
   "Meebhoomi · Andhra Pradesh", "Banglarbhumi · West Bengal", "Ente Bhoomi · Kerala",
 ];
 
+/* Second marquee row — the record types themselves, scrolling the other way. */
+const DOC_MARQUEE = [
+  "7/12 Satbara", "RTC Pahani", "Khasra / Khatauni", "Patta Chitta",
+  "Jamabandi", "Porcha", "1-B Adangal", "Index-2",
+  "Encumbrance Certificate", "NA Order", "TP Final Plot", "Property Card",
+];
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-bg">
@@ -262,8 +275,15 @@ export default function Home() {
               Gujarat live today · pan-India rollout underway
             </span>
             <h1 className="font-serif text-[2.65rem] sm:text-6xl font-semibold text-ink leading-[1.04] tracking-tight">
-              Know the truth of a title{" "}
-              <em className="text-sheen not-italic sm:italic font-medium">before the token changes hands.</em>
+              <span className="sl-anim inline-block" style={{ animation: "sl-fade-up 0.55s cubic-bezier(0.22,0.61,0.36,1) 0.05s both" }}>
+                Know the truth
+              </span>{" "}
+              <span className="sl-anim inline-block" style={{ animation: "sl-fade-up 0.55s cubic-bezier(0.22,0.61,0.36,1) 0.16s both" }}>
+                of a title
+              </span>{" "}
+              <em className="sl-anim inline-block text-sheen not-italic sm:italic font-medium" style={{ animation: "sl-fade-up 0.55s cubic-bezier(0.22,0.61,0.36,1) 0.28s both" }}>
+                before the token changes hands.
+              </em>
             </h1>
             <p className="text-lg text-ink-soft leading-relaxed max-w-lg">
               India&apos;s land records sit behind CAPTCHAs, regional scripts and
@@ -296,10 +316,12 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Search card front-and-center */}
-          <div className="sl-anim w-full max-w-xl mx-auto lg:mx-0 lg:pt-2" style={{ animation: "sl-fade-up 0.7s cubic-bezier(0.22,0.61,0.36,1) 0.15s both" }}>
-            <SearchWidget />
-          </div>
+          {/* Search card front-and-center — gentle parallax drift on scroll */}
+          <Parallax maxShift={24} className="w-full max-w-xl mx-auto lg:mx-0 lg:pt-2">
+            <div className="sl-anim" style={{ animation: "sl-fade-up 0.7s cubic-bezier(0.22,0.61,0.36,1) 0.15s both" }}>
+              <SearchWidget />
+            </div>
+          </Parallax>
         </div>
       </section>
 
@@ -311,6 +333,18 @@ export default function Home() {
               {PORTAL_MARQUEE.map((p) => (
                 <span key={`${dup}-${p}`} className="flex items-center gap-2 whitespace-nowrap text-xs font-mono text-muted">
                   <Landmark size={11} className="text-brand/60" /> {p}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+        {/* Second row — record types, drifting the opposite way */}
+        <div className="marquee mt-3" aria-label="Land record document types">
+          {[0, 1].map((dup) => (
+            <div key={dup} className="marquee-track marquee-reverse" aria-hidden={dup === 1}>
+              {DOC_MARQUEE.map((d) => (
+                <span key={`${dup}-${d}`} className="flex items-center gap-2 whitespace-nowrap text-xs font-mono text-muted">
+                  <FileBadge2 size={11} className="text-accent/60" /> {d}
                 </span>
               ))}
             </div>
@@ -343,6 +377,7 @@ export default function Home() {
         <div className="max-w-[1200px] mx-auto">
           <Reveal>
             <p className="eyebrow mb-2 flex items-center gap-1.5"><Route size={12} /> One search box, four channels</p>
+            <span className="rule-draw mb-3" aria-hidden="true" />
             <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink mb-4 max-w-2xl">
               Every request takes the fastest honest route to the record.
             </h2>
@@ -378,6 +413,7 @@ export default function Home() {
         <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_1.35fr] gap-12 lg:gap-16 items-start">
           <Reveal variant="reveal-left" className="lg:sticky lg:top-24">
             <p className="eyebrow mb-2 flex items-center gap-1.5"><Globe2 size={12} /> Coverage</p>
+            <span className="rule-draw mb-3" aria-hidden="true" />
             <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink leading-[1.12] mb-4">
               Built in Gujarat.<br />Headed everywhere land is bought.
             </h2>
@@ -398,7 +434,7 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-            <Link href="/coverage" className="btn btn-outline w-fit">
+            <Link href="/coverage" className="btn btn-outline btn-arrow w-fit">
               See the full coverage plan <ArrowRight size={14} />
             </Link>
           </Reveal>
@@ -454,6 +490,7 @@ export default function Home() {
           <Reveal delay={120} variant="reveal-right" className="order-1 lg:order-2">
             <div className="flex flex-col gap-5 max-w-lg">
               <p className="eyebrow text-accent">The report</p>
+              <span className="rule-draw" aria-hidden="true" />
               <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink leading-[1.12]">
                 A title opinion you can actually read.
               </h2>
@@ -476,7 +513,7 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <Link href="/demo" className="btn btn-outline w-fit mt-1">
+              <Link href="/demo" className="btn btn-outline btn-arrow w-fit mt-1">
                 See a sample in demo mode <ArrowRight size={14} />
               </Link>
             </div>
@@ -489,6 +526,7 @@ export default function Home() {
         <div className="max-w-[1200px] mx-auto">
           <Reveal>
             <p className="eyebrow mb-2">How it works</p>
+            <span className="rule-draw mb-3" aria-hidden="true" />
             <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink mb-12">
               From survey number to title verdict
             </h2>
@@ -519,6 +557,7 @@ export default function Home() {
         <div className="max-w-[1200px] mx-auto">
           <Reveal>
             <p className="eyebrow mb-2">Everything for due diligence</p>
+            <span className="rule-draw mb-3" aria-hidden="true" />
             <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink mb-12">
               One place for land intelligence
             </h2>
@@ -578,7 +617,7 @@ export default function Home() {
                     </span>
                   ))}
                 </div>
-                <Link href="/contact" className="btn btn-primary w-fit mt-3">
+                <Link href="/contact" className="btn btn-primary btn-arrow w-fit mt-3">
                   Order a certified copy <ArrowRight size={14} />
                 </Link>
               </div>
@@ -628,7 +667,7 @@ export default function Home() {
                 <a
                   href="#top"
                   onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                  className="btn bg-white text-pine hover:bg-brand-soft border border-white/10 px-7 py-3 text-base whitespace-nowrap font-semibold"
+                  className="btn btn-arrow bg-white text-pine hover:bg-brand-soft border border-white/10 px-7 py-3 text-base whitespace-nowrap font-semibold"
                 >
                   Start a search <ArrowRight size={15} />
                 </a>
@@ -678,6 +717,7 @@ export default function Home() {
               <div className="flex flex-col gap-2.5">
                 <span className="eyebrow text-white/40">Company</span>
                 <Link href="/pricing" className="text-white/70 hover:text-white transition-colors">Pricing</Link>
+                <Link href="/investors" className="text-white/70 hover:text-white transition-colors">Investors</Link>
                 <Link href="/directory" className="text-white/70 hover:text-white transition-colors">Legal directory</Link>
                 <Link href="/contact" className="text-white/70 hover:text-white transition-colors">Contact</Link>
                 <Link href="/demo" className="text-white/70 hover:text-white transition-colors">Demo</Link>

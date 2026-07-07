@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Search, UploadCloud, Phone, LayoutDashboard, TrendingUp, ShieldCheck, Menu, X,
-  Wallet, Sparkles, Vault, BookOpen, Bell, ChevronDown, Users, Globe2,
+  Wallet, Sparkles, Vault, BookOpen, Bell, ChevronDown, Users, Globe2, Radar, Briefcase,
 } from 'lucide-react';
 import { getUserEmail, fetchCredits, fetchUnseenAlertCount, CreditsInfo, isDemoActive } from '@/lib/api';
+import { useRafScroll } from '@/components/motion';
 
 export default function TopNav() {
   const pathname = usePathname();
@@ -16,7 +17,20 @@ export default function TopNav() {
   const [creditsInfo, setCreditsInfo] = useState<CreditsInfo | null>(null);
   const [unseenAlerts, setUnseenAlerts] = useState(0);
   const [demoActive, setDemoActive] = useState(false); // client-only, post-hydration
+  const [elevated, setElevated] = useState(false); // nav shadow once scrolled
   const moreRef = useRef<HTMLDivElement | null>(null);
+  const progressRef = useRef<HTMLDivElement | null>(null);
+
+  // Scroll progress bar (scaleX, transform-only) + nav elevation — one
+  // rAF-throttled listener; setState only inside the scroll callback.
+  useRafScroll((y) => {
+    setElevated(y > 8);
+    const doc = document.documentElement;
+    const max = doc.scrollHeight - window.innerHeight;
+    if (progressRef.current) {
+      progressRef.current.style.transform = `scaleX(${max > 0 ? Math.min(y / max, 1) : 0})`;
+    }
+  });
 
   // ── DEMO MODE ── small badge while a demo session is active
   useEffect(() => { setDemoActive(isDemoActive()); }, [pathname]);
@@ -47,11 +61,13 @@ export default function TopNav() {
     { href: '/dashboard', label: 'Portfolio', icon: <LayoutDashboard size={15}/> },
     { href: '/upload', label: 'Title Scanner', icon: <UploadCloud size={15}/> },
     { href: '/land-intel', label: 'Land Intel', icon: <Sparkles size={15}/> },
+    { href: '/risk-intel', label: 'Risk Intel', icon: <Radar size={15}/> },
     { href: '/pricing', label: 'Pricing', icon: <Wallet size={15}/> },
   ];
 
   const moreLinks = [
     { href: '/coverage', label: 'Coverage', icon: <Globe2 size={15}/> },
+    { href: '/investors', label: 'Investors', icon: <Briefcase size={15}/> },
     { href: '/market', label: 'Market Intel', icon: <TrendingUp size={15}/> },
     { href: '/compliance', label: 'FSI Compliance', icon: <ShieldCheck size={15}/> },
     { href: '/locker', label: 'Property Locker', icon: <Vault size={15}/> },
@@ -63,12 +79,20 @@ export default function TopNav() {
   const allLinks = [...primaryLinks, ...moreLinks];
 
   const linkCls = (active: boolean) =>
-    `relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-      active ? 'text-brand bg-brand-soft' : 'text-ink-soft hover:text-ink hover:bg-surface-soft'
+    `nav-underline relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+      active ? 'nav-active text-brand bg-brand-soft' : 'text-ink-soft hover:text-ink hover:bg-surface-soft'
     }`;
 
   return (
-    <nav className="fixed top-0 left-0 w-full z-[999] bg-surface/90 backdrop-blur-md border-b border-border shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_1px_8px_-4px_rgba(22,36,31,0.08)]">
+    <nav
+      className={`fixed top-0 left-0 w-full z-[999] backdrop-blur-md border-b border-border transition-[background-color,box-shadow] duration-300 [transition-timing-function:cubic-bezier(0.22,0.61,0.36,1)] ${
+        elevated
+          ? 'bg-surface/95 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_4px_20px_-6px_rgba(22,36,31,0.16)]'
+          : 'bg-surface/90 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_1px_8px_-4px_rgba(22,36,31,0.08)]'
+      }`}
+    >
+       {/* Scroll progress — 2px brand→gold bar, scaleX driven via rAF */}
+       <div ref={progressRef} className="scroll-progress" aria-hidden="true" />
        <div className="max-w-[1280px] mx-auto px-4 h-16 flex justify-between items-center gap-4">
           {/* Brand */}
           <Link href="/" className="flex items-center gap-2.5 whitespace-nowrap group">

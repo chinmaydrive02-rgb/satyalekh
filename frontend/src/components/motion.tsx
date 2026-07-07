@@ -94,3 +94,74 @@ export function CountUp({
     </span>
   );
 }
+
+/* ── rAF-throttled scroll subscription. Calls `onFrame(scrollY)` at most once
+   per animation frame; adds/removes the listener itself. SSR-safe (runs only
+   in useEffect). ── */
+export function useRafScroll(onFrame: (y: number) => void) {
+  const cbRef = useRef(onFrame);
+  useEffect(() => {
+    cbRef.current = onFrame;
+  });
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        cbRef.current(window.scrollY);
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll(); // sync initial state
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+}
+
+/* ── Gentle scroll parallax: translates children by scrollY * rate, capped at
+   maxShift px. Transform-only (no layout shift), rAF-throttled, and inert on
+   touch/mobile widths and under prefers-reduced-motion. ── */
+export function Parallax({
+  children,
+  maxShift = 24,
+  rate = 0.06,
+  className = "",
+}: {
+  children: React.ReactNode;
+  maxShift?: number;
+  rate?: number;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const mobile = window.matchMedia("(max-width: 1023px), (hover: none)").matches;
+    if (reduced || mobile) return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const shift = Math.min(window.scrollY * rate, maxShift);
+        el.style.transform = `translate3d(0, ${shift}px, 0)`;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+      el.style.transform = "";
+    };
+  }, [maxShift, rate]);
+  return (
+    <div ref={ref} className={`parallax ${className}`}>
+      {children}
+    </div>
+  );
+}
