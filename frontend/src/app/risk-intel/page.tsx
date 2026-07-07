@@ -9,15 +9,19 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import TopNav from "@/components/TopNav";
 import { Reveal, CountUp } from "@/components/motion";
+import { API_BASE_URL } from "@/lib/api";
 import {
   RISK_LAYERS, SAMPLE_CHECKS, SAMPLE_PARCEL,
+  localScreen,
+  SCREEN_REGIONS, SCREEN_ZONES, SCREEN_ROAD_WIDTHS,
   type LayerStatus, type CheckOutcome,
+  type RiskScreenResponse, type ScreenLayerResult, type ScreenOutcome,
 } from "@/lib/riskLayers";
 import {
   Landmark, Trees, PlaneTakeoff, Activity, Wheat, ShieldAlert, Flame, Zap,
   Waves, Building2, Map as MapIcon, Gavel, Scale, Layers, ShieldCheck,
   CheckCircle2, AlertTriangle, XCircle, ArrowRight, RotateCcw, MapPin,
-  Search, UserCheck, Building, Radar, FileSearch,
+  Search, UserCheck, Building, Radar, FileSearch, HelpCircle, Loader2, Play,
 } from "lucide-react";
 
 /* ── Presentation metadata ────────────────────────────────────── */
@@ -49,6 +53,38 @@ const OUTCOME_META: Record<CheckOutcome, { label: string; cls: string; icon: Rea
   caution: { label: "Caution", cls: "text-warning", icon: <AlertTriangle size={15} className="text-warning" /> },
   restricted: { label: "Restricted", cls: "text-danger", icon: <XCircle size={15} className="text-danger" /> },
 };
+
+const SCREEN_OUTCOME_META: Record<ScreenOutcome, { label: string; cls: string; icon: React.ReactNode }> = {
+  ...OUTCOME_META,
+  unknown: { label: "Unknown", cls: "text-muted", icon: <HelpCircle size={15} className="text-muted" /> },
+};
+
+const VALID_OUTCOMES: ScreenOutcome[] = ["clear", "caution", "restricted", "unknown"];
+
+/** Defensively normalise a possibly-partial backend payload into safe shape. */
+function normaliseScreen(raw: RiskScreenResponse | null | undefined): RiskScreenResponse {
+  const layers: ScreenLayerResult[] = Array.isArray(raw?.layers)
+    ? raw!.layers
+        .filter((l): l is ScreenLayerResult => !!l && typeof l.layer === "string")
+        .map((l) => ({
+          layer: l.layer,
+          outcome: VALID_OUTCOMES.includes(l.outcome) ? l.outcome : "unknown",
+          finding: typeof l.finding === "string" ? l.finding : "",
+        }))
+    : [];
+  const counts: Record<ScreenOutcome, number> = {
+    clear: layers.filter((l) => l.outcome === "clear").length,
+    caution: layers.filter((l) => l.outcome === "caution").length,
+    restricted: layers.filter((l) => l.outcome === "restricted").length,
+    unknown: layers.filter((l) => l.outcome === "unknown").length,
+  };
+  return {
+    verdict: typeof raw?.verdict === "string" ? raw.verdict : undefined,
+    summary: typeof raw?.summary === "string" ? raw.summary : undefined,
+    layers,
+    counts,
+  };
+}
 
 const STATUTE_MARQUEE = [
   "AMASR Act 1958", "Wildlife (Protection) Act 1972", "IS 1893 (Part 1) : 2016",
@@ -145,6 +181,249 @@ function LayerStack() {
         </text>
       </g>
     </svg>
+  );
+}
+
+/* ── Interactive screening: pick a parcel, screen it live ─────── */
+
+type ScreenState = "idle" | "loading" | "done";
+
+function InteractiveScreening() {
+  const [region, setRegion] = useState<string>("Central Gujarat");
+  const [zone, setZone] = useState<string>("R1");
+  const [roadWidth, setRoadWidth] = useState<number>(18);
+  const [isAgri, setIsAgri] = useState<boolean>(false);
+
+  const [state, setState] = useState<ScreenState>("idle");
+  const [result, setResult] = useState<RiskScreenResponse | null>(null);
+  const [fallback, setFallback] = useState(false);
+  const [resolved, setResolved] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const req = { region, zone, road_width_m: roadWidth, is_agricultural: isAgri };
+
+  // Staggered reveal once a result lands. setState only inside deferred callbacks.
+  useEffect(() => {
+    if (state !== "done" || !result?.layers?.length) return;
+    const total = result.layers.length;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const raf = requestAnimationFrame(() => setResolved(0));
+    if (reduced) {
+      const t = requestAnimationFrame(() => setResolved(total));
+      return () => { cancelAnimationFrame(raf); cancelAnimationFrame(t); };
+    }
+    const timer = setInterval(() => {
+      setResolved((n) => {
+        if (n >= total) { clearInterval(timer); return n; }
+        return n + 1;
+      });
+    }, 260);
+    timerRef.current = timer;
+    return () => { cancelAnimationFrame(raf); clearInterval(timer); };
+  }, [state, result]);
+
+  async function runScreen() {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setState("loading");
+    setResolved(0);
+    setResult(null);
+    // Fetch happens here in the handler; setState is inside the async callback.
+    try {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(`${API_BASE_URL}/risk-screen`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const raw = (await res.json()) as RiskScreenResponse;
+      const norm = normaliseScreen(raw);
+      if (!norm.layers?.length) throw new Error("empty payload");
+      setResult(norm);
+      setFallback(false);
+      setState("done");
+    } catch {
+      // Backend unreachable / not deployed — fall back to deterministic sample.
+      setResult(normaliseScreen(localScreen(req)));
+      setFallback(true);
+      setState("done");
+    }
+  }
+
+  const counts = result?.counts ?? { clear: 0, caution: 0, restricted: 0, unknown: 0 };
+  const total = result?.layers?.length ?? 0;
+  const done = state === "done" && resolved >= total;
+
+  const selectCls =
+    "w-full appearance-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink font-medium focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 transition-colors";
+
+  return (
+    <div className="card overflow-hidden">
+      {/* Input row */}
+      <div className="px-5 sm:px-6 py-4 border-b border-border bg-surface-soft/50">
+        <p className="text-sm font-semibold text-ink flex items-center gap-2 mb-3">
+          <Radar size={14} className="text-brand" /> Screen a parcel
+        </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[10px] uppercase tracking-[0.1em] text-muted font-semibold">Region</span>
+            <select className={selectCls} value={region} onChange={(e) => setRegion(e.target.value)}>
+              {SCREEN_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[10px] uppercase tracking-[0.1em] text-muted font-semibold">Zone</span>
+            <select className={selectCls} value={zone} onChange={(e) => setZone(e.target.value)}>
+              {SCREEN_ZONES.map((z) => <option key={z} value={z}>{z}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[10px] uppercase tracking-[0.1em] text-muted font-semibold">Road width</span>
+            <select className={selectCls} value={roadWidth} onChange={(e) => setRoadWidth(Number(e.target.value))}>
+              {SCREEN_ROAD_WIDTHS.map((w) => <option key={w} value={w}>{w} m</option>)}
+            </select>
+          </label>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[10px] uppercase tracking-[0.1em] text-muted font-semibold">Agricultural land?</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isAgri}
+              onClick={() => setIsAgri((v) => !v)}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                isAgri ? "border-warning/50 bg-warning-soft text-warning" : "border-border bg-surface text-muted"
+              }`}
+            >
+              <span className={`relative inline-flex w-8 h-[18px] rounded-full transition-colors ${isAgri ? "bg-warning/70" : "bg-border-strong"}`}>
+                <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-surface shadow transition-all ${isAgri ? "left-[16px]" : "left-[2px]"}`} />
+              </span>
+              {isAgri ? "Yes" : "No"}
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mt-4">
+          <button
+            onClick={runScreen}
+            disabled={state === "loading"}
+            className="btn btn-primary px-4 py-2 text-sm disabled:opacity-70"
+          >
+            {state === "loading"
+              ? <><Loader2 size={14} className="animate-spin" /> Screening…</>
+              : <><Play size={13} /> Screen parcel</>}
+          </button>
+          {state === "done" && (
+            <span className="text-[11px] text-muted flex items-center gap-1.5">
+              {fallback ? (
+                <span className="badge border text-[10px] uppercase tracking-[0.1em] text-accent bg-accent-soft border-accent-border">
+                  Sample data
+                </span>
+              ) : (
+                <span className="badge border text-[10px] uppercase tracking-[0.1em] text-success bg-success-soft border-success-border">
+                  <span className="pulse-dot" aria-hidden="true" /> Live engine
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Empty state */}
+      {state === "idle" && (
+        <div className="px-5 sm:px-6 py-10 text-center text-sm text-muted">
+          Pick a region, zone and road width, then screen the parcel through all twelve layers.
+        </div>
+      )}
+
+      {/* Result rows */}
+      {state !== "idle" && result?.layers && (
+        <div className="divide-y divide-border">
+          {result.layers.map((c, i) => {
+            const rowState = i < resolved ? "resolved" : i === resolved && !done ? "active" : "pending";
+            const meta = SCREEN_OUTCOME_META[c.outcome];
+            return (
+              <div key={`${c.layer}-${i}`} className={`px-5 sm:px-6 py-3 transition-opacity duration-300 ${rowState === "pending" ? "opacity-40" : ""}`}>
+                <div className="flex items-baseline gap-2.5 text-[13px]">
+                  <span className="shrink-0 translate-y-0.5 w-[15px]">
+                    {rowState === "resolved" ? (
+                      <span className="sl-anim inline-flex" style={{ animation: "sl-pop 0.4s cubic-bezier(0.22,0.61,0.36,1) both" }}>
+                        {meta.icon}
+                      </span>
+                    ) : rowState === "active" ? (
+                      <span className="pulse-dot" aria-hidden="true" />
+                    ) : (
+                      <span className="inline-block w-2 h-2 rounded-full bg-border-strong" aria-hidden="true" />
+                    )}
+                  </span>
+                  <span className="font-mono text-[10px] text-faint tnum shrink-0">{String(i + 1).padStart(2, "0")}</span>
+                  <span className="font-medium text-ink whitespace-nowrap">{c.layer}</span>
+                  <span className="leader" />
+                  <span className={`font-mono text-[10px] font-bold uppercase tracking-[0.1em] whitespace-nowrap ${rowState === "resolved" ? meta.cls : "text-faint"}`}>
+                    {rowState === "resolved" ? meta.label : rowState === "active" ? "Screening…" : "Queued"}
+                  </span>
+                </div>
+                {rowState === "resolved" && c.finding && (
+                  <p className="sl-anim text-xs text-muted leading-relaxed mt-1 pl-[52px]"
+                    style={{ animation: "sl-fade-up 0.4s cubic-bezier(0.22,0.61,0.36,1) both" }}>
+                    {c.finding}
+                  </p>
+                )}
+                {rowState === "active" && (
+                  <div className="mt-2 ml-[52px] h-1 rounded-full bg-surface-soft shimmer overflow-hidden" aria-hidden="true" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Verdict band */}
+      {done && result && (
+        <div className="sl-anim px-5 sm:px-6 py-5 border-t border-border bg-surface-soft/50"
+          style={{ animation: "sl-fade-up 0.55s cubic-bezier(0.22,0.61,0.36,1) both" }}>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            {[
+              { n: counts.clear ?? 0, label: "clear", cls: "text-success" },
+              { n: counts.caution ?? 0, label: "caution", cls: "text-warning" },
+              { n: counts.restricted ?? 0, label: "restricted", cls: "text-danger" },
+              ...((counts.unknown ?? 0) > 0 ? [{ n: counts.unknown ?? 0, label: "unknown", cls: "text-muted" }] : []),
+            ].map((s) => (
+              <span key={s.label} className="flex items-baseline gap-1.5">
+                <strong className={`font-mono tnum text-2xl font-bold leading-none ${s.cls}`}>{s.n}</strong>
+                <span className="text-[10px] uppercase tracking-[0.1em] text-muted">{s.label}</span>
+              </span>
+            ))}
+            {result.verdict && (
+              <span className={`ml-auto inline-flex items-center gap-1.5 rounded-md border-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] -rotate-1 ${
+                (counts.restricted ?? 0) > 0
+                  ? "border-danger/60 text-danger"
+                  : (counts.caution ?? 0) > 0
+                    ? "border-warning/60 text-warning"
+                    : "border-success/60 text-success"
+              }`}>
+                {(counts.restricted ?? 0) > 0
+                  ? <XCircle size={10} />
+                  : (counts.caution ?? 0) > 0
+                    ? <AlertTriangle size={10} />
+                    : <CheckCircle2 size={10} />}
+                {result.verdict}
+              </span>
+            )}
+          </div>
+          {result.summary && (
+            <p className="text-xs text-muted leading-relaxed mt-3">{result.summary}</p>
+          )}
+          {fallback && (
+            <p className="text-[11px] text-faint leading-relaxed mt-2 italic">
+              Sample data — the live risk engine was unreachable, so this verdict is generated locally
+              from encoded rules on an illustrative parcel, not live data for any real survey number.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -479,9 +758,21 @@ export default function RiskIntel() {
             </p>
           </Reveal>
 
-          <Reveal variant="reveal-right" delay={120}>
-            <SampleScreening />
-          </Reveal>
+          <div className="flex flex-col gap-8">
+            <Reveal variant="reveal-right">
+              <InteractiveScreening />
+            </Reveal>
+            <Reveal variant="reveal-right" delay={120}>
+              <div className="flex items-center gap-3 -mb-2">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-[10px] uppercase tracking-[0.14em] text-faint font-semibold whitespace-nowrap">
+                  Or read a worked example
+                </span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+              <SampleScreening />
+            </Reveal>
+          </div>
         </div>
       </section>
 

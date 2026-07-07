@@ -9,6 +9,7 @@ import {
   Database, Cpu, Stamp, FileBadge2, Route, RefreshCw, Bell, Vault,
   MapPin, Gavel, TrendingUp, IndianRupee, Building2, Timer, Layers,
   GitBranch, Satellite, MonitorPlay, ClipboardList, Hourglass, Banknote,
+  Target, Globe2,
 } from "lucide-react";
 
 /* ──────────────────────────────────────────────────────────────
@@ -328,6 +329,86 @@ function FlywheelDiagram() {
   );
 }
 
+/* ── Market framing — a concentric TAM → SAM → SOM visual ─────── */
+// Framing, not traction. Each band is labelled with the market it
+// describes and the commonly-cited estimate behind it — no invented
+// company revenue or user numbers.
+
+const MARKET_BANDS: {
+  key: string;
+  ring: string;
+  r: number;
+  fill: string;
+  stroke: string;
+  cite: string;
+}[] = [
+  {
+    key: "TAM",
+    ring: "India property & land",
+    r: 168,
+    fill: "var(--color-brand-soft)",
+    stroke: "var(--color-brand)",
+    cite: "The country's largest asset class",
+  },
+  {
+    key: "SAM",
+    ring: "Title & land due diligence",
+    r: 116,
+    fill: "var(--color-surface)",
+    stroke: "var(--color-brand)",
+    cite: "Disputes ≈ 2/3 of civil cases",
+  },
+  {
+    key: "SOM",
+    ring: "Digital title verification",
+    r: 66,
+    fill: "var(--color-accent-soft)",
+    stroke: "var(--color-accent)",
+    cite: "Where we start: Gujarat, live",
+  },
+];
+
+function MarketVisual() {
+  const cx = 200;
+  const cy = 200;
+  return (
+    <svg viewBox="0 0 400 400" className="w-full h-auto" role="img"
+      aria-label="Concentric market framing: India property and land, narrowing to title due diligence, narrowing to digital title verification">
+      {MARKET_BANDS.map((b, i) => (
+        <g key={b.key}>
+          <circle
+            cx={cx} cy={cy} r={b.r}
+            fill={b.fill} fillOpacity={i === 0 ? 0.35 : i === 1 ? 0.55 : 0.7}
+            className="draw-line"
+            style={{
+              "--draw-len": Math.round(2 * Math.PI * b.r),
+              "--draw-delay": `${0.2 + i * 0.35}s`,
+            } as React.CSSProperties}
+            stroke={b.stroke}
+            strokeWidth={1.6}
+            strokeDasharray={Math.round(2 * Math.PI * b.r)}
+          />
+        </g>
+      ))}
+      {/* Band labels stacked at the top of each ring */}
+      {MARKET_BANDS.map((b, i) => (
+        <g key={`${b.key}-label`} className="sl-anim"
+          style={{ animation: `sl-fade-up 0.55s cubic-bezier(0.22,0.61,0.36,1) ${0.5 + i * 0.35}s both` }}>
+          <text x={cx} y={cy - b.r + (i === 2 ? 28 : 22)} textAnchor="middle"
+            fontFamily="ui-monospace, monospace" fontSize="12" fontWeight="700"
+            fill={b.stroke} letterSpacing="0.12em">
+            {b.key}
+          </text>
+          <text x={cx} y={cy - b.r + (i === 2 ? 44 : 38)} textAnchor="middle"
+            fontSize="10.5" fill="var(--color-ink-soft)">
+            {b.ring}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 export default function InvestorsPage() {
   return (
     <main className="min-h-screen bg-bg">
@@ -417,6 +498,93 @@ export default function InvestorsPage() {
               </Reveal>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── 2b · Why now / market framing ──────────────────────── */}
+      <section className="bg-surface border-y border-border py-20 sm:py-24 px-4 sm:px-6 overflow-hidden">
+        <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-12 lg:gap-16 items-center">
+          <Reveal variant="reveal-left">
+            <p className="eyebrow mb-2 flex items-center gap-1.5"><Target size={12} /> Why now · market framing</p>
+            <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink leading-[1.12] mb-4 max-w-xl">
+              A market defined by its largest asset — and its most litigated.
+            </h2>
+            <p className="text-ink-soft leading-relaxed mb-6 max-w-xl">
+              This is market <em className="text-ink font-medium">framing</em>, not company
+              traction. Land and property is commonly described as India&apos;s largest asset
+              class, and land-related disputes are frequently estimated at roughly two-thirds
+              of the civil caseload. Verification today is manual, slow and script-locked —
+              exactly the wedge a machine-read title verdict opens.
+            </p>
+
+            {/* Band legend with animated counters */}
+            <div className="flex flex-col gap-4 mb-6">
+              {MARKET_BANDS.map((b) => (
+                <div key={b.key} className="flex items-start gap-3">
+                  <span className="mt-1 w-3 h-3 rounded-full shrink-0"
+                    style={{ backgroundColor: b.stroke === "var(--color-accent)" ? "var(--color-accent)" : "var(--color-brand)" }} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-ink">
+                      <span className="font-mono text-[11px] tracking-[0.1em] text-muted mr-2">{b.key}</span>
+                      {b.ring}
+                    </p>
+                    <p className="text-xs text-muted leading-relaxed">{b.cite}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Anchor facts — commonly-cited, non-fabricated */}
+            <div className="flex flex-wrap gap-x-8 gap-y-4 border-t border-border pt-6">
+              <span className="flex flex-col">
+                <strong className="font-mono tnum text-3xl font-bold text-ink leading-none">
+                  ~<CountUp target={66} suffix="%" />
+                </strong>
+                <span className="text-[11px] text-muted mt-1.5 uppercase tracking-[0.08em] leading-snug max-w-[9rem]">
+                  commonly-cited share of civil cases tied to land
+                </span>
+              </span>
+              <span className="flex flex-col">
+                <strong className="font-mono tnum text-3xl font-bold text-ink leading-none">
+                  $<CountUp target={16} suffix=".3M" />
+                </strong>
+                <span className="text-[11px] text-muted mt-1.5 uppercase tracking-[0.08em] leading-snug max-w-[9rem]">
+                  raised by a YC-backed competitor on this model
+                </span>
+              </span>
+            </div>
+          </Reveal>
+
+          <Reveal variant="reveal-scale" delay={120}>
+            <div className="card p-6 sm:p-8">
+              <MarketVisual />
+              <div className="mt-6 pt-5 border-t border-border">
+                {/* Traction we can show — only what's real */}
+                <p className="eyebrow flex items-center gap-1.5 mb-4"><CheckCircle2 size={12} className="text-success" /> Traction we can show</p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+                  {[
+                    { n: 1, suffix: "", label: "state pipeline live (Gujarat)" },
+                    { n: 13, suffix: "", label: "state architecture shipped" },
+                    { n: 4, suffix: "", label: "fulfilment channels" },
+                    { n: 12, suffix: "", label: "restriction layers designed" },
+                  ].map((s) => (
+                    <span key={s.label} className="flex flex-col">
+                      <strong className="font-mono tnum text-2xl font-bold text-ink leading-none">
+                        <CountUp target={s.n} suffix={s.suffix} />
+                      </strong>
+                      <span className="text-[11px] text-muted mt-1.5 uppercase tracking-[0.08em] leading-snug">{s.label}</span>
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[11px] text-faint leading-relaxed mt-5 flex items-start gap-1.5">
+                  <Globe2 size={12} className="text-brand shrink-0 mt-0.5" />
+                  Concentric bands are market framing, not measured company traction. The four
+                  figures above are shipped software and designed architecture — no revenue or
+                  user numbers are claimed.
+                </p>
+              </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 

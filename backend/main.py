@@ -1477,6 +1477,61 @@ def list_manual_orders(http_request: Request, email: str = ""):
         raise HTTPException(status_code=502, detail="Order read failed. Please try again.")
 
 
+# ─── Development-restriction screening (12 layers) ─────────────────────────
+# risk_layers.py encodes the twelve /risk-intel restriction layers as a data
+# registry + a deterministic screener. GET /risk-layers serialises the registry
+# (honest statuses + real citations for the UI); POST /risk-screen runs a parcel
+# through the screener. Pure computation — no scraping, no I/O, deterministic.
+
+from risk_layers import LAYERS as RISK_LAYERS_REGISTRY, screen_parcel
+
+
+class RiskScreenRequest(BaseModel):
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    region: Optional[str] = None
+    zone: Optional[str] = None
+    road_width_m: Optional[float] = None
+    is_agricultural: Optional[bool] = None
+
+
+@app.get("/risk-layers")
+def risk_layers_endpoint():
+    """The 12 development-restriction layers — key, title, citation, status and
+    a short `checks` description. Lets the /risk-intel UI render honest coverage."""
+    return {"layers": RISK_LAYERS_REGISTRY, "count": len(RISK_LAYERS_REGISTRY)}
+
+
+@app.post("/risk-screen")
+def risk_screen_endpoint(body: RiskScreenRequest, http_request: Request):
+    """Screen a parcel against all 12 restriction layers deterministically.
+
+    All fields optional. Layers computable from the inputs return real findings
+    from the encoded parameter tables (seismic from region, GDCR base-FSI from
+    zone + road width, agri/NA from is_agricultural); layers that need geodata
+    we don't yet hold return outcome "unknown" with an honest verification note
+    rather than a fabricated distance. Same inputs -> same output."""
+    _enforce_rate_limit(http_request, "risk-screen", limit=30)
+
+    # Light input hygiene mirroring /land-report's coordinate + length checks.
+    if body.lat is not None or body.lng is not None:
+        if body.lat is None or body.lng is None:
+            raise HTTPException(status_code=400, detail="Provide both lat and lng, or neither")
+        if not (-90 <= body.lat <= 90 and -180 <= body.lng <= 180):
+            raise HTTPException(status_code=400, detail="Invalid coordinates")
+    if body.region is not None and len(body.region) > MAX_LOCATION_LEN:
+        raise HTTPException(status_code=400, detail="region is too long")
+    if body.zone is not None and len(body.zone) > MAX_LOCATION_LEN:
+        raise HTTPException(status_code=400, detail="zone is too long")
+    if body.road_width_m is not None and not (0 <= body.road_width_m <= 1000):
+        raise HTTPException(status_code=400, detail="road_width_m is out of range")
+
+    return screen_parcel(
+        lat=body.lat, lng=body.lng, region=body.region, zone=body.zone,
+        road_width_m=body.road_width_m, is_agricultural=body.is_agricultural,
+    )
+
+
 # ─── Health Check ──────────────────────────────────────────────────────────
 
 @app.get("/")

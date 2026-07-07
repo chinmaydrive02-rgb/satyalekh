@@ -190,6 +190,168 @@ export const SAMPLE_PARCEL = {
   ref: "SL-RISK-0214",
 };
 
+// ── Interactive parcel screening — request / response contract ──
+// The risk-intel page POSTs {region, zone, road_width_m, is_agricultural}
+// to `${API_BASE_URL}/risk-screen`. The backend is expected to return a
+// per-layer breakdown; every field is treated as optional and defensively
+// normalised, so an incomplete or partial payload never breaks the page.
+
+export type ScreenOutcome = CheckOutcome | "unknown";
+
+export interface ScreenRequest {
+  region: string;
+  zone: string;
+  road_width_m: number;
+  is_agricultural: boolean;
+}
+
+export interface ScreenLayerResult {
+  layer: string;
+  outcome: ScreenOutcome;
+  finding: string;
+}
+
+export interface RiskScreenResponse {
+  verdict?: string;
+  summary?: string;
+  layers?: ScreenLayerResult[];
+  counts?: Partial<Record<ScreenOutcome, number>>;
+}
+
+export const SCREEN_REGIONS = [
+  "Kutch", "Saurashtra", "North Gujarat", "Central Gujarat", "South Gujarat",
+] as const;
+export const SCREEN_ZONES = [
+  "Agriculture", "R1", "R2", "R3", "Commercial",
+] as const;
+export const SCREEN_ROAD_WIDTHS = [9, 12, 18, 24, 30] as const;
+
+export type ScreenRegion = (typeof SCREEN_REGIONS)[number];
+export type ScreenZone = (typeof SCREEN_ZONES)[number];
+
+// ── Deterministic local fallback ────────────────────────────────
+// Used when the backend is unreachable. Produces an honest, rule-shaped
+// per-layer breakdown from the same inputs, so the demo never looks broken.
+
+const SEISMIC_BY_REGION: Record<ScreenRegion, { zone: string; outcome: ScreenOutcome; note: string }> = {
+  "Kutch": { zone: "Zone V", outcome: "restricted", note: "Zone V (severe) — highest IS-1893 design category; specialist structural design mandatory" },
+  "Saurashtra": { zone: "Zone III–IV", outcome: "caution", note: "Zone III–IV — moderate-to-high seismicity; confirm district band for the design coefficient" },
+  "North Gujarat": { zone: "Zone III–IV", outcome: "caution", note: "Zone III–IV — moderate seismicity; standard IS-1893 detailing with district check" },
+  "Central Gujarat": { zone: "Zone III", outcome: "clear", note: "Zone III — moderate; standard IS-1893 (Part 1) design applies" },
+  "South Gujarat": { zone: "Zone III", outcome: "clear", note: "Zone III — moderate; standard IS-1893 (Part 1) design applies" },
+};
+
+const FSI_BY_ROAD: Record<number, { base: string; premium: string }> = {
+  9: { base: "1.2", premium: "1.8" },
+  12: { base: "1.8", premium: "2.7" },
+  18: { base: "1.8", premium: "2.7" },
+  24: { base: "2.7", premium: "4.0" },
+  30: { base: "3.0", premium: "5.4" },
+};
+
+/** Deterministic, clearly-labelled local screening — the fallback data. */
+export function localScreen(req: ScreenRequest): RiskScreenResponse {
+  const region = (SCREEN_REGIONS as readonly string[]).includes(req.region)
+    ? (req.region as ScreenRegion)
+    : "Central Gujarat";
+  const seismic = SEISMIC_BY_REGION[region];
+  const isCoastal = region === "Saurashtra" || region === "South Gujarat" || region === "Kutch";
+  const fsi = FSI_BY_ROAD[req.road_width_m] ?? FSI_BY_ROAD[12];
+  const narrowRoad = req.road_width_m <= 9;
+
+  const layers: ScreenLayerResult[] = [
+    {
+      layer: "Heritage & ASI",
+      outcome: "clear",
+      finding: "No centrally-protected monument within the 100 m prohibited or 200 m regulated AMASR band on this sample parcel",
+    },
+    {
+      layer: "Forests & ESZ",
+      outcome: region === "Saurashtra" ? "caution" : "clear",
+      finding: region === "Saurashtra"
+        ? "Saurashtra hosts Gir & Blackbuck NP — confirm distance to the nearest sanctuary and its 10 km default ESZ band"
+        : "No national park or sanctuary within the 10 km default ESZ band on this sample parcel",
+    },
+    {
+      layer: "Airport & defence",
+      outcome: "caution",
+      finding: "Verify distance to the nearest aerodrome — heights above the AAI colour-zone cap need a NOCAS NOC before plan sanction",
+    },
+    {
+      layer: "Seismic (IS 1893)",
+      outcome: seismic.outcome,
+      finding: `${seismic.zone} — ${seismic.note}`,
+    },
+    {
+      layer: "Agricultural / NA status",
+      outcome: req.is_agricultural ? "restricted" : "clear",
+      finding: req.is_agricultural
+        ? "Agricultural land — NA (non-agricultural) conversion under GLRC §65 required before any development; check Ganotdhara / Navi Sharat tenure"
+        : "Non-agricultural order assumed on record — no §65 conversion gate for the selected use",
+    },
+    {
+      layer: "Prohibited category",
+      outcome: "clear",
+      finding: "Sample parcel not recorded as government, gauchar, wakf, trust or forest land — passes the 20-point screen",
+    },
+    {
+      layer: "Pipelines (PMP Act)",
+      outcome: "caution",
+      finding: "Confirm no GAIL / ONGC ROU corridor clips the plot — the Right-of-User strip is a no-construction band under the PMP Act 1962",
+    },
+    {
+      layer: "HT transmission",
+      outcome: "caution",
+      finding: "Verify clearance to any HT line by voltage class — multi-metre vertical/horizontal bands apply; check tower-footing setbacks with GETCO",
+    },
+    {
+      layer: "Water bodies & CRZ",
+      outcome: isCoastal ? "caution" : "clear",
+      finding: isCoastal
+        ? `${region} is coastal — confirm CRZ I–IV classification and lake/river no-development buffers before layout`
+        : "Non-coastal — CRZ not applicable; confirm no lake/river buffer clips the plot",
+    },
+    {
+      layer: "GDCR",
+      outcome: narrowRoad ? "caution" : "clear",
+      finding: req.zone === "Agriculture"
+        ? `Agriculture zone — development needs zone change / NA; on a ${req.road_width_m} m road, base FSI ${fsi.base}, premium to ${fsi.premium} once converted`
+        : `${req.zone} on a ${req.road_width_m} m road — base FSI ${fsi.base}, chargeable premium to ${fsi.premium}; margins & parking per CGDCR-2017`,
+    },
+    {
+      layer: "TP scheme",
+      outcome: "caution",
+      finding: "Confirm original-plot → final-plot mapping — the deed should cite the FP number, and check betterment charges are paid",
+    },
+    {
+      layer: "Fraud & litigation",
+      outcome: "clear",
+      finding: "No district-court cases assumed against the sample owner; normal mutation velocity — run the live litigation check on the real survey number",
+    },
+  ];
+
+  const counts: Record<ScreenOutcome, number> = {
+    clear: layers.filter((l) => l.outcome === "clear").length,
+    caution: layers.filter((l) => l.outcome === "caution").length,
+    restricted: layers.filter((l) => l.outcome === "restricted").length,
+    unknown: layers.filter((l) => l.outcome === "unknown").length,
+  };
+
+  const verdict = counts.restricted > 0
+    ? "Buildable with conditions"
+    : counts.caution > 0
+      ? "Buildable — verify the cautions"
+      : "Clear to proceed";
+
+  const summary = counts.restricted > 0
+    ? "One or more layers flag a hard restriction — quantify the affected area and design around it, or reconsider the parcel."
+    : counts.caution > 0
+      ? "No hard restrictions on the sample, but several layers need a site-specific NOC or confirmation before plan submission."
+      : "No restrictions surfaced on this illustrative sample — still verify on the real survey number before you transact.";
+
+  return { verdict, summary, layers, counts };
+}
+
 export const SAMPLE_CHECKS: SampleCheck[] = [
   { layer: "Heritage & ASI", outcome: "clear", finding: "Nearest ASI monument ≈ 4.9 km — outside the 100 m prohibited and 200 m regulated AMASR bands" },
   { layer: "Forests & ESZ", outcome: "clear", finding: "No national park or sanctuary within 10 km; Thol sanctuary ESZ ≈ 19 km NW" },
