@@ -9,57 +9,36 @@ import {
   Database, Cpu, Stamp, FileBadge2, Route, RefreshCw, Bell, Vault,
   MapPin, Gavel, TrendingUp, IndianRupee, Building2, Timer, Layers,
   GitBranch, Satellite, MonitorPlay, ClipboardList, Hourglass, Banknote,
-  Target, Globe2,
+  Target, Globe2, Ruler, Swords, Rocket,
 } from "lucide-react";
+import {
+  HERO_STATS, PROBLEM_CARDS, CHANNEL_LEGEND, RESTRICTION_LAYERS,
+  MARKET_BANDS, ROADMAP, PRICING_LADDER, UNIT_ECONOMICS, COMPETITION,
+} from "@/lib/investorData";
 
 /* ──────────────────────────────────────────────────────────────
-   /investors — the fundraising narrative.
-   Every number on this page traces to the repo's own docs:
-   PAN_INDIA_PLAYBOOK.md, PRODUCT_ROADMAP.md, AGENT_BRIEFING.md,
-   LAUNCH_CHECKLIST.md. No invented traction.
+   /investors — the fundraising narrative, as scrollytelling.
+   Every number on this page traces to the repo's own docs
+   (PAN_INDIA_PLAYBOOK / PRODUCT_ROADMAP / AGENT_BRIEFING /
+   LAUNCH_CHECKLIST) or to commonly-cited public estimates that
+   are clearly labelled as market framing. No invented traction:
+   no user counts, no MRR, no signed customers.
    ────────────────────────────────────────────────────────────── */
 
-/* ── Hero counters — the honest numbers that exist today ─────── */
-const HERO_STATS: { n: number; suffix: string; label: string }[] = [
-  { n: 1, suffix: "", label: "state live" },
-  { n: 13, suffix: "", label: "states in the adapter registry" },
-  { n: 4, suffix: "", label: "fulfilment channels" },
-  { n: 12, suffix: "", label: "restriction layers designed" },
-  { n: 33, suffix: "", label: "Gujarat districts indexed" },
-  { n: 18000, suffix: "+", label: "villages indexed" },
+/* Icons kept local to the page (JSX can't live in the .ts data file). */
+const CHANNEL_ICONS = [
+  <Database key="db" size={16} />,
+  <FileBadge2 key="fb" size={16} />,
+  <Cpu key="cpu" size={16} />,
+  <Stamp key="st" size={16} />,
 ];
-
-/* ── Problem cards ────────────────────────────────────────────── */
-const PROBLEM_CARDS = [
-  {
-    icon: <Scale size={20} />,
-    stat: "~2/3",
-    statLabel: "of civil litigation",
-    body:
-      "Land and property disputes are commonly estimated to account for about two-thirds of India's civil caseload. Land is the country's largest asset class — and its most litigated.",
-  },
-  {
-    icon: <Landmark size={20} />,
-    stat: "Presumptive",
-    statLabel: "not guaranteed",
-    body:
-      "Indian land titles are presumptive: the record shows who the revenue department believes holds the land, not a state-guaranteed ownership. The burden of verification sits entirely on the buyer.",
-  },
-  {
-    icon: <Hourglass size={20} />,
-    stat: "Weeks",
-    statLabel: "and lakhs in fees",
-    body:
-      "The standard answer is a lawyer-run 30-year search: registrar-office queues, regional-script records, opinion letters. Buyers pay lakhs and wait weeks for a verdict a machine can assemble in minutes.",
-  },
-];
-
-/* ── Channels (router diagram legend) ─────────────────────────── */
-const CHANNEL_LEGEND = [
-  { icon: <Database size={16} />, name: "Verified cache", sla: "Instant", note: "already-checked parcels, served free" },
-  { icon: <FileBadge2 size={16} />, name: "DigiLocker rails", sla: "Seconds", note: "government-signed PDFs, ~12 issuer states" },
-  { icon: <Cpu size={16} />, name: "Live portal fetch", sla: "Minutes", note: "CAPTCHA solved, local script translated" },
-  { icon: <Stamp size={16} />, name: "Human network", sla: "Days", note: "certified copies from the Sub-Registrar's office" },
+const PROBLEM_ICONS = [<Scale key="s" size={20} />, <Landmark key="l" size={20} />, <Hourglass key="h" size={20} />];
+const PRICING_ICONS = [
+  <ShieldCheck key="p0" size={16} />,
+  <IndianRupee key="p1" size={16} />,
+  <Layers key="p2" size={16} />,
+  <Stamp key="p3" size={16} />,
+  <Building2 key="p4" size={16} />,
 ];
 
 /* ── What exists today — the shipped checklist ────────────────── */
@@ -74,55 +53,6 @@ const BUILT_TODAY: { icon: React.ReactNode; title: string; note: string }[] = [
   { icon: <Route size={16} />, title: "Four-channel backend", note: "document-fulfilment router with a 13-state adapter registry" },
   { icon: <ClipboardList size={16} />, title: "Manual-fulfilment order flow", note: "certified-copy orders tracked like any other job, measured in days" },
   { icon: <MonitorPlay size={16} />, title: "Demo mode", note: "the full product walkable without a live government portal" },
-];
-
-/* ── Roadmap — sequencing straight from the playbook ─────────── */
-const ROADMAP: { phase: string; title: string; body: string }[] = [
-  {
-    phase: "Step 1",
-    title: "Mumbai-IP deployment",
-    body:
-      "NIC-hosted portals throttle foreign data-center traffic. One Indian-infrastructure deployment unlocks both the Gujarat scraper and eCourts litigation search in production — the single gating dependency, and the first use of funds.",
-  },
-  {
-    phase: "Step 2",
-    title: "Maharashtra — MahaBhulekh",
-    body:
-      "India's biggest land market, next door to Gujarat. Same adapter pattern, Marathi → English is the same muscle as Gujarati. The launch moment: two-state title checks in English.",
-  },
-  {
-    phase: "Step 3",
-    title: "DigiLocker requester status",
-    body:
-      "One official integration yields government-signed land records across roughly a dozen issuer states — no CAPTCHA, no IP games. Pure paperwork now, a coverage step-change when approved.",
-  },
-  {
-    phase: "Step 4",
-    title: "Karnataka + Ahmedabad fulfilment partner",
-    body:
-      "Bhoomi RTC adapter for Bangalore demand, in parallel with our first on-ground partner for certified copies and 30-year search reports — the channel that justifies bank-grade pricing.",
-  },
-  {
-    phase: "Step 5",
-    title: "A state per fortnight",
-    body:
-      "The adapter interface makes each new state a file, not a fork: Tamil Nadu → Uttar Pradesh → Rajasthan → Punjab & Haryana, prioritised by transaction volume. The incumbent's home states come last — we fight where they are weakest.",
-  },
-];
-
-/* ── Business model ladder ────────────────────────────────────── */
-const PRICING_LADDER: {
-  icon: React.ReactNode;
-  tier: string;
-  price: string;
-  note: string;
-  accent?: boolean;
-}[] = [
-  { icon: <ShieldCheck size={16} />, tier: "Free trials", price: "2 searches", note: "See the verdict before paying — the conversion funnel starts at zero." },
-  { icon: <IndianRupee size={16} />, tier: "Per-search", price: "from ₹299", note: "Impulse-purchasable single verdicts for individual buyers." },
-  { icon: <Layers size={16} />, tier: "Title Pack", price: "5-search bundle", note: "Bundled searches today; per-state document packs as states come online." },
-  { icon: <Stamp size={16} />, tier: "Certified & manual", price: "₹1,500–4,999", note: "SRO-fetched certified copies and 30-year search reports, advocate-reviewed.", accent: true },
-  { icon: <Building2 size={16} />, tier: "Bank & enterprise", price: "Custom", note: "Bulk collateral verification and API access — the boring, lucrative tier.", accent: true },
 ];
 
 /* ── Compact report mock — the artefact in 30 seconds ─────────── */
@@ -330,50 +260,12 @@ function FlywheelDiagram() {
 }
 
 /* ── Market framing — a concentric TAM → SAM → SOM visual ─────── */
-// Framing, not traction. Each band is labelled with the market it
-// describes and the commonly-cited estimate behind it — no invented
-// company revenue or user numbers.
-
-const MARKET_BANDS: {
-  key: string;
-  ring: string;
-  r: number;
-  fill: string;
-  stroke: string;
-  cite: string;
-}[] = [
-  {
-    key: "TAM",
-    ring: "India property & land",
-    r: 168,
-    fill: "var(--color-brand-soft)",
-    stroke: "var(--color-brand)",
-    cite: "The country's largest asset class",
-  },
-  {
-    key: "SAM",
-    ring: "Title & land due diligence",
-    r: 116,
-    fill: "var(--color-surface)",
-    stroke: "var(--color-brand)",
-    cite: "Disputes ≈ 2/3 of civil cases",
-  },
-  {
-    key: "SOM",
-    ring: "Digital title verification",
-    r: 66,
-    fill: "var(--color-accent-soft)",
-    stroke: "var(--color-accent)",
-    cite: "Where we start: Gujarat, live",
-  },
-];
-
 function MarketVisual() {
   const cx = 200;
   const cy = 200;
   return (
     <svg viewBox="0 0 400 400" className="w-full h-auto" role="img"
-      aria-label="Concentric market framing: India property and land, narrowing to title due diligence, narrowing to digital title verification">
+      aria-label="Concentric market framing: India real-estate transactions, narrowing to annual title and diligence spend, narrowing to a digital-first serviceable slice">
       {MARKET_BANDS.map((b, i) => (
         <g key={b.key}>
           <circle
@@ -400,7 +292,7 @@ function MarketVisual() {
             {b.key}
           </text>
           <text x={cx} y={cy - b.r + (i === 2 ? 44 : 38)} textAnchor="middle"
-            fontSize="10.5" fill="var(--color-ink-soft)">
+            fontSize="9.5" fill="var(--color-ink-soft)">
             {b.ring}
           </text>
         </g>
@@ -445,7 +337,7 @@ export default function InvestorsPage() {
             className="sl-anim flex flex-wrap gap-3"
             style={{ animation: "sl-fade-up 0.7s cubic-bezier(0.22,0.61,0.36,1) 0.24s both" }}
           >
-            <Link href="/contact" className="btn bg-white text-pine hover:bg-brand-soft border border-white/10 px-6 py-3 font-semibold">
+            <Link href="/contact" className="btn btn-arrow bg-white text-pine hover:bg-brand-soft border border-white/10 px-6 py-3 font-semibold">
               Request the data room <ArrowRight size={15} />
             </Link>
             <Link href="/demo" className="btn btn-ghost text-white/80 hover:text-white border border-white/20 hover:border-white/40 px-6 py-3">
@@ -487,7 +379,7 @@ export default function InvestorsPage() {
               <Reveal key={c.stat} delay={i * 120} variant="reveal-scale">
                 <div className="card p-7 flex flex-col gap-4 h-full">
                   <span className="w-11 h-11 rounded-xl bg-danger-soft text-danger border border-danger-border/60 flex items-center justify-center">
-                    {c.icon}
+                    {PROBLEM_ICONS[i]}
                   </span>
                   <div>
                     <p className="font-mono tnum text-3xl font-bold text-ink leading-none">{c.stat}</p>
@@ -498,93 +390,6 @@ export default function InvestorsPage() {
               </Reveal>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* ── 2b · Why now / market framing ──────────────────────── */}
-      <section className="bg-surface border-y border-border py-20 sm:py-24 px-4 sm:px-6 overflow-hidden">
-        <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-12 lg:gap-16 items-center">
-          <Reveal variant="reveal-left">
-            <p className="eyebrow mb-2 flex items-center gap-1.5"><Target size={12} /> Why now · market framing</p>
-            <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink leading-[1.12] mb-4 max-w-xl">
-              A market defined by its largest asset — and its most litigated.
-            </h2>
-            <p className="text-ink-soft leading-relaxed mb-6 max-w-xl">
-              This is market <em className="text-ink font-medium">framing</em>, not company
-              traction. Land and property is commonly described as India&apos;s largest asset
-              class, and land-related disputes are frequently estimated at roughly two-thirds
-              of the civil caseload. Verification today is manual, slow and script-locked —
-              exactly the wedge a machine-read title verdict opens.
-            </p>
-
-            {/* Band legend with animated counters */}
-            <div className="flex flex-col gap-4 mb-6">
-              {MARKET_BANDS.map((b) => (
-                <div key={b.key} className="flex items-start gap-3">
-                  <span className="mt-1 w-3 h-3 rounded-full shrink-0"
-                    style={{ backgroundColor: b.stroke === "var(--color-accent)" ? "var(--color-accent)" : "var(--color-brand)" }} />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-ink">
-                      <span className="font-mono text-[11px] tracking-[0.1em] text-muted mr-2">{b.key}</span>
-                      {b.ring}
-                    </p>
-                    <p className="text-xs text-muted leading-relaxed">{b.cite}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Anchor facts — commonly-cited, non-fabricated */}
-            <div className="flex flex-wrap gap-x-8 gap-y-4 border-t border-border pt-6">
-              <span className="flex flex-col">
-                <strong className="font-mono tnum text-3xl font-bold text-ink leading-none">
-                  ~<CountUp target={66} suffix="%" />
-                </strong>
-                <span className="text-[11px] text-muted mt-1.5 uppercase tracking-[0.08em] leading-snug max-w-[9rem]">
-                  commonly-cited share of civil cases tied to land
-                </span>
-              </span>
-              <span className="flex flex-col">
-                <strong className="font-mono tnum text-3xl font-bold text-ink leading-none">
-                  $<CountUp target={16} suffix=".3M" />
-                </strong>
-                <span className="text-[11px] text-muted mt-1.5 uppercase tracking-[0.08em] leading-snug max-w-[9rem]">
-                  raised by a YC-backed competitor on this model
-                </span>
-              </span>
-            </div>
-          </Reveal>
-
-          <Reveal variant="reveal-scale" delay={120}>
-            <div className="card p-6 sm:p-8">
-              <MarketVisual />
-              <div className="mt-6 pt-5 border-t border-border">
-                {/* Traction we can show — only what's real */}
-                <p className="eyebrow flex items-center gap-1.5 mb-4"><CheckCircle2 size={12} className="text-success" /> Traction we can show</p>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-                  {[
-                    { n: 1, suffix: "", label: "state pipeline live (Gujarat)" },
-                    { n: 13, suffix: "", label: "state architecture shipped" },
-                    { n: 4, suffix: "", label: "fulfilment channels" },
-                    { n: 12, suffix: "", label: "restriction layers designed" },
-                  ].map((s) => (
-                    <span key={s.label} className="flex flex-col">
-                      <strong className="font-mono tnum text-2xl font-bold text-ink leading-none">
-                        <CountUp target={s.n} suffix={s.suffix} />
-                      </strong>
-                      <span className="text-[11px] text-muted mt-1.5 uppercase tracking-[0.08em] leading-snug">{s.label}</span>
-                    </span>
-                  ))}
-                </div>
-                <p className="text-[11px] text-faint leading-relaxed mt-5 flex items-start gap-1.5">
-                  <Globe2 size={12} className="text-brand shrink-0 mt-0.5" />
-                  Concentric bands are market framing, not measured company traction. The four
-                  figures above are shipped software and designed architecture — no revenue or
-                  user numbers are claimed.
-                </p>
-              </div>
-            </div>
-          </Reveal>
         </div>
       </section>
 
@@ -608,7 +413,7 @@ export default function InvestorsPage() {
                 This is the artefact that gets forwarded on WhatsApp before a token
                 changes hands — and the unit everything else on this page compounds around.
               </p>
-              <Link href="/demo" className="btn btn-outline w-fit mt-1">
+              <Link href="/demo" className="btn btn-outline btn-arrow w-fit mt-1">
                 See a live sample <ArrowRight size={14} />
               </Link>
             </div>
@@ -619,11 +424,11 @@ export default function InvestorsPage() {
         </div>
       </section>
 
-      {/* ── 4 · The architecture moat ──────────────────────────── */}
+      {/* ── 4 · The architecture moat — router ─────────────────── */}
       <section className="py-20 sm:py-24 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto">
           <Reveal>
-            <p className="eyebrow mb-2 flex items-center gap-1.5"><Route size={12} /> The architecture moat</p>
+            <p className="eyebrow mb-2 flex items-center gap-1.5"><Route size={12} /> Why we win · the moat</p>
             <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink mb-4 max-w-3xl">
               There is no magic API into every state. There is a router.
             </h2>
@@ -641,9 +446,9 @@ export default function InvestorsPage() {
             <div className="card p-6 sm:p-10">
               <RouterDiagram />
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8 pt-6 border-t border-border">
-                {CHANNEL_LEGEND.map((c) => (
+                {CHANNEL_LEGEND.map((c, i) => (
                   <div key={c.name} className="flex items-start gap-2.5">
-                    <span className="w-8 h-8 rounded-lg bg-brand-soft text-brand flex items-center justify-center shrink-0">{c.icon}</span>
+                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${c.accent ? "bg-accent-soft text-accent" : "bg-brand-soft text-brand"}`}>{CHANNEL_ICONS[i]}</span>
                     <span className="flex flex-col leading-tight min-w-0">
                       <span className="text-sm font-semibold text-ink">{c.name}</span>
                       <span className="text-[11px] font-mono text-accent flex items-center gap-1"><Timer size={9} /> {c.sla}</span>
@@ -674,10 +479,10 @@ export default function InvestorsPage() {
                 <p className="eyebrow text-accent flex items-center gap-1.5"><GitBranch size={12} /> Our wedge: depth over breadth</p>
                 <p className="text-sm text-ink-soft leading-relaxed">
                   They fetch documents. We answer the question underneath —{" "}
-                  <em className="text-ink font-medium">is this title clean?</em> The
-                  risk-scored verdict, chain of title and litigation check are the
-                  layer a document fetcher has to rebuild from scratch to follow us.
-                  We won&apos;t chase 120 document types; we&apos;ll own the verdict.
+                  <em className="text-ink font-medium">is this title clean, and is this buildable?</em> The
+                  risk-scored verdict, chain of title, litigation check and restriction
+                  engine are the layer a document fetcher has to rebuild from scratch to
+                  follow us. We won&apos;t chase 120 document types; we&apos;ll own the verdict.
                 </p>
               </div>
             </Reveal>
@@ -725,8 +530,328 @@ export default function InvestorsPage() {
         </div>
       </section>
 
-      {/* ── 6 · What's built today ─────────────────────────────── */}
+      {/* ── 6 · The restriction engine — the real wedge ────────── */}
       <section className="py-20 sm:py-24 px-4 sm:px-6">
+        <div className="max-w-[1200px] mx-auto">
+          <Reveal>
+            <p className="eyebrow mb-2 flex items-center gap-1.5"><Ruler size={12} /> The wedge · restriction engine</p>
+            <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink mb-4 max-w-3xl">
+              Others fetch documents. We answer <em className="text-brand not-italic">is this buildable</em>.
+            </h2>
+            <p className="text-ink-soft leading-relaxed max-w-3xl mb-10">
+              A clean title is only half the question a buyer actually has. The other
+              half is whether the land can be used — and that is buried across twelve
+              overlapping restriction regimes: tenure, zoning, coastal and forest
+              buffers, road and TP-scheme reservations, acquisition notices, wakf and
+              trust flags. Our development-restriction engine scores all twelve on top
+              of the record. A document fetcher has to build this layer from scratch to
+              follow us.
+            </p>
+          </Reveal>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
+            {RESTRICTION_LAYERS.map((layer, i) => (
+              <Reveal key={layer} delay={Math.min(i * 55, 600)} variant="reveal-scale">
+                <div className="card p-4 flex items-center gap-3 h-full">
+                  <span className="w-7 h-7 rounded-lg bg-brand-soft text-brand flex items-center justify-center shrink-0 font-mono tnum text-[11px] font-bold">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="text-[13px] font-medium text-ink leading-tight">{layer}</span>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          <Reveal delay={120}>
+            <div className="card bg-surface-soft/50 px-6 py-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <span className="w-10 h-10 rounded-xl bg-accent-soft text-accent flex items-center justify-center shrink-0">
+                <Layers size={18} />
+              </span>
+              <p className="text-sm text-ink-soft leading-relaxed flex-1">
+                <strong className="text-ink">Twelve layers, one verdict.</strong>{" "}
+                The engine is the deepest part of the moat — the analysis a buyer
+                would otherwise pay a lawyer and a town-planner for, separately.
+                See how each layer is scored.
+              </p>
+              <Link href="/risk-intel" className="btn btn-outline btn-arrow whitespace-nowrap shrink-0">
+                Explore the restriction engine <ArrowRight size={14} />
+              </Link>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 7 · Market framing — TAM → SAM → SOM ───────────────── */}
+      <section className="bg-surface border-y border-border py-20 sm:py-24 px-4 sm:px-6 overflow-hidden">
+        <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-12 lg:gap-16 items-center">
+          <Reveal variant="reveal-left">
+            <p className="eyebrow mb-2 flex items-center gap-1.5"><Target size={12} /> Market sizing · framing</p>
+            <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink leading-[1.12] mb-4 max-w-xl">
+              A market defined by its largest asset — and its most litigated.
+            </h2>
+            <p className="text-ink-soft leading-relaxed mb-6 max-w-xl">
+              This is market <em className="text-ink font-medium">framing</em>, not company
+              traction, and it is expressed as directional ranges rather than false
+              precision. India&apos;s real-estate transaction volume defines the outer
+              band; the annual title and diligence spend already flowing through
+              lawyers, brokers and banks is the addressable middle; the digital-first
+              slice that starts with one live state is where we begin.
+            </p>
+
+            {/* Band legend */}
+            <div className="flex flex-col gap-4 mb-6">
+              {MARKET_BANDS.map((b) => (
+                <div key={b.key} className="flex items-start gap-3">
+                  <span className="mt-1 w-3 h-3 rounded-full shrink-0"
+                    style={{ backgroundColor: b.stroke === "var(--color-accent)" ? "var(--color-accent)" : "var(--color-brand)" }} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-ink">
+                      <span className="font-mono text-[11px] tracking-[0.1em] text-muted mr-2">{b.key}</span>
+                      {b.ring}
+                    </p>
+                    <p className="text-xs text-muted leading-relaxed">{b.cite}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Anchor facts — commonly-cited, non-fabricated */}
+            <div className="flex flex-wrap gap-x-8 gap-y-4 border-t border-border pt-6">
+              <span className="flex flex-col">
+                <strong className="font-mono tnum text-3xl font-bold text-ink leading-none">
+                  ~<CountUp target={66} suffix="%" />
+                </strong>
+                <span className="text-[11px] text-muted mt-1.5 uppercase tracking-[0.08em] leading-snug max-w-[9rem]">
+                  commonly-cited share of civil cases tied to land
+                </span>
+              </span>
+              <span className="flex flex-col">
+                <strong className="font-mono tnum text-3xl font-bold text-ink leading-none">
+                  $<CountUp target={16} suffix=".3M" />
+                </strong>
+                <span className="text-[11px] text-muted mt-1.5 uppercase tracking-[0.08em] leading-snug max-w-[9rem]">
+                  raised by a YC-backed competitor on this model
+                </span>
+              </span>
+            </div>
+          </Reveal>
+
+          <Reveal variant="reveal-scale" delay={120}>
+            <div className="card p-6 sm:p-8">
+              <MarketVisual />
+              <div className="mt-6 pt-5 border-t border-border">
+                {/* Traction we can show — only what's real */}
+                <p className="eyebrow flex items-center gap-1.5 mb-4"><CheckCircle2 size={12} className="text-success" /> What we can honestly claim</p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+                  {[
+                    { n: 1, suffix: "", label: "state pipeline live (Gujarat)" },
+                    { n: 13, suffix: "", label: "state architecture shipped" },
+                    { n: 4, suffix: "", label: "fulfilment channels" },
+                    { n: 12, suffix: "", label: "restriction layers designed" },
+                  ].map((s) => (
+                    <span key={s.label} className="flex flex-col">
+                      <strong className="font-mono tnum text-2xl font-bold text-ink leading-none">
+                        <CountUp target={s.n} suffix={s.suffix} />
+                      </strong>
+                      <span className="text-[11px] text-muted mt-1.5 uppercase tracking-[0.08em] leading-snug">{s.label}</span>
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[11px] text-faint leading-relaxed mt-5 flex items-start gap-1.5">
+                  <Globe2 size={12} className="text-brand shrink-0 mt-0.5" />
+                  Concentric bands are directional market framing, not measured company
+                  traction. The four figures above are shipped software and designed
+                  architecture — no revenue, user or customer numbers are claimed.
+                </p>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 8 · Business model & unit economics ────────────────── */}
+      <section className="py-20 sm:py-24 px-4 sm:px-6">
+        <div className="max-w-[1200px] mx-auto">
+          <Reveal>
+            <p className="eyebrow mb-2 flex items-center gap-1.5"><IndianRupee size={12} /> Business model &amp; unit economics</p>
+            <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink mb-4 max-w-2xl">
+              A ladder from free trial to bank contract.
+            </h2>
+            <p className="text-ink-soft leading-relaxed max-w-2xl mb-12">
+              The pricing shape is the proven one in this category: free first
+              searches to show the verdict, impulse-priced singles, bundles, and a
+              high-margin certified tier that earns the enterprise conversation.
+            </p>
+          </Reveal>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 items-end">
+            {PRICING_LADDER.map((p, i) => (
+              <Reveal key={p.tier} delay={i * 100} variant="reveal-scale">
+                <div className={`card card-lift p-5 flex flex-col gap-2.5 ${p.accent ? "border-accent-border" : ""}`}>
+                  <span className={`w-9 h-9 rounded-lg flex items-center justify-center ${p.accent ? "bg-accent-soft text-accent" : "bg-brand-soft text-brand"}`}>
+                    {PRICING_ICONS[i]}
+                  </span>
+                  <p className="eyebrow text-[10px]">{`Rung ${i + 1}`}</p>
+                  <h3 className="text-sm font-semibold text-ink leading-tight">{p.tier}</h3>
+                  <p className="font-mono tnum text-lg font-bold text-ink leading-none">{p.price}</p>
+                  <p className="text-xs text-muted leading-relaxed">{p.note}</p>
+                  {/* Ladder bar — height rises with the tier */}
+                  <span
+                    className={`mt-2 w-full rounded-sm ${p.accent ? "bg-accent/70" : "bg-brand/60"}`}
+                    style={{ height: `${8 + i * 9}px` }}
+                    aria-hidden="true"
+                  />
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* Illustrative unit-economics strip */}
+          <Reveal delay={120}>
+            <div className="card p-6 sm:p-8 mt-8">
+              <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+                <p className="eyebrow flex items-center gap-1.5"><TrendingUp size={12} /> Unit-economics intuition</p>
+                <span className="badge border text-[10px] uppercase tracking-[0.1em] text-accent bg-accent-soft border-accent-border">
+                  Illustrative — not measured margins
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {UNIT_ECONOMICS.map((u) => (
+                  <div key={u.label} className={`rounded-xl border p-5 flex flex-col gap-3 ${u.accent ? "border-accent-border bg-accent-soft/25" : "border-border bg-surface-soft/40"}`}>
+                    <p className="text-sm font-semibold text-ink">{u.label}</p>
+                    <div className="flex items-end justify-between gap-4">
+                      <span className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-[0.1em] text-muted">Price</span>
+                        <span className="font-mono tnum text-2xl font-bold text-ink leading-none mt-1">{u.price}</span>
+                      </span>
+                      <span className="flex flex-col text-right">
+                        <span className="text-[10px] uppercase tracking-[0.1em] text-muted">Cost driver</span>
+                        <span className="text-[13px] font-medium text-ink-soft mt-1">{u.cost}</span>
+                      </span>
+                    </div>
+                    {/* margin intuition bar: price above cost, illustrative only */}
+                    <div className="mt-1">
+                      <div className="h-2 rounded-full bg-border-strong/40 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${u.accent ? "bg-accent/75" : "bg-brand/70"}`}
+                          style={{ width: u.accent ? "58%" : "82%" }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-faint mt-1.5 font-mono">illustrative gross-margin band ↑</p>
+                    </div>
+                    <p className="text-xs text-muted leading-relaxed">{u.intuition}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-faint leading-relaxed mt-5 flex items-start gap-1.5">
+                <IndianRupee size={12} className="text-brand shrink-0 mt-0.5" />
+                These bars illustrate cost structure and margin shape only — they are not
+                measured unit economics. Instant digital searches carry near-zero marginal
+                cost once cached; the certified tier prices the on-ground fulfilment cost
+                with margin. No revenue or realised-margin figures are claimed.
+              </p>
+            </div>
+          </Reveal>
+
+          <Reveal delay={160}>
+            <p className="text-xs text-muted mt-6">
+              Live today: free trial searches and per-search checkout. Certified SKUs
+              run through the manual-fulfilment order flow; enterprise verification is
+              the deliberate end-state, not the starting point.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 9 · Go-to-market & roadmap ─────────────────────────── */}
+      <section className="bg-surface border-y border-border py-20 sm:py-24 px-4 sm:px-6">
+        <div className="max-w-[900px] mx-auto">
+          <Reveal>
+            <p className="eyebrow mb-2 flex items-center gap-1.5"><Rocket size={12} /> Go-to-market &amp; roadmap</p>
+            <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink mb-4">
+              Ahmedabad-first, then one state at a time.
+            </h2>
+            <p className="text-ink-soft leading-relaxed max-w-2xl mb-14">
+              We start where transaction velocity and NRI demand are highest, go deep
+              in Gujarat, then use the adapter pattern to add states — each step
+              independently shippable and already sequenced. The round funds the
+              execution of this list.
+            </p>
+          </Reveal>
+
+          <div className="relative">
+            {/* Timeline rail */}
+            <div className="absolute left-[19px] top-3 bottom-3 w-px bg-gradient-to-b from-brand via-border-strong to-accent" aria-hidden="true" />
+            <div className="flex flex-col gap-10">
+              {ROADMAP.map((m, i) => (
+                <Reveal key={m.title} delay={i * 110} variant="reveal-left">
+                  <div className="relative pl-14">
+                    <span className="absolute left-0 top-0 w-10 h-10 rounded-xl bg-brand text-white font-mono text-sm font-bold flex items-center justify-center shadow-md ring-4 ring-surface tnum">
+                      {i + 1}
+                    </span>
+                    <p className="eyebrow text-brand mb-1">{m.phase}</p>
+                    <h3 className="text-lg font-semibold text-ink mb-1.5">{m.title}</h3>
+                    <p className="text-sm text-muted leading-relaxed max-w-xl">{m.body}</p>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 10 · Competition ───────────────────────────────────── */}
+      <section className="py-20 sm:py-24 px-4 sm:px-6">
+        <div className="max-w-[1100px] mx-auto">
+          <Reveal>
+            <p className="eyebrow mb-2 flex items-center gap-1.5"><Swords size={12} /> Competition</p>
+            <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink mb-4 max-w-2xl">
+              Honest positioning against a funded incumbent.
+            </h2>
+            <p className="text-ink-soft leading-relaxed max-w-2xl mb-10">
+              A YC-backed incumbent has raised roughly{" "}
+              <span className="font-mono tnum font-semibold text-ink">$16.3M</span> and covers
+              breadth — many states, 120+ document types. We are not trying to out-breadth
+              them. We compete on depth: a verdict rather than a document, and a restriction
+              engine no document fetcher can shortcut.
+            </p>
+          </Reveal>
+
+          <Reveal variant="reveal-scale">
+            <div className="card overflow-hidden">
+              {/* Header row */}
+              <div className="grid grid-cols-[1.1fr_1.2fr_1.4fr] gap-x-4 px-5 sm:px-7 py-4 border-b border-border bg-surface-soft/50 text-[11px] uppercase tracking-[0.1em] font-semibold text-muted">
+                <span>Dimension</span>
+                <span className="flex items-center gap-1.5"><Building2 size={12} /> Funded incumbent</span>
+                <span className="flex items-center gap-1.5 text-brand"><ShieldCheck size={12} /> Satya-Lekh</span>
+              </div>
+              {COMPETITION.map((row, i) => (
+                <Reveal key={row.dimension} delay={i * 70}>
+                  <div className="grid grid-cols-[1.1fr_1.2fr_1.4fr] gap-x-4 px-5 sm:px-7 py-4 border-b border-border last:border-b-0 items-start">
+                    <span className="text-sm font-semibold text-ink">{row.dimension}</span>
+                    <span className="text-[13px] text-muted leading-relaxed">{row.incumbent}</span>
+                    <span className="text-[13px] text-ink-soft leading-relaxed flex items-start gap-1.5">
+                      <CheckCircle2 size={13} className="text-brand shrink-0 mt-0.5" />
+                      <span>{row.us}</span>
+                    </span>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+          </Reveal>
+
+          <Reveal delay={120}>
+            <p className="text-[11px] text-faint leading-relaxed mt-5">
+              Funding figure for the incumbent (~$16.3M over five rounds) reflects
+              commonly-reported public coverage, per our own market research
+              (PAN_INDIA_PLAYBOOK). Positioning claims describe our architecture and
+              intent, not head-to-head benchmark results.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 11 · What's built today ────────────────────────────── */}
+      <section className="bg-surface border-y border-border py-20 sm:py-24 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto">
           <Reveal>
             <p className="eyebrow mb-2 flex items-center gap-1.5"><CheckCircle2 size={12} /> Shipped, not slideware</p>
@@ -766,108 +891,29 @@ export default function InvestorsPage() {
         </div>
       </section>
 
-      {/* ── 7 · Roadmap ────────────────────────────────────────── */}
-      <section className="bg-surface border-y border-border py-20 sm:py-24 px-4 sm:px-6">
-        <div className="max-w-[900px] mx-auto">
-          <Reveal>
-            <p className="eyebrow mb-2 flex items-center gap-1.5"><Route size={12} /> The rollout</p>
-            <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink mb-4">
-              One state at a time, then one a fortnight.
-            </h2>
-            <p className="text-ink-soft leading-relaxed max-w-2xl mb-14">
-              Each step below is independently shippable and already sequenced.
-              The architecture is built; the round funds the execution of this list.
-            </p>
-          </Reveal>
-
-          <div className="relative">
-            {/* Timeline rail */}
-            <div className="absolute left-[19px] top-3 bottom-3 w-px bg-gradient-to-b from-brand via-border-strong to-accent" aria-hidden="true" />
-            <div className="flex flex-col gap-10">
-              {ROADMAP.map((m, i) => (
-                <Reveal key={m.title} delay={i * 110} variant="reveal-left">
-                  <div className="relative pl-14">
-                    <span className="absolute left-0 top-0 w-10 h-10 rounded-xl bg-brand text-white font-mono text-sm font-bold flex items-center justify-center shadow-md ring-4 ring-surface tnum">
-                      {i + 1}
-                    </span>
-                    <p className="eyebrow text-brand mb-1">{m.phase}</p>
-                    <h3 className="text-lg font-semibold text-ink mb-1.5">{m.title}</h3>
-                    <p className="text-sm text-muted leading-relaxed max-w-xl">{m.body}</p>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── 8 · Business model ─────────────────────────────────── */}
-      <section className="py-20 sm:py-24 px-4 sm:px-6">
-        <div className="max-w-[1200px] mx-auto">
-          <Reveal>
-            <p className="eyebrow mb-2 flex items-center gap-1.5"><IndianRupee size={12} /> Business model</p>
-            <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-ink mb-4 max-w-2xl">
-              A ladder from free trial to bank contract.
-            </h2>
-            <p className="text-ink-soft leading-relaxed max-w-2xl mb-12">
-              The pricing shape is the proven one in this category: free first
-              searches to show the verdict, impulse-priced singles, bundles, and a
-              high-margin certified tier that earns the enterprise conversation.
-            </p>
-          </Reveal>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 items-end">
-            {PRICING_LADDER.map((p, i) => (
-              <Reveal key={p.tier} delay={i * 100} variant="reveal-scale">
-                <div className={`card card-lift p-5 flex flex-col gap-2.5 ${p.accent ? "border-accent-border" : ""}`}>
-                  <span className={`w-9 h-9 rounded-lg flex items-center justify-center ${p.accent ? "bg-accent-soft text-accent" : "bg-brand-soft text-brand"}`}>
-                    {p.icon}
-                  </span>
-                  <p className="eyebrow text-[10px]">{`Rung ${i + 1}`}</p>
-                  <h3 className="text-sm font-semibold text-ink leading-tight">{p.tier}</h3>
-                  <p className="font-mono tnum text-lg font-bold text-ink leading-none">{p.price}</p>
-                  <p className="text-xs text-muted leading-relaxed">{p.note}</p>
-                  {/* Ladder bar — height rises with the tier */}
-                  <span
-                    className={`mt-2 w-full rounded-sm ${p.accent ? "bg-accent/70" : "bg-brand/60"}`}
-                    style={{ height: `${8 + i * 9}px` }}
-                    aria-hidden="true"
-                  />
-                </div>
-              </Reveal>
-            ))}
-          </div>
-          <Reveal delay={160}>
-            <p className="text-xs text-muted mt-6">
-              Live today: free trial searches and per-search checkout. Certified SKUs
-              run through the manual-fulfilment order flow; enterprise verification is
-              the deliberate end-state, not the starting point.
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ── 9 · The ask ────────────────────────────────────────── */}
-      <section className="px-4 sm:px-6 pb-20">
+      {/* ── 12 · Team / why-now + the ask ──────────────────────── */}
+      <section className="px-4 sm:px-6 py-20">
         <Reveal>
           <div className="section-dark max-w-[1200px] mx-auto rounded-3xl px-8 py-14 sm:px-14 sm:py-16 overflow-hidden">
             <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
               <div className="max-w-xl">
-                <p className="eyebrow text-accent-bright mb-3">The ask</p>
+                <p className="eyebrow text-accent-bright mb-3">Why now · the ask</p>
                 <h2 className="font-serif text-3xl sm:text-[2.6rem] font-semibold text-white leading-[1.1] mb-4">
-                  Raising our first round.
+                  Raising our first institutional round.
                 </h2>
                 <p className="text-white/70 text-base leading-relaxed">
                   The product works in one state. The architecture is built for
-                  thirteen. The round funds Indian infrastructure, the next two
-                  state adapters, DigiLocker requester status and the first
-                  fulfilment partner — every line item already sequenced above.
-                  Ask us for the data room and walk the working product yourself.
+                  thirteen. The moat — the verdict and the restriction engine — is
+                  the hard part, and it is already shipped. The round funds Indian
+                  infrastructure, the next state adapters, DigiLocker requester status
+                  and the first fulfilment partner — every line item already sequenced
+                  above. Ask us for the data room and walk the working product yourself.
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0">
                 <Link
                   href="/contact"
-                  className="btn bg-white text-pine hover:bg-brand-soft border border-white/10 px-7 py-3 text-base whitespace-nowrap font-semibold"
+                  className="btn btn-arrow bg-white text-pine hover:bg-brand-soft border border-white/10 px-7 py-3 text-base whitespace-nowrap font-semibold"
                 >
                   Request the data room <ArrowRight size={15} />
                 </Link>
@@ -883,8 +929,10 @@ export default function InvestorsPage() {
         </Reveal>
         <p className="max-w-[1200px] mx-auto text-[11px] text-faint mt-6 leading-relaxed">
           Figures on this page describe shipped software and designed architecture, not
-          audited traction. Market framing (share of civil litigation, presumptive title)
-          reflects commonly cited estimates for the Indian land-records market.
+          audited traction — no user counts, revenue or signed customers are claimed.
+          Market framing (share of civil litigation, presumptive title, incumbent
+          funding) reflects commonly-cited estimates for the Indian land-records market;
+          unit-economics bars are illustrative of cost structure, not measured margins.
         </p>
       </section>
     </main>

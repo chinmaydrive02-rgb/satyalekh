@@ -46,11 +46,11 @@ export const RISK_LAYERS: RiskLayer[] = [
   {
     id: 3,
     title: "Airport & defence zones",
-    citation: "GSR 751(E) 2015 — AAI height restrictions · Works of Defence Act 1903",
+    citation: "GSR 751(E) 2015 — AAI NOCAS height rules · Works of Defence Act 1903",
     checks: [
-      "AAI colour-coded zoning maps & NOCAS NOC for approach / transitional funnel surfaces",
-      "Distance to SVPIA and other aerodromes — funnel-zone proximity flag",
-      "No-construction bands around cantonments, naval and air-force stations",
+      "AAI colour-coded height zones (green → red) & NOCAS NOC for approach / transition funnel surfaces",
+      "Distance to SVPIA and other aerodromes — funnel-surface proximity flag",
+      "No-construction bands & no-fly / security zones around cantonments, naval and air-force stations",
     ],
     status: "partial",
     note: "Airport-funnel & metro proximity screening runs live in Land Intel today; NOCAS colour-zone maps and defence bands are planned.",
@@ -62,8 +62,8 @@ export const RISK_LAYERS: RiskLayer[] = [
     title: "Seismic risk (IS 1893)",
     citation: "IS 1893 (Part 1): 2016 — seismic zoning map of India",
     checks: [
-      "Zone V — Kutch (severe) · Zone IV — much of Saurashtra & north Gujarat · Zone III elsewhere",
-      "Structural-cost, insurance and buyer-advisory implications by zone",
+      "Zone V — Kutch (severe, Z=0.36) · Zone IV — much of Saurashtra & north Gujarat (Z=0.24) · Zone III elsewhere (Z=0.16)",
+      "Investing advice by zone — ductile-detailing cost uplift & insurance loading vs Zone III baseline",
     ],
     status: "beta",
     note: "District → zone lookup table encoded; surfacing in reports next.",
@@ -98,22 +98,23 @@ export const RISK_LAYERS: RiskLayer[] = [
   {
     id: 7,
     title: "Petroleum & gas pipelines",
-    citation: "Petroleum & Minerals Pipelines (Acquisition of ROU) Act 1962",
+    citation: "Petroleum & Minerals Pipelines (Acquisition of Right of User) Act 1962 §§4–7",
     checks: [
-      "No construction on the Right-of-User corridor itself",
-      "Restricted-activity bands on either side of the ROU",
-      "ONGC crude & GAIL trunk lines — Hazira–Vijaipur–Jagdishpur and the Gujarat grid",
+      "No construction on the Right-of-User (RoU) corridor itself — the operator's strip is a no-build band",
+      "Restricted-activity band beyond the RoU — deep excavation, blasting & heavy foundations need operator NOC",
+      "GAIL HVJ gas trunk (Hazira–Vijaipur–Jagdishpur) · GSPL gas grid · ONGC crude & product lines — all cross Gujarat heavily",
     ],
     status: "planned",
-    note: "Corridor alignments require data partnerships with pipeline operators.",
+    note: "Corridor alignments require the operator's alignment sheet (GAIL / GSPL / ONGC).",
   },
   {
     id: 8,
     title: "High-tension transmission lines",
-    citation: "Indian Electricity Rules 1956 r.77–80 · CEA (Measures of Safety) Regs 2010",
+    citation: "Indian Electricity Rules 1956 r.77 (vertical) / r.80 (horizontal) · CEA (Safety) Regs 2010 Reg.58",
     checks: [
-      "Mandatory vertical & horizontal clearances by voltage class — multi-metre bands up to 400 kV",
-      "No building directly beneath HT corridors; tower-footing setbacks",
+      "Horizontal clearance by voltage class — 11/66 kV ≈ 1.2 m · 132 kV ≈ 2.2 m · 220 kV ≈ 3.7 m · 400 kV ≈ 6.4 m",
+      "Vertical clearance where a line crosses over — 2.5 m up to 33 kV, +0.3 m per extra 33 kV",
+      "No habitable structure directly under the line (CEA 2010 Reg.58); tower-footing setbacks",
     ],
     status: "planned",
     note: "GETCO / PGCIL corridor alignments required.",
@@ -136,8 +137,9 @@ export const RISK_LAYERS: RiskLayer[] = [
     title: "GDCR engine",
     citation: "Comprehensive GDCR (CGDCR-2017) — zoning, FSI, margins, parking",
     checks: [
-      "Zoning — R1/R2/R3, commercial, industrial, agriculture, gamtal",
-      "Base vs chargeable (premium) FSI, road-width-linked FSI caps & height slabs",
+      "Residential intensity — R1 (low-rise) · R2 (mid-rise) · R3 (high-rise); plus commercial, agriculture, gamtal",
+      "Non-development / green-belt / recreation zones flagged as no-build outcomes",
+      "Base vs chargeable (premium) FSI, road-width-linked FSI caps & height intuition",
       "Margins and parking norms by use and building height",
     ],
     status: "live",
@@ -209,7 +211,25 @@ export interface ScreenLayerResult {
   layer: string;
   outcome: ScreenOutcome;
   finding: string;
+  advice?: string;    // plain-English "what to do about it" (optional)
+  citation?: string;  // the statute / rule the finding rests on (optional)
 }
+
+// ── What each verdict means — a concise, honest legend ──────────
+// Rendered under the interactive result so a first-time reader knows how to
+// act on each outcome. Tolerant: purely presentational.
+export interface OutcomeLegend {
+  key: ScreenOutcome;
+  label: string;
+  meaning: string;
+}
+
+export const OUTCOME_LEGEND: OutcomeLegend[] = [
+  { key: "clear", label: "Clear", meaning: "No restriction from the encoded rules for the inputs given — still verify on the real survey number." },
+  { key: "caution", label: "Caution", meaning: "Buildable, but a site-specific NOC, clearance or confirmation is needed before plan submission." },
+  { key: "restricted", label: "Restricted", meaning: "A hard restriction applies — resolve it (zone change, NA, NOC) or design around the affected area." },
+  { key: "unknown", label: "Needs geodata", meaning: "The rule is encoded but the reference dataset isn't wired in yet — verify with a site survey / DILR / DISCOM / GAIL-ONGC sheet." },
+];
 
 export interface RiskScreenResponse {
   verdict?: string;
@@ -233,12 +253,12 @@ export type ScreenZone = (typeof SCREEN_ZONES)[number];
 // Used when the backend is unreachable. Produces an honest, rule-shaped
 // per-layer breakdown from the same inputs, so the demo never looks broken.
 
-const SEISMIC_BY_REGION: Record<ScreenRegion, { zone: string; outcome: ScreenOutcome; note: string }> = {
-  "Kutch": { zone: "Zone V", outcome: "restricted", note: "Zone V (severe) — highest IS-1893 design category; specialist structural design mandatory" },
-  "Saurashtra": { zone: "Zone III–IV", outcome: "caution", note: "Zone III–IV — moderate-to-high seismicity; confirm district band for the design coefficient" },
-  "North Gujarat": { zone: "Zone III–IV", outcome: "caution", note: "Zone III–IV — moderate seismicity; standard IS-1893 detailing with district check" },
-  "Central Gujarat": { zone: "Zone III", outcome: "clear", note: "Zone III — moderate; standard IS-1893 (Part 1) design applies" },
-  "South Gujarat": { zone: "Zone III", outcome: "clear", note: "Zone III — moderate; standard IS-1893 (Part 1) design applies" },
+const SEISMIC_BY_REGION: Record<ScreenRegion, { zone: string; outcome: ScreenOutcome; note: string; advice: string }> = {
+  "Kutch": { zone: "Zone V", outcome: "restricted", note: "Zone V (severe, Z=0.36) — highest IS-1893 design category; specialist structural design mandatory", advice: "Severe hazard: IS-13920 ductile detailing, deeper/raft foundations, ~8–15% structural-cost uplift and higher insurance loading vs Zone III." },
+  "Saurashtra": { zone: "Zone IV", outcome: "caution", note: "Zone IV (high, Z=0.24) — high seismicity; Zone-IV design + ductile detailing mandatory", advice: "High hazard: ~4–8% structural-cost uplift over Zone III and a modest insurance loading." },
+  "North Gujarat": { zone: "Zone IV", outcome: "caution", note: "Zone IV (high, Z=0.24) — high seismicity; Zone-IV design + ductile detailing", advice: "High hazard: ~4–8% structural-cost uplift over Zone III and a modest insurance loading." },
+  "Central Gujarat": { zone: "Zone III", outcome: "clear", note: "Zone III (moderate, Z=0.16) — standard IS-1893 (Part 1) design applies", advice: "Moderate hazard: no material seismic cost or insurance premium beyond code compliance." },
+  "South Gujarat": { zone: "Zone III", outcome: "clear", note: "Zone III (moderate, Z=0.16) — standard IS-1893 (Part 1) design applies", advice: "Moderate hazard: no material seismic cost or insurance premium beyond code compliance." },
 };
 
 const FSI_BY_ROAD: Record<number, { base: string; premium: string }> = {
@@ -281,6 +301,8 @@ export function localScreen(req: ScreenRequest): RiskScreenResponse {
       layer: "Seismic (IS 1893)",
       outcome: seismic.outcome,
       finding: `${seismic.zone} — ${seismic.note}`,
+      citation: "IS 1893 (Part 1) : 2016",
+      advice: seismic.advice,
     },
     {
       layer: "Agricultural / NA status",
@@ -288,6 +310,10 @@ export function localScreen(req: ScreenRequest): RiskScreenResponse {
       finding: req.is_agricultural
         ? "Agricultural land — NA (non-agricultural) conversion under GLRC §65 required before any development; check Ganotdhara / Navi Sharat tenure"
         : "Non-agricultural order assumed on record — no §65 conversion gate for the selected use",
+      citation: "Gujarat Land Revenue Code §65",
+      advice: req.is_agricultural
+        ? "Obtain the §65 NA order (and pay any Navi-Sharat premium / collector permission) before you transact or apply for a plan."
+        : undefined,
     },
     {
       layer: "Prohibited category",
@@ -297,12 +323,16 @@ export function localScreen(req: ScreenRequest): RiskScreenResponse {
     {
       layer: "Pipelines (PMP Act)",
       outcome: "caution",
-      finding: "Confirm no GAIL / ONGC ROU corridor clips the plot — the Right-of-User strip is a no-construction band under the PMP Act 1962",
+      finding: "Confirm no GAIL HVJ gas trunk / GSPL grid / ONGC crude RoU corridor clips the plot — the Right-of-User strip is a no-construction band",
+      citation: "PMP (RoU) Act 1962 §§4–7",
+      advice: "Obtain the operator's alignment sheet (GAIL / GSPL / ONGC) and their NOC for any work in the restricted-activity band; never build on the RoU strip.",
     },
     {
       layer: "HT transmission",
       outcome: "caution",
-      finding: "Verify clearance to any HT line by voltage class — multi-metre vertical/horizontal bands apply; check tower-footing setbacks with GETCO",
+      finding: "Verify clearance to any HT line by voltage class — 220 kV ≈ 3.7 m horizontal / 4.6 m vertical; no habitable structure under the line",
+      citation: "IE Rules 1956 r.77/80 · CEA 2010 Reg.58",
+      advice: "Keep the statutory horizontal & vertical clearance to conductors and confirm sag & tower-footing setbacks with GETCO / PGCIL / the DISCOM.",
     },
     {
       layer: "Water bodies & CRZ",
@@ -313,10 +343,16 @@ export function localScreen(req: ScreenRequest): RiskScreenResponse {
     },
     {
       layer: "GDCR",
-      outcome: narrowRoad ? "caution" : "clear",
+      outcome: req.zone === "Agriculture" ? "restricted" : narrowRoad ? "caution" : "clear",
       finding: req.zone === "Agriculture"
-        ? `Agriculture zone — development needs zone change / NA; on a ${req.road_width_m} m road, base FSI ${fsi.base}, premium to ${fsi.premium} once converted`
+        ? `Agriculture zone — base FSI 0.0; development needs a buildable-zone change + §65 NA. Once converted, a ${req.road_width_m} m road gives base FSI ${fsi.base}, premium to ${fsi.premium}`
         : `${req.zone} on a ${req.road_width_m} m road — base FSI ${fsi.base}, chargeable premium to ${fsi.premium}; margins & parking per CGDCR-2017`,
+      citation: "CGDCR-2017",
+      advice: req.zone === "Agriculture"
+        ? "No building on agricultural land until the zone change and NA order are in hand."
+        : narrowRoad
+          ? "A narrow abutting road constrains FSI and may cap height — widening or a corner plot can lift the yield."
+          : undefined,
     },
     {
       layer: "TP scheme",

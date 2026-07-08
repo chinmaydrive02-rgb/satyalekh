@@ -11,7 +11,7 @@ import TopNav from "@/components/TopNav";
 import { Reveal, CountUp } from "@/components/motion";
 import { API_BASE_URL } from "@/lib/api";
 import {
-  RISK_LAYERS, SAMPLE_CHECKS, SAMPLE_PARCEL,
+  RISK_LAYERS, SAMPLE_CHECKS, SAMPLE_PARCEL, OUTCOME_LEGEND,
   localScreen,
   SCREEN_REGIONS, SCREEN_ZONES, SCREEN_ROAD_WIDTHS,
   type LayerStatus, type CheckOutcome,
@@ -22,6 +22,7 @@ import {
   Waves, Building2, Map as MapIcon, Gavel, Scale, Layers, ShieldCheck,
   CheckCircle2, AlertTriangle, XCircle, ArrowRight, RotateCcw, MapPin,
   Search, UserCheck, Building, Radar, FileSearch, HelpCircle, Loader2, Play,
+  Lightbulb, BookMarked, ExternalLink,
 } from "lucide-react";
 
 /* ── Presentation metadata ────────────────────────────────────── */
@@ -70,6 +71,8 @@ function normaliseScreen(raw: RiskScreenResponse | null | undefined): RiskScreen
           layer: l.layer,
           outcome: VALID_OUTCOMES.includes(l.outcome) ? l.outcome : "unknown",
           finding: typeof l.finding === "string" ? l.finding : "",
+          ...(typeof l.advice === "string" && l.advice ? { advice: l.advice } : {}),
+          ...(typeof l.citation === "string" && l.citation ? { citation: l.citation } : {}),
         }))
     : [];
   const counts: Record<ScreenOutcome, number> = {
@@ -180,6 +183,55 @@ function LayerStack() {
           ONE VERDICT
         </text>
       </g>
+    </svg>
+  );
+}
+
+/* ── Corridor cross-section: RoU, HT clearance & plot setbacks ─── */
+// A schematic (not to scale) of the three horizontal restrictions that most
+// often clip a plot: the pipeline Right-of-User no-build strip, the HT-line
+// horizontal clearance, and the CGDCR margin/setback off the road. Inline SVG
+// with the existing draw-line keyframe; purely illustrative.
+
+function CorridorSection() {
+  return (
+    <svg viewBox="0 0 520 210" className="w-full h-auto" role="img"
+      aria-label="Schematic cross-section of pipeline Right-of-User strip, HT-line clearance and CGDCR plot setback">
+      {/* ground line */}
+      <path className="draw-line"
+        style={{ "--draw-len": 480, "--draw-delay": "0.1s" } as React.CSSProperties}
+        d="M20 150 L500 150" fill="none" stroke="var(--color-border-strong)"
+        strokeWidth="1.5" strokeDasharray="480" />
+
+      {/* road */}
+      <rect x="20" y="150" width="90" height="16" fill="rgba(127,216,164,0.10)" stroke="var(--color-border)" strokeWidth="1" />
+      <text x="65" y="182" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="var(--color-muted)">ROAD</text>
+
+      {/* CGDCR setback / margin */}
+      <path d="M110 150 L150 150" stroke="var(--color-brand)" strokeWidth="2" strokeDasharray="3 3" />
+      <text x="130" y="144" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="8.5" fill="var(--color-brand)">margin</text>
+
+      {/* buildable plot + building */}
+      <rect x="150" y="120" width="120" height="30" fill="rgba(127,216,164,0.14)" stroke="#7fd8a4" strokeWidth="1.2" />
+      <rect x="185" y="96" width="50" height="54" fill="rgba(127,216,164,0.20)" stroke="#7fd8a4" strokeWidth="1.2" />
+      <text x="210" y="182" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#7fd8a4">BUILDABLE</text>
+
+      {/* pipeline RoU no-build strip */}
+      <rect x="300" y="120" width="70" height="30" fill="rgba(230,150,80,0.12)" stroke="var(--color-accent-bright)" strokeWidth="1.2" strokeDasharray="4 3" />
+      <circle cx="335" cy="158" r="5" fill="none" stroke="var(--color-accent-bright)" strokeWidth="1.5" />
+      <text x="335" y="112" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="8.5" fill="var(--color-accent-bright)">RoU · no build</text>
+      <text x="335" y="182" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="8" fill="var(--color-muted)">pipeline</text>
+
+      {/* HT line + tower + clearance */}
+      <line x1="440" y1="30" x2="440" y2="150" stroke="var(--color-border-strong)" strokeWidth="1.5" />
+      <path d="M415 40 L465 40" stroke="var(--color-border-strong)" strokeWidth="1.5" />
+      <path className="draw-line"
+        style={{ "--draw-len": 90, "--draw-delay": "0.5s" } as React.CSSProperties}
+        d="M400 46 L490 46" fill="none" stroke="var(--color-accent-bright)" strokeWidth="1.2"
+        strokeDasharray="90" opacity="0.8" />
+      <line x1="490" y1="46" x2="490" y2="150" stroke="var(--color-accent-bright)" strokeWidth="1" strokeDasharray="3 3" opacity="0.7" />
+      <text x="445" y="70" fontFamily="ui-monospace, monospace" fontSize="8.5" fill="var(--color-accent-bright)">HT clearance</text>
+      <text x="445" y="182" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="8" fill="var(--color-muted)">HT tower</text>
     </svg>
   );
 }
@@ -365,10 +417,22 @@ function InteractiveScreening() {
                   </span>
                 </div>
                 {rowState === "resolved" && c.finding && (
-                  <p className="sl-anim text-xs text-muted leading-relaxed mt-1 pl-[52px]"
+                  <div className="sl-anim mt-1 pl-[52px] flex flex-col gap-1.5"
                     style={{ animation: "sl-fade-up 0.4s cubic-bezier(0.22,0.61,0.36,1) both" }}>
-                    {c.finding}
-                  </p>
+                    <p className="text-xs text-muted leading-relaxed">{c.finding}</p>
+                    {c.advice && (
+                      <p className="text-[11.5px] text-ink-soft leading-relaxed flex items-start gap-1.5">
+                        <Lightbulb size={12} className="text-brand shrink-0 mt-0.5" />
+                        <span>{c.advice}</span>
+                      </p>
+                    )}
+                    {c.citation && (
+                      <p className="text-[10.5px] font-mono text-faint leading-relaxed flex items-center gap-1.5">
+                        <BookMarked size={11} className="text-accent/70 shrink-0" />
+                        {c.citation}
+                      </p>
+                    )}
+                  </div>
                 )}
                 {rowState === "active" && (
                   <div className="mt-2 ml-[52px] h-1 rounded-full bg-surface-soft shimmer overflow-hidden" aria-hidden="true" />
@@ -421,6 +485,36 @@ function InteractiveScreening() {
               from encoded rules on an illustrative parcel, not live data for any real survey number.
             </p>
           )}
+
+          {/* What each verdict means — concise, honest legend */}
+          <div className="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+            {OUTCOME_LEGEND.map((o) => {
+              const meta = SCREEN_OUTCOME_META[o.key];
+              return (
+                <p key={o.key} className="text-[11px] text-muted leading-relaxed flex items-start gap-1.5">
+                  <span className="shrink-0 translate-y-0.5">{meta.icon}</span>
+                  <span>
+                    <strong className={`font-semibold ${meta.cls}`}>{o.label}</strong>
+                    {" — "}{o.meaning}
+                  </span>
+                </p>
+              );
+            })}
+          </div>
+
+          {/* Take it further — links to the already-live tools */}
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-faint font-semibold">Take it further</span>
+            <Link href="/compliance" className="text-[11.5px] font-semibold text-success inline-flex items-center gap-1 hover:text-brand transition-colors">
+              <Building2 size={12} /> FSI + stamp-duty calculator <ExternalLink size={10} />
+            </Link>
+            <Link href="/land-intel" className="text-[11.5px] font-semibold text-success inline-flex items-center gap-1 hover:text-brand transition-colors">
+              <Radar size={12} /> Infra distances (Land Intel) <ExternalLink size={10} />
+            </Link>
+            <Link href="/" className="text-[11.5px] font-semibold text-success inline-flex items-center gap-1 hover:text-brand transition-colors">
+              <Search size={12} /> Title score <ExternalLink size={10} />
+            </Link>
+          </div>
         </div>
       )}
     </div>
@@ -749,6 +843,16 @@ export default function RiskIntel() {
                 </li>
               ))}
             </ul>
+            <div className="card p-4 mb-6">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-faint font-semibold mb-2">
+                How the corridors clip a plot (schematic)
+              </p>
+              <CorridorSection />
+              <p className="text-[11px] text-muted leading-relaxed mt-2">
+                Setback off the road, the pipeline Right-of-User no-build strip and the
+                HT-line clearance each carve into the buildable footprint — not to scale.
+              </p>
+            </div>
             <Link href="/" className="btn btn-outline w-fit">
               <FileSearch size={14} /> Start with the title check
             </Link>

@@ -6,6 +6,9 @@ import SearchWidget from "@/components/SearchWidget";
 import TopNav from "@/components/TopNav";
 import WelcomeIntro from "@/components/WelcomeIntro";
 import { Reveal, CountUp, Parallax } from "@/components/motion";
+import HeroBackdrop from "@/components/HeroBackdrop";
+import RecordRails from "@/components/RecordRails";
+import { MagneticButton, Tilt } from "@/components/MagneticButton";
 import {
   Landmark, Languages, ShieldCheck, FileSearch, Bell, GitBranch,
   Vault, Scale, TrendingUp, Search, Cpu, FileCheck2, ArrowRight,
@@ -267,8 +270,9 @@ export default function Home() {
       <TopNav />
 
       {/* ── Hero ─────────────────────────────────────────────────── */}
-      <section className="hero-mesh pt-28 pb-16 sm:pb-20 px-4 sm:px-6 overflow-hidden">
-        <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
+      <section className="hero-mesh relative isolate pt-28 pb-16 sm:pb-20 px-4 sm:px-6 overflow-hidden">
+        <HeroBackdrop />
+        <div className="relative z-10 max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
           <div className="sl-anim flex flex-col gap-7 lg:pt-8" style={{ animation: "sl-fade-up 0.7s cubic-bezier(0.22,0.61,0.36,1) both" }}>
             <span className="inline-flex items-center gap-2.5 w-fit rounded-full border border-brand-border bg-brand-soft/70 px-3.5 py-1.5 text-xs font-semibold text-brand">
               <span className="pulse-dot" aria-hidden="true" />
@@ -325,6 +329,13 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── Credibility strip — built on official government rails ── */}
+      <section className="border-b border-border bg-surface-soft/40 py-8 sm:py-10 px-4 sm:px-6">
+        <Reveal className="max-w-[1200px] mx-auto">
+          <RecordRails />
+        </Reveal>
+      </section>
+
       {/* ── Portal marquee — the breadth signal ──────────────────── */}
       <section className="border-y border-border bg-surface py-3.5 overflow-hidden" aria-label="State land-record portals">
         <div className="marquee">
@@ -352,15 +363,16 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Trust strip: who it serves ───────────────────────────── */}
+      {/* ── Trust strip: who it serves — staggered rise ──────────── */}
       <section className="border-b border-border bg-surface px-4 sm:px-6">
-        <div className="max-w-[1200px] mx-auto grid grid-cols-2 lg:grid-cols-4">
+        <Reveal className="max-w-[1200px] mx-auto grid grid-cols-2 lg:grid-cols-4">
           {AUDIENCES.map((a, i) => (
             <div
               key={a.label}
-              className={`flex items-center gap-3 py-5 px-4 sm:px-6 border-border ${
+              className={`stagger-item flex items-center gap-3 py-5 px-4 sm:px-6 border-border ${
                 i === 1 ? "border-l" : i === 2 ? "border-t lg:border-t-0 lg:border-l" : i === 3 ? "border-l border-t lg:border-t-0" : ""
               }`}
+              style={{ "--stagger-i": i } as React.CSSProperties}
             >
               <span className="w-8 h-8 rounded-lg bg-brand-soft text-brand flex items-center justify-center shrink-0">{a.icon}</span>
               <span className="flex flex-col min-w-0">
@@ -369,7 +381,7 @@ export default function Home() {
               </span>
             </div>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       {/* ── Four channels — the fulfilment engine ────────────────── */}
@@ -531,11 +543,11 @@ export default function Home() {
               From survey number to title verdict
             </h2>
           </Reveal>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-8 relative">
-            {/* Dashed connector across the steps (desktop) */}
-            <div className="hidden md:block absolute top-6 left-[calc(16.67%+2rem)] right-[calc(16.67%+2rem)] border-t-2 border-dashed border-border-strong" aria-hidden="true" />
+          <Reveal className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-8 relative">
+            {/* Connector across the steps (desktop) — draws left→right on view */}
+            <div className="hidden md:block absolute top-6 left-[calc(16.67%+2rem)] right-[calc(16.67%+2rem)] h-0 border-t-2 border-dashed border-border-strong steps-connector" aria-hidden="true" />
             {HOW_IT_WORKS.map((s, i) => (
-              <Reveal key={i} delay={i * 120}>
+              <div key={i} className="stagger-item" style={{ "--stagger-i": i } as React.CSSProperties}>
                 <div className="flex flex-col gap-4 md:items-center md:text-center relative">
                   <div className="relative w-12 h-12 rounded-xl bg-brand text-white flex items-center justify-center shadow-md shrink-0 z-10 ring-4 ring-surface">
                     {s.icon}
@@ -546,9 +558,9 @@ export default function Home() {
                   <h3 className="text-lg font-semibold text-ink">{s.title}</h3>
                   <p className="text-sm text-muted leading-relaxed max-w-xs">{s.desc}</p>
                 </div>
-              </Reveal>
+              </div>
             ))}
-          </div>
+          </Reveal>
         </div>
       </section>
 
@@ -564,22 +576,24 @@ export default function Home() {
           </Reveal>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {FEATURES.map((f, i) => (
-              <Reveal key={i} delay={(i % 3) * 90}>
-                <Link
-                  href={f.href}
-                  className="card card-lift p-6 flex flex-col gap-3.5 group h-full hover:border-brand-border"
-                >
-                  <span className="w-11 h-11 rounded-xl bg-brand-soft text-brand border border-brand-border/60 flex items-center justify-center transition-colors group-hover:bg-brand group-hover:text-white">
-                    {f.icon}
-                  </span>
-                  <h3 className="text-base font-semibold text-ink group-hover:text-brand transition-colors">
-                    {f.title}
-                  </h3>
-                  <p className="text-sm text-muted leading-relaxed">{f.desc}</p>
-                  <span className="mt-auto pt-1 text-xs font-semibold text-brand inline-flex items-center gap-1 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all">
-                    Explore <ArrowRight size={12} />
-                  </span>
-                </Link>
+              <Reveal key={i} delay={(i % 3) * 90} className="h-full">
+                <Tilt className="h-full" max={5}>
+                  <Link
+                    href={f.href}
+                    className="card card-lift p-6 flex flex-col gap-3.5 group h-full hover:border-brand-border"
+                  >
+                    <span className="w-11 h-11 rounded-xl bg-brand-soft text-brand border border-brand-border/60 flex items-center justify-center transition-colors group-hover:bg-brand group-hover:text-white">
+                      {f.icon}
+                    </span>
+                    <h3 className="text-base font-semibold text-ink group-hover:text-brand transition-colors">
+                      {f.title}
+                    </h3>
+                    <p className="text-sm text-muted leading-relaxed">{f.desc}</p>
+                    <span className="mt-auto pt-1 text-xs font-semibold text-brand inline-flex items-center gap-1 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all">
+                      Explore <ArrowRight size={12} />
+                    </span>
+                  </Link>
+                </Tilt>
               </Reveal>
             ))}
           </div>
@@ -650,7 +664,7 @@ export default function Home() {
       {/* ── Dark CTA band ────────────────────────────────────────── */}
       <section className="px-4 sm:px-6 pb-20">
         <Reveal>
-          <div className="section-dark max-w-[1200px] mx-auto rounded-3xl px-8 py-14 sm:px-14 sm:py-16 overflow-hidden">
+          <div className="section-dark cta-sheen max-w-[1200px] mx-auto rounded-3xl px-8 py-14 sm:px-14 sm:py-16 overflow-hidden">
             <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
               <div className="max-w-xl">
                 <p className="eyebrow text-accent-bright mb-3">Start now</p>
@@ -664,16 +678,20 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0">
-                <a
-                  href="#top"
-                  onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                  className="btn btn-arrow bg-white text-pine hover:bg-brand-soft border border-white/10 px-7 py-3 text-base whitespace-nowrap font-semibold"
-                >
-                  Start a search <ArrowRight size={15} />
-                </a>
-                <Link href="/pricing" className="btn btn-ghost text-white/80 hover:text-white border border-white/20 hover:border-white/40 px-7 py-3 whitespace-nowrap">
-                  See pricing
-                </Link>
+                <MagneticButton strength={7}>
+                  <a
+                    href="#top"
+                    onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    className="btn btn-arrow bg-white text-pine hover:bg-brand-soft border border-white/10 px-7 py-3 text-base whitespace-nowrap font-semibold w-full"
+                  >
+                    Start a search <ArrowRight size={15} />
+                  </a>
+                </MagneticButton>
+                <MagneticButton strength={5}>
+                  <Link href="/pricing" className="btn btn-ghost text-white/80 hover:text-white border border-white/20 hover:border-white/40 px-7 py-3 whitespace-nowrap w-full">
+                    See pricing
+                  </Link>
+                </MagneticButton>
               </div>
             </div>
           </div>

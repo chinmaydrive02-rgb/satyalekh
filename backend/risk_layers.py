@@ -8,12 +8,17 @@
 # and the caller-supplied inputs.
 #
 # Honesty principle: layers that need geodata we do not have yet (heritage
-# proximity, forest/ESZ boundaries, pipeline ROU alignments, HT-line corridors,
+# proximity, forest/ESZ boundaries, pipeline RoU alignments, HT-line corridors,
 # CRZ, TP scheme registers) return outcome "unknown" with a "needs site/geodata
 # verification" finding rather than a fabricated distance. The layers we CAN
 # compute from inputs — seismic (from region), GDCR base-FSI (from zone + road
 # width) and agricultural/NA status (from is_agricultural) — return real,
 # deterministic findings derived from the tables below.
+#
+# Each per-layer result carries `layer`/`outcome`/`finding` (the fields the
+# frontend depends on) PLUS optional `citation` and `advice` fields — the
+# statute bit the finding rests on, and a plain-English "what to do about it".
+# These are additive; older frontends that ignore them keep working.
 #
 # NO randomness anywhere: same inputs -> same output.
 
@@ -32,15 +37,35 @@ from typing import Optional
 #   Zone V (severe / Z=0.36)   — Kutch region (2001 Bhuj epicentre belt)
 #   Zone IV (high / Z=0.24)    — Saurashtra & North Gujarat
 #   Zone III (moderate/Z=0.16) — Central/South Gujarat and the rest of the state
-# Region keys are normalised (lower-case, stripped) before lookup; a small set
-# of common district names is aliased onto their region so callers can pass
-# either a region ("Kutch", "Saurashtra") or a district ("Bhuj", "Rajkot").
+# `advice` carries the design/insurance-cost intuition per zone (informational,
+# not a quote): higher zones -> ductile detailing, heavier steel, higher premia.
 SEISMIC_ZONE_BY_REGION: dict[str, dict] = {
-    "kutch": {"zone": "V", "factor": 0.36, "severity": "severe"},
-    "saurashtra": {"zone": "IV", "factor": 0.24, "severity": "high"},
-    "north gujarat": {"zone": "IV", "factor": 0.24, "severity": "high"},
-    "central gujarat": {"zone": "III", "factor": 0.16, "severity": "moderate"},
-    "south gujarat": {"zone": "III", "factor": 0.16, "severity": "moderate"},
+    "kutch": {
+        "zone": "V", "factor": 0.36, "severity": "severe",
+        "advice": "Severe hazard: IS-13920 ductile detailing mandatory, deeper/raft "
+                  "foundations common, ~8–15% structural-cost uplift and higher "
+                  "property-insurance loading vs Zone III. Budget for a geotechnical report.",
+    },
+    "saurashtra": {
+        "zone": "IV", "factor": 0.24, "severity": "high",
+        "advice": "High hazard: Zone-IV seismic design + ductile detailing; ~4–8% "
+                  "structural-cost uplift over Zone III and a modest insurance loading.",
+    },
+    "north gujarat": {
+        "zone": "IV", "factor": 0.24, "severity": "high",
+        "advice": "High hazard: Zone-IV seismic design + ductile detailing; ~4–8% "
+                  "structural-cost uplift over Zone III and a modest insurance loading.",
+    },
+    "central gujarat": {
+        "zone": "III", "factor": 0.16, "severity": "moderate",
+        "advice": "Moderate hazard: standard IS-1893 Zone-III design; no material "
+                  "seismic cost or insurance premium beyond code compliance.",
+    },
+    "south gujarat": {
+        "zone": "III", "factor": 0.16, "severity": "moderate",
+        "advice": "Moderate hazard: standard IS-1893 Zone-III design; no material "
+                  "seismic cost or insurance premium beyond code compliance.",
+    },
 }
 
 # District / city -> region alias, so a caller passing a district still resolves.
@@ -81,33 +106,112 @@ ASI_PROHIBITED_M = 100     # <=100 m: prohibited
 ASI_REGULATED_M = 200      # 100–200 m: regulated (NOC required)
 
 
-# ── HT transmission — minimum horizontal clearance (metres) by voltage ───────
-# Source: Indian Electricity Rules 1956 r.77–80 and CEA (Measures relating to
-# Safety and Electric Supply) Regulations 2010, Schedule VII. These are the
-# statutory minimum HORIZONTAL clearances from a building to the nearest
-# conductor for overhead lines (low/medium up to 33 kV = 1.2 m; then +0.3 m per
-# additional 33 kV over 33 kV). Common voltage classes tabulated:
-#   11 kV / 66 kV  -> 1.2 m ; 132 kV -> 2.2 m ; 220 kV -> 3.7 m ; 400 kV -> 6.4 m
+# ── HT transmission — statutory clearances (metres) by voltage class ─────────
+# Source: Indian Electricity Rules 1956 r.77 (vertical, lines crossing over a
+# building) and r.80 (horizontal, from a building to the nearest conductor),
+# carried into CEA (Measures relating to Safety and Electric Supply) Regulations
+# 2010, Reg. 58 / Schedule VII. r.77/80 also give the base + increment rule:
+#   Horizontal — up to 33 kV = 1.2 m; then +0.3 m per additional 33 kV (or part).
+#   Vertical   — up to 33 kV = 2.5 m; then +0.3 m per additional 33 kV (or part).
+# The overriding rule (CEA 2010, Reg. 58) is that NO habitable/permanent
+# structure may exist directly under or within these bands of an overhead line.
+HT_CLEARANCE_M: dict[str, dict] = {
+    "11kV":  {"horizontal": 1.2, "vertical": 2.5},
+    "66kV":  {"horizontal": 1.2, "vertical": 2.5},
+    "132kV": {"horizontal": 2.2, "vertical": 3.7},
+    "220kV": {"horizontal": 3.7, "vertical": 4.6},
+    "400kV": {"horizontal": 6.4, "vertical": 7.3},
+}
+# Back-compat: horizontal-only view kept for any existing importer.
 HT_HORIZONTAL_CLEARANCE_M: dict[str, float] = {
-    "11kV": 1.2,
-    "66kV": 1.2,
-    "132kV": 2.2,
-    "220kV": 3.7,
-    "400kV": 6.4,
+    k: v["horizontal"] for k, v in HT_CLEARANCE_M.items()
 }
 
 
-# ── CGDCR-2017 — base FSI by zone and abutting-road-width band ────────────────
-# Source: Comprehensive General Development Control Regulations 2017 (Gujarat),
-# Table for permissible base FSI keyed to zone and the width of the abutting
-# road. Values below are the widely-applied CGDCR base-FSI slabs; chargeable
-# (premium) FSI can lift these further on payment (not computed here).
+# ── PMP (RoU) Act 1962 — petroleum & gas pipeline corridors ──────────────────
+# Source: Petroleum & Minerals Pipelines (Acquisition of Right of User in Land)
+# Act 1962, §§ 4–7. The operator acquires a Right-of-User (RoU) strip — the land
+# owner retains title but CANNOT build on / obstruct the RoU. Typical operator
+# alignment sheets use a ~18–30 m RoU width (trunk gas lines wider), with a
+# further "restricted activity" band either side (deep excavation, blasting,
+# heavy foundations need operator NOC). Major Gujarat trunk lines encoded so the
+# UI can name them honestly; exact alignments still need the operator's sheet.
+PMP_ROU_WIDTH_M = 30          # indicative no-construction RoU strip (verify per line)
+PMP_RESTRICTED_BAND_M = 60    # indicative restricted-activity band beyond the RoU
+GUJARAT_TRUNK_PIPELINES: list[dict] = [
+    {
+        "name": "HVJ trunk (Hazira–Vijaipur–Jagdishpur)",
+        "operator": "GAIL",
+        "product": "natural gas",
+        "note": "National gas trunk line originating at Hazira (Surat) — runs NE "
+                "across South & Central Gujarat before leaving the state.",
+    },
+    {
+        "name": "Dahej–Uran / Gujarat gas grid",
+        "operator": "GAIL / GSPL",
+        "product": "natural gas",
+        "note": "Dense gas-grid spurs across the Bharuch–Vadodara–Ahmedabad belt.",
+    },
+    {
+        "name": "ONGC crude & product lines",
+        "operator": "ONGC",
+        "product": "crude oil / petroleum products",
+        "note": "Ankleshwar, Gandhar, Hazira and Cambay-basin crude/product lines "
+                "criss-cross Central & South Gujarat.",
+    },
+]
+
+
+# ── Other utility easements (advisory) ───────────────────────────────────────
+# Grouped advisory for the everyday buried/overhead services that also carry
+# easements or setback expectations but are not a single statute: piped-gas
+# distribution (PNGRB-licensed CGD networks), municipal water & sewer mains,
+# and OFC / telecom right-of-way (Indian Telegraph RoW Rules 2016). Not a hard
+# restriction on their own — but a service easement across the plot constrains
+# where you can put foundations, basements and boundary walls.
+UTILITY_EASEMENTS = [
+    "Piped natural-gas (CGD) distribution mains — PNGRB-licensed operator setbacks",
+    "Municipal water & sewer trunk mains — no-build easement over the alignment",
+    "OFC / telecom right-of-way — Indian Telegraph RoW Rules 2016 easements",
+]
+
+
+# ── AAI NOCAS / Works of Defence — aviation & defence height zones ───────────
+# Source: GSR 751(E) 2015 (Aircraft — Demolition of Obstructions Caused by
+# Buildings and Trees etc. Rules) administered via AAI's NOCAS colour-coded
+# height maps around aerodromes, plus the approach/transition funnel surfaces of
+# the ICAO obstacle-limitation surfaces; and the Works of Defence Act 1903
+# (restricted zones around cantonments / naval / air-force stations).
+# Colour zones are the AAI convention (green = tallest permissible, red =
+# near-zero / NOC mandatory). Exact caps are site- and elevation-specific — we
+# encode the schema, never a fabricated per-plot height.
+AAI_COLOUR_ZONES = [
+    {"colour": "green", "meaning": "Outermost — highest permissible top elevation; NOCAS NOC still advisable"},
+    {"colour": "blue", "meaning": "Intermediate — reduced height cap; NOCAS NOC required above the cap"},
+    {"colour": "yellow", "meaning": "Inner — low height cap near approach/transition surfaces"},
+    {"colour": "red", "meaning": "Innermost / funnel — near-zero cap; construction needs explicit AAI NOC"},
+]
+DEFENCE_ADVISORY = (
+    "Works of Defence Act 1903 imposes no-construction / restricted-works zones "
+    "around notified defence installations (cantonments, naval & air-force "
+    "stations); some also fall under 'no-fly' / security bands. Verify with the "
+    "local Station HQ / Defence Estates before planning near one."
+)
+
+
+# ── CGDCR-2017 — base FSI, permitted use & height intuition by zone ───────────
+# Source: Comprehensive General Development Control Regulations 2017 (Gujarat).
+# Base FSI is keyed to zone AND the width of the abutting road; chargeable
+# (premium) FSI can lift these further on payment (not computed here). Height is
+# not a single statutory number in CGDCR (it flows from FSI, margins, road width
+# and the fire/high-rise rules) — so we carry a plain-English HEIGHT INTUITION,
+# not a fabricated metre cap.
 #
 # Road-width bands (metres): <9, 9–<12, 12–<18, 18–<24, 24–<30, >=30.
-# Zones: agriculture, R1 (residential-affordable / gamtal fringe),
-#        R2 (general residential), R3 (high-density residential), commercial.
-# A base FSI of 0.0 for the agriculture zone reflects that development requires
-# NA conversion + zone change first (see the agri/NA layer).
+# Residential intensity distinctions:
+#   R1 — low-intensity / affordable / gamtal-fringe residential (low rise)
+#   R2 — general residential (mid rise)
+#   R3 — high-density residential (high rise, towers on wide roads)
 ROAD_WIDTH_BANDS_M = [9.0, 12.0, 18.0, 24.0, 30.0]   # lower edges of slabs >9m
 
 # For each zone: FSI for [<9m, 9–12, 12–18, 18–24, 24–30, >=30]
@@ -117,6 +221,54 @@ GDCR_BASE_FSI: dict[str, list[float]] = {
     "r2":          [1.2, 1.8, 1.8, 2.7, 2.7, 3.0],
     "r3":          [1.8, 1.8, 2.7, 3.0, 3.6, 4.0],
     "commercial":  [1.5, 2.0, 3.0, 4.0, 4.0, 5.4],
+}
+
+# Per-zone descriptors: permitted-use intuition + height intuition. Informational
+# strings (CGDCR-2017 style), NOT a substitute for the sanctioned DP/TP zoning.
+GDCR_ZONE_PROFILE: dict[str, dict] = {
+    "agriculture": {
+        "use": "Farming / farmhouse only — no urban development without a zone "
+               "change to a developable use plus s.65 NA conversion.",
+        "height": "No habitable-building height until converted.",
+    },
+    "r1": {
+        "use": "Low-intensity residential (plotted / affordable / gamtal-fringe); "
+               "small shops on the ground floor typically permitted.",
+        "height": "Low-rise — typically up to ~2–4 floors on narrow roads.",
+    },
+    "r2": {
+        "use": "General residential — apartments and mixed residential with "
+               "convenience commercial along wider roads.",
+        "height": "Mid-rise; height rises with road width and chargeable FSI.",
+    },
+    "r3": {
+        "use": "High-density residential — apartment towers, higher ground coverage.",
+        "height": "High-rise on 18 m+ roads; high-rise fire/NOC rules apply above 15/23/45 m.",
+    },
+    "commercial": {
+        "use": "Commercial / mixed use — offices, retail, hospitality.",
+        "height": "Mid- to high-rise on wide roads; high-rise NOC regime applies.",
+    },
+}
+
+# ── Non-developable / no-building CGDCR zones (explicit outcomes) ─────────────
+# Zones where the sanctioned plan permits little or no building. Passing any of
+# these returns a hard "restricted" so the UI never green-lights construction on
+# land the DP has reserved.
+NON_DEVELOPABLE_ZONES: dict[str, str] = {
+    "non-development": "Non-development / no-development zone — the DP reserves this "
+                       "land against building; development is not permitted.",
+    "green-belt": "Green-belt / agricultural-green zone — reserved as open/green; "
+                  "no urban building (limited farm/utility uses only).",
+    "green belt": "Green-belt / agricultural-green zone — reserved as open/green; "
+                  "no urban building (limited farm/utility uses only).",
+    "gamtal": "Gamtal (village abadi) — old settlement core; special/relaxed norms "
+              "apply and title/tenure needs care, but it is NOT a general "
+              "developable zone — verify the sanctioned use plot-by-plot.",
+    "recreation": "Recreation / garden reservation — reserved as open space; no "
+                  "private building.",
+    "water-body": "Water-body / lake reservation — no building; buffer applies.",
+    "water body": "Water-body / lake reservation — no building; buffer applies.",
 }
 
 # Zone-name aliases so callers can pass friendly labels.
@@ -198,16 +350,16 @@ LAYERS: list[dict] = [
     {
         "key": "pipeline_rou",
         "title": "Petroleum & gas pipelines",
-        "citation": "Petroleum & Minerals Pipelines (Acquisition of Right of User) Act 1962",
+        "citation": "Petroleum & Minerals Pipelines (Acquisition of Right of User) Act 1962 §§4–7",
         "status": "planned",
-        "checks": "No-construction Right-of-User corridor and restricted-activity bands around ONGC/GAIL trunk lines.",
+        "checks": "No-construction RoU corridor + restricted-activity band around GAIL HVJ gas trunk & ONGC crude lines.",
     },
     {
         "key": "ht_line",
         "title": "High-tension transmission lines",
-        "citation": "Indian Electricity Rules 1956 r.77–80 · CEA (Measures of Safety) Regs 2010 Sch. VII",
+        "citation": "Indian Electricity Rules 1956 r.77 (vertical) / r.80 (horizontal) · CEA (Safety) Regs 2010 Reg.58",
         "status": "planned",
-        "checks": "Horizontal/vertical clearances by voltage class (11/66/132/220/400 kV) and tower-footing setbacks.",
+        "checks": "Horizontal & vertical clearances by voltage class (11/66/132/220/400 kV); no habitable structure under the line.",
     },
     {
         "key": "water_crz",
@@ -221,7 +373,7 @@ LAYERS: list[dict] = [
         "title": "GDCR engine",
         "citation": "Comprehensive GDCR (CGDCR-2017) — zoning, base/premium FSI, margins, parking",
         "status": "live",
-        "checks": "Base FSI by zone (R1/R2/R3/commercial/agriculture) and abutting-road-width band; chargeable premium noted.",
+        "checks": "Permitted use, base FSI & height intuition by zone (R1/R2/R3/commercial/agriculture) and abutting-road-width band; non-developable zones flagged.",
     },
     {
         "key": "tp_scheme",
@@ -246,23 +398,29 @@ LAYERS_BY_KEY: dict[str, dict] = {layer["key"]: layer for layer in LAYERS}
 # ─────────────────────────────────────────────────────────────────────────────
 # PER-LAYER SCREENERS (deterministic)
 # ─────────────────────────────────────────────────────────────────────────────
+# Each screener returns (outcome, finding, advice). `advice` may be "" when the
+# layer has nothing actionable to add. `citation` is attached from the registry
+# by screen_parcel(), so screeners only return the finding-level trio.
 
 def _norm(s: Optional[str]) -> str:
     return (s or "").strip().lower()
 
 
-def _screen_seismic(region: Optional[str]) -> tuple[str, str]:
+def _screen_seismic(region: Optional[str]) -> tuple[str, str, str]:
     """IS-1893 zone from the region/district. Computable from inputs."""
     if not region or not _norm(region):
-        return "unknown", "No region provided — supply a Gujarat region/district to resolve the IS-1893 seismic zone."
+        return ("unknown",
+                "No region provided — supply a Gujarat region/district to resolve the IS-1893 seismic zone.",
+                "")
     key = _norm(region)
     key = _SEISMIC_REGION_ALIASES.get(key, key)
     info = SEISMIC_ZONE_BY_REGION.get(key)
     if info is None:
-        return "unknown", (
-            f"Region '{region}' not in the encoded Gujarat seismic table — "
-            "pass Kutch / Saurashtra / North Gujarat / Central Gujarat / South Gujarat "
-            "or a known district.")
+        return ("unknown",
+                (f"Region '{region}' not in the encoded Gujarat seismic table — "
+                 "pass Kutch / Saurashtra / North Gujarat / Central Gujarat / South Gujarat "
+                 "or a known district."),
+                "")
     zone, factor, severity = info["zone"], info["factor"], info["severity"]
     if zone == "V":
         outcome = "restricted"
@@ -270,67 +428,95 @@ def _screen_seismic(region: Optional[str]) -> tuple[str, str]:
         outcome = "caution"
     else:
         outcome = "clear"
-    return outcome, (
+    finding = (
         f"IS-1893 Zone {zone} ({severity}, seismic zone factor Z={factor}). "
         f"{'Severe seismic hazard — ductile detailing and higher structural cost apply.' if zone == 'V' else ''}"
         f"{'High seismic hazard — IS-1893 zone-IV design mandatory.' if zone == 'IV' else ''}"
         f"{'Moderate hazard — standard IS-1893 zone-III design.' if zone == 'III' else ''}"
     ).strip()
+    return outcome, finding, info["advice"]
 
 
-def _screen_gdcr(zone: Optional[str], road_width_m: Optional[float]) -> tuple[str, str]:
-    """CGDCR-2017 base FSI from zone + abutting road width. Computable."""
+def _screen_gdcr(zone: Optional[str], road_width_m: Optional[float]) -> tuple[str, str, str]:
+    """CGDCR-2017 use / base FSI / height intuition from zone + road width."""
     if not zone or not _norm(zone):
-        return "unknown", "No zone provided — supply CGDCR zone (agriculture/R1/R2/R3/commercial) to compute base FSI."
-    zkey = _ZONE_ALIASES.get(_norm(zone))
+        return ("unknown",
+                "No zone provided — supply CGDCR zone (agriculture/R1/R2/R3/commercial) to compute base FSI.",
+                "")
+    zkey_raw = _norm(zone)
+
+    # Non-developable / no-building DP zones -> explicit hard restriction.
+    if zkey_raw in NON_DEVELOPABLE_ZONES:
+        return ("restricted",
+                NON_DEVELOPABLE_ZONES[zkey_raw],
+                "Land reserved against building in the sanctioned Development Plan — a "
+                "buildable-zone change is required before any construction is even applied for.")
+
+    zkey = _ZONE_ALIASES.get(zkey_raw)
     if zkey is None:
-        return "unknown", (
-            f"Zone '{zone}' not recognised — use agriculture / R1 / R2 / R3 / commercial.")
+        return ("unknown",
+                (f"Zone '{zone}' not recognised — use agriculture / R1 / R2 / R3 / commercial "
+                 "(or a non-developable zone: non-development / green-belt / gamtal / recreation)."),
+                "")
+
+    profile = GDCR_ZONE_PROFILE.get(zkey, {})
+    use_note = profile.get("use", "")
+    height_note = profile.get("height", "")
+
     if road_width_m is None:
-        return "unknown", (
-            f"Zone {zkey.upper()} recognised but no abutting road width provided — "
-            "CGDCR base FSI is road-width-linked; supply road_width_m.")
+        return ("unknown",
+                (f"Zone {zkey.upper()} recognised ({use_note}) but no abutting road width provided — "
+                 "CGDCR base FSI is road-width-linked; supply road_width_m."),
+                height_note)
     try:
         rw = float(road_width_m)
     except (TypeError, ValueError):
-        return "unknown", "road_width_m is not a number."
+        return "unknown", "road_width_m is not a number.", ""
     if rw <= 0:
-        return "unknown", "road_width_m must be positive."
+        return "unknown", "road_width_m must be positive.", ""
+
     idx = _road_slab_index(rw)
     fsi = GDCR_BASE_FSI[zkey][idx]
     slab = _road_slab_label(idx)
+
     if zkey == "agriculture":
-        return "restricted", (
-            f"Agriculture zone: base FSI 0.0 — development is not permissible without "
-            f"zone change + NA conversion. Abutting road {rw:g} m ({slab}).")
-    # Non-agricultural zones: clear (development permissible under FSI regime),
-    # but call out constrained FSI on narrow roads as caution.
+        return ("restricted",
+                (f"Agriculture zone: base FSI 0.0 — development is not permissible without "
+                 f"zone change + NA conversion. Abutting road {rw:g} m ({slab}). {use_note}"),
+                height_note)
+
     outcome = "caution" if rw < 12.0 else "clear"
     caution_note = " Narrow abutting road constrains FSI and may cap height." if outcome == "caution" else ""
-    return outcome, (
+    finding = (
         f"CGDCR {zkey.upper()} zone @ {rw:g} m road ({slab} slab): base FSI {fsi:g}. "
-        f"Chargeable/premium FSI may lift this further on payment (not computed here)."
-        f"{caution_note}")
+        f"{use_note} Chargeable/premium FSI may lift this further on payment (not computed here)."
+        f"{caution_note}"
+    )
+    return outcome, finding, height_note
 
 
-def _screen_agri_na(is_agricultural: Optional[bool]) -> tuple[str, str]:
+def _screen_agri_na(is_agricultural: Optional[bool]) -> tuple[str, str, str]:
     """Agricultural/NA status from the is_agricultural flag. Computable."""
     if is_agricultural is None:
-        return "unknown", (
-            "Agricultural status not supplied — set is_agricultural to determine whether "
-            "s.65 NA conversion is required.")
+        return ("unknown",
+                ("Agricultural status not supplied — set is_agricultural to determine whether "
+                 "s.65 NA conversion is required."),
+                "")
     if is_agricultural:
-        return "restricted", (
-            "Parcel is agricultural — Gujarat Land Revenue Code s.65 NA (non-agricultural) "
-            "conversion is required before any non-agricultural development; also verify "
-            "Ganotdhara tenancy and Navi Sharat (new-tenure) transfer restrictions.")
-    return "clear", (
-        "Parcel is recorded non-agricultural — s.65 NA conversion not required for "
-        "development. Still confirm the NA order and tenure (Juni/Navi Sharat) on the 7/12.")
+        return ("restricted",
+                ("Parcel is agricultural — Gujarat Land Revenue Code s.65 NA (non-agricultural) "
+                 "conversion is required before any non-agricultural development; also verify "
+                 "Ganotdhara tenancy and Navi Sharat (new-tenure) transfer restrictions."),
+                "Obtain the s.65 NA order (and pay any Navi-Sharat premium / collector permission) "
+                "before you transact or apply for a building plan.")
+    return ("clear",
+            ("Parcel is recorded non-agricultural — s.65 NA conversion not required for "
+             "development. Still confirm the NA order and tenure (Juni/Navi Sharat) on the 7/12."),
+            "")
 
 
-def _screen_needs_geodata(layer_key: str, what: str,
-                          lat: Optional[float], lng: Optional[float]) -> tuple[str, str]:
+def _screen_needs_geodata(what: str, advice: str,
+                          lat: Optional[float], lng: Optional[float]) -> tuple[str, str, str]:
     """Honest 'unknown' for layers that need geodata we don't yet hold.
 
     Does NOT fabricate a distance. Notes whether coordinates were supplied so
@@ -342,10 +528,11 @@ def _screen_needs_geodata(layer_key: str, what: str,
         if have_coords else
         "No coordinates supplied; "
     )
-    return "unknown", (
+    finding = (
         f"{coord_note}{what} needs site/geodata verification — "
         "the reference dataset for this layer is not yet wired into the screener."
     )
+    return "unknown", finding, advice
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -371,56 +558,87 @@ def screen_parcel(
     Returns a dict:
       {
         "inputs": {...echo of inputs...},
-        "layers": [ {key, title, citation, status, outcome, finding}, ... 12 ],
+        "layers": [ {key, title, citation, status, outcome, finding,
+                     advice?, ...}, ... 12 ],
         "summary": {"clear", "caution", "restricted", "unknown"},
         "verdict": "<headline verdict string>",
       }
 
+    The per-layer object always carries key/title/citation/status/outcome/finding
+    (the fields the frontend depends on) and ADDS an `advice` string (may be "").
     Determinism: no randomness, no wall-clock, no I/O — same inputs -> same output.
     """
     # Compute the outcomes we can derive from inputs.
-    seismic_outcome, seismic_finding = _screen_seismic(region)
-    gdcr_outcome, gdcr_finding = _screen_gdcr(zone, road_width_m)
-    agri_outcome, agri_finding = _screen_agri_na(is_agricultural)
+    seismic = _screen_seismic(region)
+    gdcr = _screen_gdcr(zone, road_width_m)
+    agri = _screen_agri_na(is_agricultural)
 
-    # Layers needing geodata -> honest "unknown".
+    # Layers needing geodata -> honest "unknown", each with actionable advice.
     heritage = _screen_needs_geodata(
-        "heritage_asi", "AMASR 100 m prohibited / 100–200 m regulated proximity", lat, lng)
+        "AMASR 100 m prohibited / 100–200 m regulated proximity",
+        "Confirm the nearest ASI monument; within 100 m no NOC is possible, 100–200 m "
+        "needs a National Monuments Authority / Competent Authority NOC.",
+        lat, lng)
     forest = _screen_needs_geodata(
-        "forest_ecozone", "protected-area / eco-sensitive-zone proximity", lat, lng)
+        "protected-area / eco-sensitive-zone proximity",
+        "Check distance to the nearest sanctuary/national park and its ESZ notification "
+        "(10 km default where un-notified); FC Act clearance applies on forest land.",
+        lat, lng)
     airport = _screen_needs_geodata(
-        "airport_defence", "AAI NOCAS funnel-surface / defence-band proximity", lat, lng)
+        "AAI NOCAS colour-zone / approach-transition funnel & defence-band proximity",
+        "Raise a NOCAS application for the height you intend; near a defence installation "
+        + DEFENCE_ADVISORY,
+        lat, lng)
     pipeline = _screen_needs_geodata(
-        "pipeline_rou", "PMP Act Right-of-User corridor proximity", lat, lng)
+        f"PMP-Act Right-of-User corridor proximity (indicative ~{PMP_ROU_WIDTH_M} m RoU "
+        f"+ ~{PMP_RESTRICTED_BAND_M} m restricted band) — GAIL HVJ gas trunk & ONGC crude lines cross Gujarat",
+        "No construction is permitted on a pipeline RoU strip (PMP Act 1962); obtain the "
+        "operator's alignment sheet (GAIL/GSPL/ONGC) and their NOC for any work in the band.",
+        lat, lng)
     ht = _screen_needs_geodata(
-        "ht_line", "HT-line corridor proximity / voltage-class clearance", lat, lng)
+        "HT-line corridor proximity — horizontal & vertical clearance by voltage class "
+        "(11/66/132/220/400 kV); no habitable structure under the line",
+        "IE Rules r.77/80 + CEA 2010 Reg.58: keep the statutory horizontal & vertical "
+        "clearance to conductors and never build under the line; confirm sag & tower "
+        "footing with GETCO/PGCIL/DISCOM.",
+        lat, lng)
     water = _screen_needs_geodata(
-        "water_crz", "water-body buffer / CRZ classification", lat, lng)
+        "water-body buffer / CRZ classification",
+        "Confirm lake/river no-development buffers and (for coastal parcels) the CRZ "
+        "I–IV category before layout.",
+        lat, lng)
     tp = _screen_needs_geodata(
-        "tp_scheme", "GTPUDA TP-scheme final-plot mapping and finalisation status", lat, lng)
+        "GTPUDA TP-scheme final-plot mapping and finalisation status",
+        "Match the deed's original survey number to its Final Plot (FP) number, and "
+        "confirm betterment charges are paid on a finalised scheme.",
+        lat, lng)
     fraud = _screen_needs_geodata(
-        "fraud_litigation", "eCourts litigation / mutation-velocity screening (owner name required)", lat, lng)
+        "eCourts litigation / mutation-velocity screening (owner name required)",
+        "Run the live district-court litigation check on the recorded owner and review "
+        "mutation velocity / PoA chains for benami patterns.",
+        lat, lng)
 
     # prohibited_category is a title-record screen (needs the 7/12), not a
     # coordinate check — mark unknown here with an honest pointer.
     prohibited = (
         "unknown",
-        "Prohibited-category screen runs on the title record (7/12 owner/tenure fields), "
-        "not on coordinates — supply the parcel's land record to evaluate government/gauchar/"
-        "wakf/trust/forest flags.",
+        ("Prohibited-category screen runs on the title record (7/12 owner/tenure fields), "
+         "not on coordinates — supply the parcel's land record to evaluate government/gauchar/"
+         "wakf/trust/forest flags."),
+        "Pull the 7/12 extract and run the 20-point prohibited-category screen inside the title score.",
     )
 
-    outcomes: dict[str, tuple[str, str]] = {
+    outcomes: dict[str, tuple[str, str, str]] = {
         "heritage_asi": heritage,
         "forest_ecozone": forest,
         "airport_defence": airport,
-        "seismic": (seismic_outcome, seismic_finding),
-        "agri_na": (agri_outcome, agri_finding),
+        "seismic": seismic,
+        "agri_na": agri,
         "prohibited_category": prohibited,
         "pipeline_rou": pipeline,
         "ht_line": ht,
         "water_crz": water,
-        "gdcr": (gdcr_outcome, gdcr_finding),
+        "gdcr": gdcr,
         "tp_scheme": tp,
         "fraud_litigation": fraud,
     }
@@ -429,16 +647,19 @@ def screen_parcel(
     summary = {"clear": 0, "caution": 0, "restricted": 0, "unknown": 0}
     for layer in LAYERS:
         key = layer["key"]
-        outcome, finding = outcomes[key]
+        outcome, finding, advice = outcomes[key]
         summary[outcome] += 1
-        layers_out.append({
+        entry = {
             "key": key,
             "title": layer["title"],
             "citation": layer["citation"],
             "status": layer["status"],
             "outcome": outcome,
             "finding": finding,
-        })
+        }
+        if advice:
+            entry["advice"] = advice
+        layers_out.append(entry)
 
     verdict = _verdict(summary)
 

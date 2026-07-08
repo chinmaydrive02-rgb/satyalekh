@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   Search, UploadCloud, Phone, LayoutDashboard, TrendingUp, ShieldCheck, Menu, X,
   Wallet, Sparkles, Vault, BookOpen, Bell, ChevronDown, Users, Globe2, Radar, Briefcase,
+  BadgeCheck,
 } from 'lucide-react';
 import { getUserEmail, fetchCredits, fetchUnseenAlertCount, CreditsInfo, isDemoActive } from '@/lib/api';
 import { useRafScroll } from '@/components/motion';
@@ -62,6 +63,7 @@ export default function TopNav() {
     { href: '/upload', label: 'Title Scanner', icon: <UploadCloud size={15}/> },
     { href: '/land-intel', label: 'Land Intel', icon: <Sparkles size={15}/> },
     { href: '/risk-intel', label: 'Risk Intel', icon: <Radar size={15}/> },
+    { href: '/trust', label: 'Trust', icon: <BadgeCheck size={15}/> },
     { href: '/pricing', label: 'Pricing', icon: <Wallet size={15}/> },
   ];
 
@@ -175,9 +177,14 @@ export default function TopNav() {
           </button>
        </div>
 
-       {/* Mobile Dropdown */}
-       {mobileOpen && (
-         <div className="lg:hidden px-4 pb-4 pt-2 border-t border-border bg-surface flex flex-col gap-0.5 max-h-[calc(100vh-64px)] overflow-y-auto">
+       {/* Mobile Dropdown — smooth height/opacity via grid-rows trick */}
+       <div
+         className={`lg:hidden grid transition-[grid-template-rows,opacity] duration-300 [transition-timing-function:cubic-bezier(0.22,0.61,0.36,1)] ${
+           mobileOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 pointer-events-none'
+         }`}
+       >
+        <div className="overflow-hidden min-h-0">
+         <div className="px-4 pb-4 pt-2 border-t border-border bg-surface flex flex-col gap-0.5 max-h-[calc(100vh-64px)] overflow-y-auto">
            {allLinks.map((link) => {
               const isActive = pathname === link.href;
               const badge = 'badge' in link ? (link as { badge?: number }).badge : 0;
@@ -209,7 +216,8 @@ export default function TopNav() {
              </Link>
            )}
          </div>
-       )}
+        </div>
+       </div>
     </nav>
   );
 }

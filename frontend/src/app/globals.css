@@ -488,6 +488,150 @@
   @media (hover: hover) {
     .btn-arrow:hover:not(:disabled) svg:last-child { transform: translateX(3px); }
   }
+
+  /* ═══════════════════════════════════════════════════════════════
+     WOW PASS — hero backdrop, tilt, magnetic CTAs, sheen, connectors
+     Ambient loops are long (20–40s) and very low-contrast; all pointer
+     effects are transform-only and rAF-throttled from JS. Every rule
+     here has a matching disable in the prefers-reduced-motion block.
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* ── Hero backdrop — layered animated field behind the hero ──── */
+  .hero-backdrop {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .hero-backdrop-blob {
+    position: absolute;
+    width: 46rem;
+    height: 46rem;
+    border-radius: 9999px;
+    filter: blur(60px);
+    opacity: 0.5;
+    will-change: transform;
+  }
+  .hero-backdrop-blob--brand {
+    top: -18rem;
+    left: -12rem;
+    background: radial-gradient(circle at 50% 50%,
+      color-mix(in srgb, var(--color-brand) 30%, transparent), transparent 62%);
+    animation: sl-hb-drift-a 34s ease-in-out infinite;
+  }
+  .hero-backdrop-blob--gold {
+    bottom: -22rem;
+    right: -14rem;
+    background: radial-gradient(circle at 50% 50%,
+      color-mix(in srgb, var(--color-accent-bright) 26%, transparent), transparent 60%);
+    animation: sl-hb-drift-b 40s ease-in-out infinite;
+  }
+  .hero-backdrop-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .hero-backdrop-grid {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: sl-hb-grid 60s linear infinite;
+    will-change: transform;
+  }
+  .hero-backdrop-contour {
+    transform-box: fill-box;
+    transform-origin: 300px 230px;
+    animation: sl-hb-breathe 26s ease-in-out infinite;
+    will-change: transform;
+  }
+  .hero-backdrop-contour--alt {
+    transform-origin: 960px 470px;
+    animation-duration: 32s;
+    animation-delay: -8s;
+  }
+  .hero-backdrop-grain {
+    position: absolute;
+    inset: 0;
+    background-image: var(--grain);
+    background-size: 150px 150px;
+    opacity: 0.04;
+  }
+
+  /* ── Pointer 3D tilt (cards) ── */
+  .tilt-perspective { perspective: 900px; }
+  .tilt-inner {
+    transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+                box-shadow 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+
+  /* ── Magnetic CTA wrapper — springs back on pointer leave ── */
+  .magnetic {
+    transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+    will-change: transform;
+  }
+
+  /* ── Animated sheen sweeping across the dark CTA band ── */
+  .cta-sheen { position: relative; overflow: hidden; }
+  .cta-sheen::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -60%;
+    width: 45%;
+    height: 200%;
+    background: linear-gradient(100deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.05) 40%,
+      rgba(217, 181, 106, 0.14) 50%,
+      rgba(255, 255, 255, 0.05) 60%,
+      transparent 100%);
+    transform: skewX(-18deg);
+    animation: sl-cta-sheen 7s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+    pointer-events: none;
+  }
+
+  /* ── Credibility rails (RecordRails) ── */
+  .rail-tick {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: var(--color-success);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 20%, transparent);
+  }
+  .rail-chip {
+    transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
+                border-color 0.25s, box-shadow 0.25s;
+  }
+  @media (hover: hover) {
+    .rail-chip:hover {
+      transform: translateY(-2px);
+      border-color: var(--color-brand-border);
+      box-shadow: var(--shadow-sm);
+    }
+  }
+
+  /* ── "How it works" connecting line that draws across the steps ── */
+  .steps-connector {
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 1.1s cubic-bezier(0.22, 0.61, 0.36, 1) 0.2s;
+  }
+  .is-visible .steps-connector,
+  .steps-connector.is-visible { transform: scaleX(1); }
+
+  /* ── Staggered rise for grouped items (audience strip, etc.) ── */
+  .stagger-item {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 0.6s cubic-bezier(0.22, 0.61, 0.36, 1),
+                transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1);
+    transition-delay: calc(var(--stagger-i, 0) * 90ms);
+  }
+  .is-visible .stagger-item { opacity: 1; transform: none; }
 }
 
 /* ── Keyframes ─────────────────────────────────────────────── */
@@ -549,6 +693,27 @@
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* ── WOW pass keyframes ── */
+@keyframes sl-hb-drift-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(4rem, 2.5rem, 0) scale(1.08); }
+}
+@keyframes sl-hb-drift-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); }
+  50% { transform: translate3d(-3.5rem, -2rem, 0) scale(1); }
+}
+@keyframes sl-hb-grid {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-56px, -56px, 0); }
+}
+@keyframes sl-hb-breathe {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.06); opacity: 0.7; }
+}
+@keyframes sl-cta-sheen {
+  0% { transform: translateX(0) skewX(-18deg); }
+  55%, 100% { transform: translateX(360%) skewX(-18deg); }
+}
 
 /* Touch devices — hover transforms must not stick after a tap */
 @media (hover: none) {
@@ -557,6 +722,10 @@
   .channel-card:hover::before { transform: scaleY(0); }
   .state-row:hover { transform: none; }
   .btn-arrow:hover:not(:disabled) svg:last-child { transform: none; }
+  /* WOW pass — pointer-driven transforms must not stick after a tap */
+  .tilt-inner { transform: none !important; }
+  .magnetic { transform: none !important; }
+  .rail-chip:hover { transform: none; }
 }
 
 /* Respect users who prefer reduced motion */
@@ -582,6 +751,19 @@
   .rule-draw, .is-visible .rule-draw, .rule-draw.is-visible { transform: none; transition: none; }
   .btn-arrow svg:last-child { transition: none; transform: none !important; }
   .parallax { transform: none !important; }
+  /* WOW pass additions — ambient loops, tilt, magnetic, sheen, connectors */
+  .hero-backdrop-blob,
+  .hero-backdrop-grid,
+  .hero-backdrop-contour { animation: none !important; transform: none !important; }
+  .tilt-inner { animation: none !important; transform: none !important; transition: none; }
+  .magnetic { transform: none !important; transition: none; }
+  .cta-sheen::after { animation: none !important; display: none; }
+  .steps-connector,
+  .is-visible .steps-connector,
+  .steps-connector.is-visible { transform: none !important; transition: none; }
+  .stagger-item,
+  .is-visible .stagger-item { opacity: 1 !important; transform: none !important; transition: none; }
+  .hero-backdrop-grain { opacity: 0.03; }
   /* Decorative entrance/float animations off; spinners stay (loading feedback) */
   .sl-anim { animation: none !important; }
 }
