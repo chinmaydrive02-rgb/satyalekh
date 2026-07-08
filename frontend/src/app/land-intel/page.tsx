@@ -10,9 +10,9 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import TopNav from '@/components/TopNav';
 import Link from 'next/link';
 import { Reveal } from '@/components/motion';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BASE_URL, demoHeaders, isDemoActive } from '@/lib/api';
 import { analyzeInfra, METRO_STATIONS, InfraIntel } from '@/lib/ahmedabadInfra';
-import { Ruler, Trash2, Undo2, Loader2, Printer, Search, MapPin, AlertTriangle, Droplets, Mountain, CloudRain, Route, Scale, TrendingUp, Landmark, TrainFront, FileSignature, Building2, FileText } from 'lucide-react';
+import { Ruler, Trash2, Undo2, Loader2, Printer, Search, MapPin, AlertTriangle, Droplets, Mountain, CloudRain, Route, Scale, TrendingUp, Landmark, TrainFront, FileSignature, Building2, FileText, FlaskConical } from 'lucide-react';
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
   'pk.eyJ1IjoiY2hpbm1heTEyMDYiLCJhIjoiY21rOW5neGw3MXF1MjNkc2M2NTRpaW93dSJ9.Iyf99AosQ3obQDU6JIwFOA';
@@ -50,6 +50,22 @@ export default function LandIntel() {
   const [query, setQuery] = useState('');
   const [placeName, setPlaceName] = useState('');
   const [refNo] = useState(() => `SL-${Date.now().toString(36).toUpperCase()}`);
+  const [demoActive, setDemoActive] = useState(false);
+
+  // ── DEMO MODE ── seed a sample parcel (Navrangpura) so the "Generate
+  // Report" flow is one click away and always reaches the seeded fixture.
+  useEffect(() => {
+    if (!isDemoActive()) return;
+    setDemoActive(true);
+    setPoints([
+      [72.5610, 23.0380],
+      [72.5628, 23.0380],
+      [72.5628, 23.0366],
+      [72.5610, 23.0366],
+    ]);
+    setPlaceName('Navrangpura, Ahmedabad, Gujarat');
+    setQuery('Navrangpura, Ahmedabad');
+  }, []);
 
   const area = useMemo(() => polygonAreaSqm(points), [points]);
   const perimeter = useMemo(() => {
@@ -129,7 +145,7 @@ export default function LandIntel() {
     try {
       const res = await fetch(`${API_BASE_URL}/land-report`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...demoHeaders() },
         body: JSON.stringify({
           lat: centroid[1], lng: centroid[0], area_sqm: area,
           place_hint: placeName || query || undefined,
@@ -231,6 +247,13 @@ export default function LandIntel() {
               <p className="text-sm text-muted mt-1">Due diligence for any parcel in India — no land records needed.</p>
             </div>
           </Reveal>
+
+          {demoActive && (
+            <div className="text-xs text-warning bg-warning-soft border border-warning-border rounded-lg px-3 py-2 flex items-start gap-2">
+              <FlaskConical size={13} className="mt-0.5 shrink-0" />
+              <span>Demo mode — a sample Navrangpura parcel is pre-drawn. Just hit <span className="font-semibold">Generate Due Diligence Report</span> to see a seeded assessment.</span>
+            </div>
+          )}
 
           {/* Measurements */}
           <Reveal delay={90}>

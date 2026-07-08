@@ -10,7 +10,7 @@ import TitleReportView from '@/components/TitleReport';
 import {
   API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, fetchConfig,
   startTitleReport, pollJob, parseSurveySuggestions,
-  ApiError, Job, TitleReport,
+  ApiError, Job, TitleReport, demoHeaders,
 } from '@/lib/api';
 import { createClient } from '@/utils/supabase/client';
 
@@ -129,7 +129,7 @@ export default function DocumentUpload() {
     const formData = new FormData();
     formData.append("file", file);
     try {
-      const res = await fetch(`${API_BASE_URL}/analyze-record`, { method: "POST", body: formData });
+      const res = await fetch(`${API_BASE_URL}/analyze-record`, { method: "POST", body: formData, headers: demoHeaders() });
       if (!res.ok) throw new Error("Analysis Failed");
       const data = await res.json();
       setResult(data);

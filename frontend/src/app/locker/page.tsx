@@ -8,13 +8,23 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TopNav from '@/components/TopNav';
 import { Reveal } from '@/components/motion';
 import { createClient } from '@/utils/supabase/client';
-import { getUserEmail, setUserEmail } from '@/lib/api';
-import { Vault, UploadCloud, FileText, Trash2, Download, Loader2, Mail, ShieldCheck } from 'lucide-react';
+import { getUserEmail, setUserEmail, isDemoActive, DEMO_EMAIL } from '@/lib/api';
+import { Vault, UploadCloud, FileText, Trash2, Download, Loader2, Mail, ShieldCheck, FlaskConical } from 'lucide-react';
 
 const DOC_TYPES = ['7/12 Extract', 'VF-6 / Mutation', 'Index-2 / Sale Deed', 'NA Order', 'EC', 'Property Tax', 'Approved Plan', 'Other'];
 const MAX_MB = 15;
 
 interface Doc { id: string; file_name: string; storage_path: string; doc_type: string; size_bytes: number; created_at: string; }
+
+// ── DEMO MODE ── seeded locker documents (client-side; never touches Supabase).
+const DEMO_DOCS: Doc[] = [
+  { id: 'demo-1', file_name: '7-12_Navrangpura_Survey_128P.pdf', storage_path: 'demo', doc_type: '7/12 Extract',       size_bytes: 412000,  created_at: '2026-05-02T09:12:00Z' },
+  { id: 'demo-2', file_name: 'Sale_Deed_Index-2_128P.pdf',       storage_path: 'demo', doc_type: 'Index-2 / Sale Deed', size_bytes: 1840000, created_at: '2026-04-18T14:40:00Z' },
+  { id: 'demo-3', file_name: 'NA_Order_Collector_Ahmedabad.pdf', storage_path: 'demo', doc_type: 'NA Order',            size_bytes: 690000,  created_at: '2026-03-27T11:05:00Z' },
+  { id: 'demo-4', file_name: 'Encumbrance_Certificate_2015-25.pdf', storage_path: 'demo', doc_type: 'EC',               size_bytes: 305000,  created_at: '2026-03-10T16:22:00Z' },
+  { id: 'demo-5', file_name: 'VF-6_Mutation_Entries_128P.pdf',   storage_path: 'demo', doc_type: 'VF-6 / Mutation',     size_bytes: 528000,  created_at: '2026-02-20T08:48:00Z' },
+  { id: 'demo-6', file_name: 'Property_Tax_Receipt_AMC.pdf',     storage_path: 'demo', doc_type: 'Property Tax',        size_bytes: 142000,  created_at: '2026-01-31T10:15:00Z' },
+];
 
 function pathKey(email: string): string {
   // Stable unguessable prefix per email (not security-grade — beta model)
@@ -33,13 +43,23 @@ export default function Locker() {
   const [docType, setDocType] = useState(DOC_TYPES[0]);
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const [demoActive, setDemoActive] = useState(false);
 
   useEffect(() => {
+    // ── DEMO MODE ── skip the email gate, show a seeded locker.
+    if (isDemoActive()) {
+      setDemoActive(true);
+      setEmail(getUserEmail() || DEMO_EMAIL);
+      setDocs(DEMO_DOCS);
+      setEntered(true);
+      return;
+    }
     const saved = getUserEmail();
     if (saved) { setEmail(saved); setEntered(true); }
   }, []);
 
   const load = useCallback(async (em: string) => {
+    if (isDemoActive()) { setDocs(DEMO_DOCS); setBusy(false); return; }
     setBusy(true);
     const { data, error: e } = await supabase.from('locker_documents')
       .select('*').eq('user_email', em).order('created_at', { ascending: false });
@@ -52,6 +72,19 @@ export default function Locker() {
 
   const onUpload = async (f: File) => {
     setError('');
+    if (isDemoActive()) {
+      // Demo: don't touch Supabase — just prepend a friendly seeded row.
+      setDocs(prev => [{
+        id: `demo-${crypto.randomUUID()}`,
+        file_name: f.name,
+        storage_path: 'demo',
+        doc_type: docType,
+        size_bytes: f.size,
+        created_at: new Date().toISOString(),
+      }, ...prev]);
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
     if (f.size > MAX_MB * 1024 * 1024) { setError(`File too large — max ${MAX_MB} MB.`); return; }
     setUploading(true);
     try {
@@ -75,12 +108,18 @@ export default function Locker() {
   // Works whether the bucket is public or private, so the owner can flip the
   // 'lockers' bucket to private (see SECURITY_TODO.md) with no code change.
   const download = async (d: Doc) => {
+    if (isDemoActive()) {
+      setError(`"${d.file_name}" is a sample document — downloads are disabled in the demo. In the live product this opens a short-lived signed link to your stored file.`);
+      setTimeout(() => setError(''), 4000);
+      return;
+    }
     const { data } = await supabase.storage.from('lockers').createSignedUrl(d.storage_path, 60);
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   };
 
   const remove = async (d: Doc) => {
     if (!confirm(`Delete "${d.file_name}" from your locker?`)) return;
+    if (isDemoActive()) { setDocs(prev => prev.filter(x => x.id !== d.id)); return; }
     await supabase.storage.from('lockers').remove([d.storage_path]);
     await supabase.from('locker_documents').delete().eq('id', d.id);
     await load(email);
@@ -113,6 +152,13 @@ export default function Locker() {
             <p className="text-muted text-sm mt-2">Your land documents — stored, organised, available anywhere.</p>
           </div>
         </Reveal>
+
+        {demoActive && (
+          <div className="text-sm text-warning bg-warning-soft border border-warning-border rounded-lg px-4 py-2.5 flex items-start gap-2">
+            <FlaskConical size={14} className="mt-0.5 shrink-0" />
+            <span>Demo locker — these are sample documents for a Navrangpura parcel. Uploads stay on-screen and downloads are disabled; nothing is saved.</span>
+          </div>
+        )}
 
         {!entered ? (
           <form

@@ -7,21 +7,40 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { FlaskConical, KeyRound, Loader2, LogIn, ShieldCheck, User } from 'lucide-react';
+import { FlaskConical, KeyRound, Loader2, LogIn, ShieldCheck, User, Sparkles, ArrowRight } from 'lucide-react';
 import TopNav from '@/components/TopNav';
 import { Reveal } from '@/components/motion';
-import { demoLogin, isDemoActive, exitDemo, ApiError } from '@/lib/api';
+import { demoLogin, demoStart, isDemoActive, exitDemo, ApiError } from '@/lib/api';
 
 export default function DemoLoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [launching, setLaunching] = useState(false);
   const [alreadyActive, setAlreadyActive] = useState(false);
 
   useEffect(() => {
-    setAlreadyActive(isDemoActive());
+    const raf = requestAnimationFrame(() => setAlreadyActive(isDemoActive()));
+    return () => cancelAnimationFrame(raf);
   }, []);
+
+  const handleLaunch = async () => {
+    if (launching || loading) return;
+    setLaunching(true);
+    setError('');
+    try {
+      await demoStart();
+      window.location.href = '/demo/tour';
+    } catch (err: unknown) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Something went wrong — please try again in a moment.'
+      );
+      setLaunching(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +49,7 @@ export default function DemoLoginPage() {
     setError('');
     try {
       await demoLogin(username.trim(), password);
-      window.location.href = '/';
+      window.location.href = '/demo/tour';
     } catch (err: unknown) {
       setError(
         err instanceof ApiError
@@ -65,7 +84,7 @@ export default function DemoLoginPage() {
                 <ShieldCheck size={13} className="shrink-0" />
                 <span>
                   A demo session is already active.{' '}
-                  <Link href="/" className="underline underline-offset-2 font-medium">Start searching</Link>
+                  <Link href="/demo/tour" className="underline underline-offset-2 font-medium">Open the guided tour</Link>
                   {' '}or{' '}
                   <button
                     type="button"
@@ -77,6 +96,36 @@ export default function DemoLoginPage() {
                 </span>
               </div>
             )}
+
+            {/* Primary, frictionless entry — no credentials needed */}
+            <button
+              type="button"
+              onClick={handleLaunch}
+              disabled={launching || loading}
+              className="btn btn-primary w-full h-12 text-base"
+            >
+              {launching
+                ? <><Loader2 size={16} className="animate-spin" /> Starting your demo…</>
+                : <><Sparkles size={16} /> Launch the investor demo <ArrowRight size={15} /></>}
+            </button>
+            <p className="text-xs text-faint leading-relaxed -mt-2">
+              No sign-in required — this opens a guided tour with realistic seeded data across every feature.
+            </p>
+
+            {error && !username && (
+              <p className="text-sm text-danger bg-danger-soft border border-danger-border rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 my-1">
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-[10px] uppercase tracking-[0.12em] text-faint font-semibold whitespace-nowrap">
+                Or sign in with demo credentials
+              </span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
@@ -111,7 +160,7 @@ export default function DemoLoginPage() {
                 </div>
               </div>
 
-              {error && (
+              {error && !!username && (
                 <p className="text-sm text-danger bg-danger-soft border border-danger-border rounded-lg px-3 py-2">
                   {error}
                 </p>
@@ -119,8 +168,8 @@ export default function DemoLoginPage() {
 
               <button
                 type="submit"
-                disabled={!username.trim() || !password || loading}
-                className="btn btn-primary w-full h-11"
+                disabled={!username.trim() || !password || loading || launching}
+                className="btn btn-outline w-full h-11"
               >
                 {loading
                   ? <><Loader2 size={15} className="animate-spin" /> Signing in…</>

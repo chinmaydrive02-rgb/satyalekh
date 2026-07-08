@@ -59,6 +59,43 @@ export function demoHeaders(): Record<string, string> {
   return token ? { "X-Demo-Token": token } : {};
 }
 
+/** Persist a freshly-minted demo token exactly like demoLogin does. */
+function storeDemoToken(data: { demo_token: string; expires_in: number }): void {
+  try {
+    window.localStorage.setItem(DEMO_TOKEN_KEY, data.demo_token);
+    window.localStorage.setItem(DEMO_EXPIRY_KEY, String(Date.now() + data.expires_in * 1000));
+  } catch {
+    // localStorage unavailable — session-only demo
+  }
+}
+
+/**
+ * Frictionless guest demo entry — POST /demo/start needs no credentials.
+ * Stores the 24h token identically to demoLogin so every ...demoHeaders()
+ * fetcher immediately serves seeded fixtures. Used by the "Launch demo" CTAs.
+ */
+export async function demoStart(): Promise<{ demo_token: string; expires_in: number }> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}/demo/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+  } catch {
+    throw new ApiError(
+      0,
+      "Could not reach the backend. It may be cold-starting (60–90s on free hosting) — please retry in a minute."
+    );
+  }
+  if (!res.ok) {
+    throw new ApiError(res.status, `Could not start the demo (HTTP ${res.status}). Please try again.`);
+  }
+  const data = (await res.json()) as { demo_token: string; expires_in: number };
+  storeDemoToken(data);
+  return data;
+}
+
 export async function demoLogin(
   username: string,
   password: string
@@ -83,12 +120,7 @@ export async function demoLogin(
     throw new ApiError(res.status, `Demo login failed (HTTP ${res.status}). Please try again.`);
   }
   const data = (await res.json()) as { demo_token: string; expires_in: number };
-  try {
-    window.localStorage.setItem(DEMO_TOKEN_KEY, data.demo_token);
-    window.localStorage.setItem(DEMO_EXPIRY_KEY, String(Date.now() + data.expires_in * 1000));
-  } catch {
-    // localStorage unavailable — session-only demo
-  }
+  storeDemoToken(data);
   return data;
 }
 
@@ -366,7 +398,9 @@ export function setUserEmail(email: string): void {
 export async function fetchCredits(email: string): Promise<CreditsInfo | null> {
   if (!email) return null;
   try {
-    const res = await fetch(`${API_BASE_URL}/credits?email=${encodeURIComponent(email)}`);
+    const res = await fetch(`${API_BASE_URL}/credits?email=${encodeURIComponent(email)}`, {
+      headers: demoHeaders(), // demo mode: seeded credit balance
+    });
     if (!res.ok) return null;
     return (await res.json()) as CreditsInfo;
   } catch {

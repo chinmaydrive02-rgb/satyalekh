@@ -13,7 +13,7 @@ import TitleReportView from '@/components/TitleReport';
 import {
   API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, fetchConfig,
   startTitleReport, pollJob, parseSurveySuggestions, addToWatchlist,
-  ApiError, Job, TitleReport, isDemoActive,
+  ApiError, Job, TitleReport, isDemoActive, demoHeaders,
 } from '@/lib/api';
 import { createClient } from '@/utils/supabase/client';
 
@@ -270,7 +270,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
     try {
       const res = await fetch(`${API_BASE_URL}/litigation-search`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...demoHeaders() },
         body: JSON.stringify({ name: record.owner_name, district: record.district || urlDistrict, year: litYear }),
       });
       const data = await res.json();

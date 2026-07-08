@@ -5,8 +5,9 @@ import { Database, AlertTriangle, CheckCircle2, Crosshair, Plus, Loader2, X, Fol
 import TopNav from '@/components/TopNav';
 import Link from 'next/link';
 import { Reveal } from '@/components/motion';
-import { API_BASE_URL, getUserEmail, setUserEmail, addToWatchlist } from '@/lib/api';
+import { API_BASE_URL, getUserEmail, setUserEmail, addToWatchlist, isDemoActive } from '@/lib/api';
 import { createClient } from '@/utils/supabase/client';
+import { FlaskConical } from 'lucide-react';
 
 interface PortfolioAsset {
   id: string;
@@ -24,8 +25,17 @@ interface PortfolioAsset {
   created_at: string;
 }
 
+// ── DEMO MODE ── seeded portfolio (client-side; never queries Supabase).
+const DEMO_HOLDINGS: PortfolioAsset[] = [
+  { id: 'demo-p1', survey_no: '128 P', district: 'Ahmedabad', taluka: 'City',    village: 'Navrangpura', owner_name: 'Rameshbhai K. Patel', area: '0-16-19 (Ha-Are-SqM)', tenure_type: 'Old Tenure', encumbrances: 'None', jantri_rate: '₹42,000/sqm', last_sale: '2019', notes: null, created_at: '2026-05-01T10:00:00Z' },
+  { id: 'demo-p2', survey_no: '45',    district: 'Ahmedabad', taluka: 'Sanand',  village: 'Sanand',      owner_name: 'Kiritbhai M. Shah',    area: '1-20-00 (Ha-Are-SqM)', tenure_type: 'New Tenure', encumbrances: 'Live boja — Bank of Baroda', jantri_rate: '₹18,000/sqm', last_sale: '2022', notes: null, created_at: '2026-04-20T10:00:00Z' },
+  { id: 'demo-p3', survey_no: '301',   district: 'Surat',     taluka: 'Choryasi', village: 'Bhimrad',    owner_name: 'Nileshbhai R. Desai',  area: '0-08-40 (Ha-Are-SqM)', tenure_type: 'Old Tenure', encumbrances: 'None', jantri_rate: '₹28,000/sqm', last_sale: '2021', notes: null, created_at: '2026-03-15T10:00:00Z' },
+  { id: 'demo-p4', survey_no: '72',    district: 'Ahmedabad', taluka: 'Dholera', village: 'Dholera',     owner_name: 'Ambaben J. Chaudhary', area: '2-10-00 (Ha-Are-SqM)', tenure_type: 'Restricted (72-AA)', encumbrances: 'Tenure restriction; NA pending', jantri_rate: '₹4,200/sqm', last_sale: '2018', notes: null, created_at: '2026-02-10T10:00:00Z' },
+];
+
 export default function Dashboard() {
   const supabase = createClient();
+  const [demoActive, setDemoActive] = useState(false);
 
   const [holdings, setHoldings] = useState<PortfolioAsset[]>([]);
   const [isLoadingPortfolio, setIsLoadingPortfolio] = useState(true);
@@ -41,6 +51,13 @@ export default function Dashboard() {
 
   // ── Load portfolio from Supabase ──────────────────────────
   const loadPortfolio = useCallback(async () => {
+    // ── DEMO MODE ── seeded portfolio, no Supabase.
+    if (isDemoActive()) {
+      setDemoActive(true);
+      setHoldings(DEMO_HOLDINGS);
+      setIsLoadingPortfolio(false);
+      return;
+    }
     setIsLoadingPortfolio(true);
     try {
       const { data, error } = await supabase
@@ -121,6 +138,7 @@ export default function Dashboard() {
   // ── Delete asset ──────────────────────────────────────────
   const handleDelete = async (id: string) => {
     if (!confirm('Remove this asset from your portfolio?')) return;
+    if (isDemoActive()) { setHoldings(prev => prev.filter(h => h.id !== id)); return; }
     setDeletingId(id);
     try {
       const { error } = await supabase.from('portfolio_assets').delete().eq('id', id);
@@ -211,6 +229,13 @@ export default function Dashboard() {
           </div>
         </div>
         </Reveal>
+
+        {demoActive && (
+          <div className="text-sm text-warning bg-warning-soft border border-warning-border rounded-lg px-4 py-2.5 flex items-start gap-2">
+            <FlaskConical size={14} className="mt-0.5 shrink-0" />
+            <span>Demo portfolio — sample parcels across Ahmedabad and Surat. Click any survey number to open its title report; watch and export work on this seeded data.</span>
+          </div>
+        )}
 
         {/* Ingest Form */}
         {showIngest && (

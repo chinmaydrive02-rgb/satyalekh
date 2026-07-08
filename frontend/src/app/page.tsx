@@ -9,6 +9,7 @@ import { Reveal, CountUp, Parallax } from "@/components/motion";
 import HeroBackdrop from "@/components/HeroBackdrop";
 import RecordRails from "@/components/RecordRails";
 import { MagneticButton, Tilt } from "@/components/MagneticButton";
+import DemoHeroLink from "@/components/DemoHeroLink";
 import {
   Landmark, Languages, ShieldCheck, FileSearch, Bell, GitBranch,
   Vault, Scale, TrendingUp, Search, Cpu, FileCheck2, ArrowRight,
@@ -302,6 +303,9 @@ export default function Home() {
               <span className="flex items-center gap-2"><Languages size={15} className="text-brand" /> Local script → English</span>
               <span className="flex items-center gap-2"><ShieldCheck size={15} className="text-brand" /> Risk-scored reports</span>
             </div>
+
+            {/* Live investor demo — subtle, non-disruptive entry point */}
+            <DemoHeroLink />
 
             <div className="flex flex-wrap gap-x-8 gap-y-3 border-t border-border pt-6">
               {[

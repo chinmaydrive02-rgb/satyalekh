@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import TopNav from "@/components/TopNav";
 import { Reveal, CountUp } from "@/components/motion";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, demoHeaders, isDemoActive } from "@/lib/api";
 import {
   RISK_LAYERS, SAMPLE_CHECKS, SAMPLE_PARCEL, OUTCOME_LEGEND,
   localScreen,
@@ -285,7 +285,7 @@ function InteractiveScreening() {
       const timeout = setTimeout(() => ctrl.abort(), 8000);
       const res = await fetch(`${API_BASE_URL}/risk-screen`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...demoHeaders() },
         body: JSON.stringify(req),
         signal: ctrl.signal,
       });
@@ -304,6 +304,18 @@ function InteractiveScreening() {
       setState("done");
     }
   }
+
+  // ── DEMO MODE ── auto-run the sample screening once so the panel lands
+  // populated. Fires in a deferred rAF callback (not synchronously in the
+  // effect body), and runScreen's own setState is inside its async flow.
+  const demoRan = useRef(false);
+  useEffect(() => {
+    if (demoRan.current || !isDemoActive()) return;
+    demoRan.current = true;
+    const raf = requestAnimationFrame(() => { void runScreen(); });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const counts = result?.counts ?? { clear: 0, caution: 0, restricted: 0, unknown: 0 };
   const total = result?.layers?.length ?? 0;

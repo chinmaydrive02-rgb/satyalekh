@@ -324,3 +324,174 @@ class TestDemoOptions:
                        params={"district": "Ahmedabad", "taluka": "City"})
         villages = r.json()["villages"]
         assert {"english": "Navrangpura", "gujarati": "નવરંગપુરા"} in villages
+
+
+# ── Frictionless guest entry (POST /demo/start) ──────────────────────────────
+
+class TestDemoStartEndpoint:
+    def test_start_issues_valid_token_no_credentials(self, client):
+        r = client.post("/demo/start")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["expires_in"] == demo.TOKEN_TTL_SECONDS
+        assert demo.is_valid_token(body["demo_token"])
+
+    def test_start_matches_login_shape(self, client):
+        start = client.post("/demo/start").json()
+        login = client.post("/demo/login", json={
+            "username": demo.DEMO_USERNAME, "password": demo.DEMO_PASSWORD}).json()
+        assert set(start.keys()) == set(login.keys()) == {"demo_token", "expires_in"}
+
+
+# ── Whole-product demo-aware endpoints ───────────────────────────────────────
+# Each newly demo-aware endpoint must (a) return a realistic fixture — never an
+# error or empty state — when a valid X-Demo-Token is supplied, and (b) still
+# take the normal (non-demo) path when no token is present.
+
+def _token():
+    token, _ = demo.issue_token()
+    return token
+
+
+class TestDemoLandReport:
+    def test_with_token_returns_full_report(self, client):
+        r = client.post("/land-report", headers={"X-Demo-Token": _token()},
+                        json={"lat": 22.9612, "lng": 72.3809, "area_sqm": 8093})
+        assert r.status_code == 200
+        body = r.json()
+        assert {"lat", "lng", "area_sqm", "elevation_m", "annual_rain_mm", "report"} <= set(body)
+        report = body["report"]
+        # All 8 narrative sections + suitability + red_flags present
+        for k in ("executive_summary", "location_summary", "soil_terrain",
+                  "water_flood_risk", "climate", "connectivity", "land_use_zoning",
+                  "development_potential", "market_outlook", "legal_notes"):
+            assert report[k]
+        assert set(report["suitability"]) == {"agriculture", "residential", "commercial"}
+        assert len(report["red_flags"]) >= 1
+
+    def test_without_token_takes_normal_path(self, client, monkeypatch):
+        # No token → the real handler runs. Invalid coords → 400 (proves the
+        # demo branch was NOT taken and no fixture leaked).
+        r = client.post("/land-report", json={"lat": 999, "lng": 0})
+        assert r.status_code == 400
+
+
+class TestDemoLitigationSearch:
+    def test_with_token_returns_mixed_cases(self, client):
+        r = client.post("/litigation-search", headers={"X-Demo-Token": _token()},
+                        json={"name": "Rameshbhai Ambalal Patel",
+                              "district": "Ahmedabad", "year": "2021"})
+        assert r.status_code == 200
+        body = r.json()
+        assert {"cases", "court_complex", "message"} <= set(body)
+        statuses = {c["status"] for c in body["cases"]}
+        assert "Pending" in statuses and "Disposed" in statuses
+        for c in body["cases"]:
+            assert {"case_no", "parties", "case_type", "status", "court"} <= set(c)
+        # Honest same-name caveat must be surfaced
+        assert "name" in body["message"].lower()
+
+    def test_without_token_validates_normally(self, client):
+        # No token → real validation runs; too-short name → 400 (demo not taken)
+        r = client.post("/litigation-search",
+                        json={"name": "ab", "district": "Ahmedabad"})
+        assert r.status_code == 400
+
+
+class TestDemoGujaratNews:
+    def test_with_token_returns_articles(self, client):
+        r = client.get("/news/gujarat", headers={"X-Demo-Token": _token()})
+        assert r.status_code == 200
+        articles = r.json()["articles"]
+        assert len(articles) >= 3
+        for a in articles:
+            assert {"source", "title", "desc", "url", "date"} <= set(a)
+
+    def test_without_token_503_when_unconfigured(self, client):
+        # No NEWSDATA_API_KEY in the test env → real path 503s (not a fixture)
+        r = client.get("/news/gujarat")
+        assert r.status_code == 503
+
+
+class TestDemoManualOrders:
+    def test_with_token_lists_sample_orders(self, client, main_mod, monkeypatch):
+        def _boom():
+            raise AssertionError("Supabase must never be touched in demo mode")
+        monkeypatch.setattr(main_mod, "_get_supabase", _boom)
+        h = {"X-Demo-Token": _token()}
+
+        orders = client.get("/manual-orders", headers=h).json()["orders"]
+        assert len(orders) == 3
+        assert {o["status"] for o in orders} == {"pending", "in_progress", "delivered"}
+
+        # POST echoes back a created order (status pending), in-memory only
+        created = client.post("/manual-orders", headers=h, json={
+            "email": "demo@satya-lekh.example", "state": "GJ",
+            "district": "Ahmedabad", "taluka": "City", "village": "Navrangpura",
+            "survey_no": "128 P", "sku": "certified_712_index2",
+            "notes": "demo order"}).json()
+        assert created["status"] == "pending"
+        assert created["price_inr"] == 1500       # server-side price, not client's
+        assert len(client.get("/manual-orders", headers=h).json()["orders"]) == 4
+
+    def test_without_token_requires_email_and_supabase(self, client):
+        # No token → real path: missing email → 400 (demo fixture never served)
+        r = client.get("/manual-orders")
+        assert r.status_code == 400
+
+
+class TestDemoAnalyzeRecord:
+    def test_with_token_returns_analysis(self, client):
+        # A demo token short-circuits before any file processing / Gemini call.
+        r = client.post("/analyze-record", headers={"X-Demo-Token": _token()},
+                        files={"file": ("dummy.txt", b"not-an-image", "text/plain")})
+        assert r.status_code == 200
+        body = r.json()
+        assert {"owner_name", "survey_no", "total_area", "tenure_type",
+                "encumbrances", "risk_level", "risk_reason"} == set(body)
+        assert body["risk_level"] in ("GREEN", "YELLOW", "RED")
+
+    def test_without_token_rejects_bad_upload(self, client):
+        # No token → real path validates the upload and rejects a text file (400)
+        r = client.post("/analyze-record",
+                        files={"file": ("dummy.txt", b"not-an-image", "text/plain")})
+        assert r.status_code == 400
+
+
+class TestDemoCredits:
+    def test_with_token_returns_generous_credits(self, client):
+        r = client.get("/credits", headers={"X-Demo-Token": _token()})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["credits"] == demo.DEMO_CREDITS
+        assert body["payments_enabled"] is False
+
+    def test_without_token_uses_normal_path(self, client):
+        # No token, payments disabled in test env → real handler returns 0
+        r = client.get("/credits", params={"email": "someone@example.com"})
+        assert r.status_code == 200
+        assert r.json()["credits"] == 0
+
+
+class TestDemoRiskScreen:
+    def test_with_token_and_empty_inputs_returns_populated(self, client):
+        r = client.post("/risk-screen", headers={"X-Demo-Token": _token()}, json={})
+        assert r.status_code == 200
+        body = r.json()
+        assert len(body["layers"]) == 12
+        # Sample defaults populate real (non-unknown) findings
+        assert body["summary"]["unknown"] < 12
+        assert body["verdict"]
+
+    def test_with_token_honours_supplied_inputs(self, client):
+        # Explicit inputs override the demo defaults (proves we don't clobber).
+        r = client.post("/risk-screen", headers={"X-Demo-Token": _token()},
+                        json={"region": "Kutch"})
+        assert r.status_code == 200
+        assert r.json()["inputs"]["region"] == "Kutch"
+
+    def test_without_token_normal_behavior(self, client):
+        # No token, empty inputs → real screener runs (mostly unknown), 200.
+        r = client.post("/risk-screen", json={})
+        assert r.status_code == 200
+        assert len(r.json()["layers"]) == 12

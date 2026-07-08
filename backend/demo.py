@@ -440,9 +440,16 @@ _next_watch_id = 3
 def reset_demo_state():
     """Restore pristine demo fixtures (used by tests; could be cron'd)."""
     global _watchlist, _alerts, _next_watch_id
+    global _manual_orders, _next_order_id
     _watchlist = _initial_watchlist()
     _alerts = _initial_alerts()
     _next_watch_id = 3
+    # Manual-fulfilment orders are defined lower in the module; reset them too
+    # when the loader has already run (they are always defined by the time a
+    # test calls reset_demo_state, but guard for import-time ordering).
+    if "_initial_manual_orders" in globals():
+        _manual_orders = _initial_manual_orders()
+        _next_order_id = 4
 
 
 def demo_list_watchlist() -> list:
@@ -529,3 +536,330 @@ def demo_survey_options() -> list:
 
 def demo_villages() -> list:
     return [dict(v) for v in DEMO_VILLAGES]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Whole-product demo fixtures — every remaining feature returns a realistic,
+# deterministic result so an investor can click through the entire deployed
+# site (which can't reach Open-Meteo / eCourts / newsdata.io / Gemini /
+# Supabase) and never hit an error or an empty state.
+#
+# Every builder here is:
+#   • deterministic — no randomness; dates use _rel_date/_iso_days_ago so the
+#     output stays stable-ish (permanently "recent") no matter when it's shown;
+#   • network-free — no scrape, no Gemini, no Playwright, no Supabase;
+#   • schema-exact — the dict shape matches the real handler's response so the
+#     frontend renders it unchanged.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def demo_land_report() -> dict:
+    """Full land-intelligence report for a believable Sanand / Dholera-corridor
+    parcel. Matches POST /land-report's real response exactly:
+    {lat, lng, area_sqm, elevation_m, annual_rain_mm, report{...}} where the
+    nested report carries the 8 narrative sections + suitability + red_flags
+    (see the LandReportRequest handler / frontend land-intel page)."""
+    report = {
+        "executive_summary": (
+            "The subject parcel lies in the Sanand–Bavla belt of the Ahmedabad "
+            "district, within the influence corridor of the Dholera Special "
+            "Investment Region and the Ahmedabad–Dholera expressway. Location "
+            "fundamentals are strong and the terrain is developable, but the "
+            "holding is recorded as agricultural (Old Tenure) and its principal "
+            "risks are pre-development: s.65 NA conversion, verification of the "
+            "sanctioned DP/TP zoning, and a clean 7/12 + Index-2 title search "
+            "before any transaction."),
+        "location_summary": (
+            "Peri-urban Sanand taluka, ~30 km south-west of Ahmedabad and inside "
+            "the Dholera SIR / DMIC investment corridor. Established industrial "
+            "anchors (Sanand GIDC, Tata Nano, Ford estate) drive demand; the "
+            "locality is transitioning from agrarian to industrial-logistics use."),
+        "soil_terrain": (
+            "Gently sloping alluvial plain with medium-black to sandy-loam soils "
+            "typical of the Nal Sarovar catchment fringe. Bearing capacity is "
+            "adequate for low- to mid-rise construction; a plot-level geotechnical "
+            "investigation is advised before foundation design."),
+        "water_flood_risk": (
+            "No mapped river or lake abutment, so no immediate CRZ/water-body "
+            "buffer applies, but the wider Nal Sarovar depression drains sluggishly "
+            "and localised monsoon waterlogging is on record for low points in this "
+            "belt. Confirm the parcel's spot level against the village drainage line "
+            "and check for any lake/tank reservation on the sanctioned plan."),
+        "climate": (
+            "Semi-arid (BSh): hot summers to ~42 °C, a concentrated June–September "
+            "south-west monsoon delivering the bulk of annual rainfall, and mild "
+            "winters. Design for high summer cooling loads and monsoon-season "
+            "drainage."),
+        "connectivity": (
+            "~4 km to the Sarkhej–Sanand (SH-17) arterial and the Ahmedabad–Rajkot "
+            "NH-47; ~30 km to Sardar Vallabhbhai Patel International Airport; on the "
+            "Ahmedabad–Dholera expressway influence line, with the Sanand rail "
+            "goods terminal nearby. Road access to the parcel edge should be "
+            "confirmed against the TP road alignment."),
+        "land_use_zoning": (
+            "Likely falls under the AUDA / Dholera SIR development-plan ambit; the "
+            "sanctioned DP zone (agricultural vs. residential-R zone vs. industrial) "
+            "and any TP-scheme final-plot number must be verified from the "
+            "sanctioned plan before assuming a buildable use. CGDCR-2017 base FSI "
+            "and margins will follow the confirmed zone and abutting road width."),
+        "development_potential": (
+            "On NA conversion and a residential/industrial DP zone, the plot suits "
+            "plotted development, warehousing/logistics, or a gated residential "
+            "scheme given the DMIC-driven employment catchment. FSI and height "
+            "follow the CGDCR zone and the abutting road width; wider TP roads "
+            "unlock higher intensity."),
+        "market_outlook": (
+            "Demand is investment- and infrastructure-led (Dholera SIR, expressway, "
+            "GIDC expansion) rather than end-user-led, so the horizon is medium-term. "
+            "Indicative agricultural-land values in the belt run ~₹0.9–1.8 crore/acre "
+            "depending on road frontage and NA status; confirm the applicable jantri "
+            "(ASR) rate for stamp-duty and premium exposure."),
+        "legal_notes": (
+            "Before transacting, obtain and verify: the 7/12 (VF-7/12) extract and "
+            "VF-6 mutation entries, the Index-2 of the last registered deed, the "
+            "s.65 NA conversion order (or budget for it), a 30-year title search, an "
+            "encumbrance certificate, and — for any organised sale of plots/units — "
+            "RERA registration. Confirm the parcel is not Navi-Sharat / gauchar / "
+            "trust land."),
+        "suitability": {"agriculture": 6, "residential": 7, "commercial": 8},
+        "red_flags": [
+            "Recorded as agricultural land — s.65 NA conversion required before any "
+            "non-agricultural development.",
+            "Sanctioned DP/TP zone unconfirmed — do not assume a buildable use until "
+            "the sanctioned plan and final-plot number are verified.",
+            "Dholera SIR / expressway reservations can clip parcels — check for any "
+            "road-widening or public-purpose reservation over the survey number.",
+            "Investment-led demand means a medium-term horizon and price volatility "
+            "tied to infrastructure milestones.",
+        ],
+    }
+    return {
+        "lat": 22.9612,
+        "lng": 72.3809,
+        "area_sqm": 8093.0,          # ~2 acres
+        "elevation_m": 34.0,
+        "annual_rain_mm": 741,
+        "report": report,
+    }
+
+
+def demo_litigation_search() -> dict:
+    """Realistic mixed eCourts result naming the recorded owner, matching
+    litigation.py's output: {cases[], court_complex, message}. Each case
+    carries case_no / parties / case_type / status / court. Includes the
+    honest same-name/spelling caveat the product must always surface."""
+    court_complex = "District & Sessions Court, Ahmedabad (Rural)"
+    cases = [
+        {
+            "case_no": "R.C.S./412/2021",
+            "parties": "Rameshbhai Ambalal Patel vs Jayantibhai Chunilal Shah",
+            "case_type": "Regular Civil Suit — specific performance / boundary dispute",
+            "status": "Pending",
+            "court": "3rd Addl. Senior Civil Judge, Ahmedabad (Rural)",
+        },
+        {
+            "case_no": "R.C.S./88/2016",
+            "parties": "Rameshbhai Ambalal Patel vs State of Gujarat & Anr.",
+            "case_type": "Regular Civil Suit — mutation entry challenge",
+            "status": "Disposed",
+            "court": "2nd Addl. Senior Civil Judge, Ahmedabad (Rural)",
+        },
+        {
+            "case_no": "Misc./1207/2019",
+            "parties": "Bank of Baroda vs Rameshbhai A. Patel",
+            "case_type": "Misc. Civil Application — recovery / mortgage",
+            "status": "Disposed",
+            "court": "Principal Senior Civil Judge, Ahmedabad (Rural)",
+        },
+    ]
+    return {
+        "cases": cases,
+        "court_complex": court_complex,
+        "message": (
+            f"{len(cases)} case(s) found in {court_complex} for 2021. "
+            "IMPORTANT: eCourts matches on party name only — these results may "
+            "include a different person who shares the same (or a similarly "
+            "spelt) name, and may miss cases where the name is spelt "
+            "differently. Confirm identity against the parcel's recorded owner "
+            "before relying on any match."),
+    }
+
+
+def demo_gujarat_news() -> dict:
+    """Plausible Gujarat land/property news feed matching GET /news/gujarat:
+    {articles[], cached} where each article has source/title/desc/url/date.
+    Dates use _iso_days_ago so the feed always looks fresh; url is a real
+    outlet homepage placeholder (no live fetch)."""
+    articles = [
+        {
+            "source": "The Times of India",
+            "title": ("Dholera SIR: activation area land allotment gathers pace as "
+                      "expressway nears completion"),
+            "desc": ("The Dholera Special Investment Region has cleared a fresh round "
+                     "of industrial plot allotments, with developers citing the "
+                     "Ahmedabad–Dholera expressway and the international airport "
+                     "groundwork as demand drivers along the corridor."),
+            "url": "https://timesofindia.indiatimes.com/city/ahmedabad",
+            "date": _iso_days_ago(2),
+        },
+        {
+            "source": "The Indian Express",
+            "title": "Gujarat revises jantri (ASR) rates; Ahmedabad peripheries see steepest rise",
+            "desc": ("The revised Annual Statement of Rates lifts benchmark land "
+                     "valuations across Ahmedabad's growth corridors, raising stamp "
+                     "duty and Navi-Sharat premium exposure for buyers in Sanand, "
+                     "Bavla and the SIR influence belt."),
+            "url": "https://indianexpress.com/section/cities/ahmedabad/",
+            "date": _iso_days_ago(5),
+        },
+        {
+            "source": "Business Standard",
+            "title": "AUDA notifies new TP schemes around Sanand–Bavla industrial belt",
+            "desc": ("The Ahmedabad Urban Development Authority has notified draft "
+                     "town-planning schemes covering villages in the Sanand and Bavla "
+                     "talukas, converting swathes of agricultural land into planned "
+                     "residential and industrial final plots."),
+            "url": "https://www.business-standard.com/",
+            "date": _iso_days_ago(9),
+        },
+        {
+            "source": "The Economic Times",
+            "title": "DMIC pull: warehousing and logistics demand firms up along Ahmedabad–Dholera line",
+            "desc": ("Institutional interest in grade-A warehousing is rising along "
+                     "the Delhi–Mumbai Industrial Corridor's Gujarat segment, with "
+                     "the Sanand and Dholera nodes drawing the bulk of new "
+                     "land-aggregation activity."),
+            "url": "https://economictimes.indiatimes.com/industry/services/property-/-cstruction",
+            "date": _iso_days_ago(13),
+        },
+        {
+            "source": "Ahmedabad Mirror",
+            "title": "Gujarat tightens Navi-Sharat land transfer scrutiny after mutation-fraud cases",
+            "desc": ("The state revenue department has flagged closer scrutiny of "
+                     "new-tenure (Navi Sharat) land transfers following a spate of "
+                     "mutation-entry disputes, urging buyers to verify collector "
+                     "permission and premium payment before registration."),
+            "url": "https://www.ahmedabadmirror.com/",
+            "date": _iso_days_ago(18),
+        },
+    ]
+    return {"articles": articles, "cached": True}
+
+
+# ── Manual fulfilment orders (in-memory, never Supabase) ─────────────────────
+
+_MANUAL_ORDER_SKUS = {
+    "certified_712_index2": {"label": "Certified 7/12 + Index-2 copy", "price_inr": 1500},
+    "search_report_30yr": {"label": "30-year search report (advocate-certified)", "price_inr": 4999},
+}
+
+
+def _initial_manual_orders() -> list:
+    """3 sample certified-copy orders in varied statuses (delivered /
+    in_progress / pending) so the orders page renders a full lifecycle.
+    Shape matches ManualOrderItem exactly."""
+    return [
+        {
+            "id": "demo-o-1", "user_email": DEMO_EMAIL, "state": "GJ",
+            "district": "Ahmedabad", "taluka": "City", "village": "Navrangpura",
+            "survey_no": "128 P", "sku": "certified_712_index2",
+            "price_inr": 1500, "status": "delivered",
+            "notes": "Certified copy collected from Sub-Registrar Ahmedabad-2.",
+            "created_at": _iso_days_ago(12), "updated_at": _iso_days_ago(8),
+        },
+        {
+            "id": "demo-o-2", "user_email": DEMO_EMAIL, "state": "GJ",
+            "district": "Ahmedabad", "taluka": "Sanand", "village": "Sanand",
+            "survey_no": "45", "sku": "search_report_30yr",
+            "price_inr": 4999, "status": "in_progress",
+            "notes": "Advocate compiling 30-year chain; encumbrance search under way.",
+            "created_at": _iso_days_ago(4), "updated_at": _iso_days_ago(1),
+        },
+        {
+            "id": "demo-o-3", "user_email": DEMO_EMAIL, "state": "GJ",
+            "district": "Ahmedabad", "taluka": "Dholera", "village": "Dholera",
+            "survey_no": "72", "sku": "certified_712_index2",
+            "price_inr": 1500, "status": "pending",
+            "notes": "Awaiting partner pickup at Dholera taluka office.",
+            "created_at": _iso_days_ago(1), "updated_at": _iso_days_ago(1),
+        },
+    ]
+
+
+_manual_orders: list = _initial_manual_orders()
+_next_order_id = 4
+
+
+def demo_list_manual_orders() -> list:
+    """Sample orders newest-first (mirrors the real API ordering)."""
+    return sorted((dict(o) for o in _manual_orders),
+                  key=lambda x: x.get("created_at") or "", reverse=True)
+
+
+def demo_create_manual_order(email: str, state: str, district: str, taluka: str,
+                             village: str, survey_no: str, sku: str,
+                             notes: str = "") -> dict:
+    """Echo back a created order (status 'pending') in-memory only — never
+    touches Supabase. Server-side price comes from the SKU table, not the
+    client, matching the real endpoint."""
+    global _next_order_id
+    sku_info = _MANUAL_ORDER_SKUS.get(sku) or _MANUAL_ORDER_SKUS["certified_712_index2"]
+    now = datetime.now(timezone.utc).isoformat()
+    row = {
+        "id": f"demo-o-{_next_order_id}", "user_email": email or DEMO_EMAIL,
+        "state": (state or "GJ").strip().upper(),
+        "district": district.strip(), "taluka": taluka.strip(),
+        "village": village.strip(), "survey_no": survey_no.strip(),
+        "sku": sku if sku in _MANUAL_ORDER_SKUS else "certified_712_index2",
+        "price_inr": sku_info["price_inr"], "status": "pending",
+        "notes": (notes or "").strip(),
+        "created_at": now, "updated_at": now,
+    }
+    _next_order_id += 1
+    _manual_orders.append(row)
+    return dict(row)
+
+
+# ── Uploaded-record analysis (title scanner OCR path, no Gemini) ─────────────
+
+def demo_analyze_record() -> dict:
+    """Parsed TitleReport-style analysis for the upload/OCR demo, matching
+    main.py's AnalysisResult exactly (owner_name / survey_no / total_area /
+    tenure_type / encumbrances / risk_level / risk_reason). Uses a CAUTION
+    (restricted new-tenure) parcel so the risk badge is visibly meaningful."""
+    return {
+        "owner_name": "Kanubhai Somabhai Chaudhary",
+        "survey_no": "45",
+        "total_area": "12140 sq. m. (3 Acre)",
+        "tenure_type": "New Tenure (Navi Sharat)",
+        "encumbrances": "Boja of ₹52,00,000 — Bank of Baroda, Sanand branch",
+        "risk_level": "RED",
+        "risk_reason": "Restricted & Mortgaged",
+    }
+
+
+# ── Credits (generous demo balance so the nav never prompts payment) ─────────
+
+DEMO_CREDITS = 999
+
+
+def demo_credits(email: str) -> dict:
+    """Generous demo credits so nothing in the UI prompts for payment.
+    Matches GET /credits: {email, credits, payments_enabled, free_trial_credits}."""
+    return {
+        "email": (email or "").strip().lower() or DEMO_EMAIL,
+        "credits": DEMO_CREDITS,
+        "payments_enabled": False,
+        "free_trial_credits": DEMO_CREDITS,
+    }
+
+
+# ── Risk screen defaults (a nicely-populated sample screening) ───────────────
+
+# Sensible demo inputs for the Sanand parcel so screen_parcel() returns a
+# populated result (seismic zone, GDCR FSI, agri/NA) instead of all-unknown.
+DEMO_RISK_SCREEN_DEFAULTS = {
+    "lat": 22.9612, "lng": 72.3809,
+    "region": "Ahmedabad", "zone": "r2", "road_width_m": 18.0,
+    "is_agricultural": True,
+}

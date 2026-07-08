@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, BarChart2, Map, ArrowRight, Flame, Newspaper, RefreshCw, ExternalLink, Clock } from 'lucide-react';
 import TopNav from '@/components/TopNav';
 import { Reveal } from '@/components/motion';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BASE_URL, demoHeaders } from '@/lib/api';
 
 // Static market data (verified from web research)
 const REGIONS = [
@@ -80,6 +80,7 @@ export default function MarketIntelligence() {
     setIsRefreshing(true);
     try {
       const res = await fetch(`${API_BASE_URL}/news/gujarat`, {
+        headers: demoHeaders(), // demo mode: seeded Gujarat news
         signal: AbortSignal.timeout(10000),
       });
 

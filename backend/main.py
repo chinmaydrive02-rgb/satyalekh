@@ -260,8 +260,15 @@ async def create_checkout_session(body: CheckoutRequest, request: Request):
 
 
 @app.get("/credits")
-def credits_endpoint(email: str, request: Request):
+def credits_endpoint(request: Request, email: str = "",
+                     x_demo_token: Optional[str] = Header(default=None)):
     """Return the current search-credit balance for an email."""
+    # ── DEMO MODE ── generous demo credits (payments disabled) so the nav
+    # looks healthy and nothing in the UI ever prompts for payment. Email is
+    # optional here (the frictionless demo has no account email).
+    if demo_mode.is_valid_token(x_demo_token) or (email or "").strip().lower() == demo_mode.DEMO_EMAIL:
+        return demo_mode.demo_credits(email)
+
     _enforce_rate_limit(request, "credits", limit=30)
     email = _validate_email(email)
     return {
@@ -361,11 +368,18 @@ def _sniff_upload_mime(data: bytes) -> Optional[str]:
 
 
 @app.post("/analyze-record", response_model=AnalysisResult)
-async def analyze_record(http_request: Request, file: UploadFile = File(...)):
+async def analyze_record(http_request: Request, file: UploadFile = File(...),
+                         x_demo_token: Optional[str] = Header(default=None)):
     """
     Analyzes an uploaded 7/12 Land Record using Gemini Vision.
     Extracts key information and assigns a risk label.
     """
+    # ── DEMO MODE ── return a deterministic parsed analysis (no Gemini call,
+    # no file read beyond FastAPI's upload). Lets the title-scanner/upload flow
+    # be demoed on the deployed site where Gemini isn't reachable.
+    if demo_mode.is_valid_token(x_demo_token):
+        return demo_mode.demo_analyze_record()
+
     _enforce_rate_limit(http_request, "analyze-record", limit=5)
 
     declared_type = (file.content_type or "").lower()
@@ -554,6 +568,16 @@ async def demo_login(body: DemoLoginRequest, http_request: Request):
 def demo_session(x_demo_token: Optional[str] = Header(default=None)):
     """Check whether a demo token is still valid (used by the frontend banner)."""
     return {"valid": demo_mode.is_valid_token(x_demo_token)}
+
+
+@app.post("/demo/start")
+async def demo_start(http_request: Request):
+    """Frictionless investor entry: issue a valid 24h demo token with NO
+    credentials. Same response shape as /demo/login ({demo_token, expires_in}).
+    Rate-limited to blunt abuse (a token is cheap but not free)."""
+    _enforce_rate_limit(http_request, "demo-start", limit=10)
+    token, expires_in = demo_mode.issue_token()
+    return {"demo_token": token, "expires_in": expires_in}
 # ── END DEMO MODE ──────────────────────────────────────────────────────────
 
 
@@ -1143,7 +1167,14 @@ class LandReportRequest(BaseModel):
     verified_facts: Optional[str] = None
 
 @app.post("/land-report")
-async def land_report(body: LandReportRequest, http_request: Request):
+async def land_report(body: LandReportRequest, http_request: Request,
+                      x_demo_token: Optional[str] = Header(default=None)):
+    # ── DEMO MODE ── full land-intel fixture (no Open-Meteo, no Gemini). Same
+    # {lat, lng, area_sqm, elevation_m, annual_rain_mm, report{...}} schema the
+    # land-intel page already renders.
+    if demo_mode.is_valid_token(x_demo_token):
+        return demo_mode.demo_land_report()
+
     _enforce_rate_limit(http_request, "land-report", limit=5)
     if not (-90 <= body.lat <= 90 and -180 <= body.lng <= 180):
         raise HTTPException(status_code=400, detail="Invalid coordinates")
@@ -1246,12 +1277,19 @@ class LitigationRequest(BaseModel):
     year: str = ""
 
 @app.post("/litigation-search")
-async def litigation_search(body: LitigationRequest, http_request: Request):
+async def litigation_search(body: LitigationRequest, http_request: Request,
+                            x_demo_token: Optional[str] = Header(default=None)):
     """
     Search Gujarat district eCourts for cases by party name (TEAL-style
     title check). One year per search; principal court complex of the
     district (v1). Takes 60-180s — live portal + CAPTCHA solving.
     """
+    # ── DEMO MODE ── realistic mixed pending/disposed result (no eCourts, no
+    # CAPTCHA, no Gemini). Same {cases[], court_complex, message} schema, with
+    # the honest same-name/spelling caveat baked into the message.
+    if demo_mode.is_valid_token(x_demo_token):
+        return demo_mode.demo_litigation_search()
+
     _enforce_rate_limit(http_request, "litigation-search", limit=3)
 
     name = body.name.strip()
@@ -1286,9 +1324,15 @@ _NEWS_QUERIES = [
 
 
 @app.get("/news/gujarat")
-async def gujarat_news(http_request: Request):
+async def gujarat_news(http_request: Request,
+                       x_demo_token: Optional[str] = Header(default=None)):
     """Cached Gujarat land/property news. 503 when NEWSDATA_API_KEY is unset
     (the frontend degrades gracefully to its static articles)."""
+    # ── DEMO MODE ── plausible Gujarat land/property news feed (no newsdata.io
+    # call). Same {articles[], cached} shape the news page renders.
+    if demo_mode.is_valid_token(x_demo_token):
+        return demo_mode.demo_gujarat_news()
+
     _enforce_rate_limit(http_request, "news", limit=10)
 
     key = os.getenv("NEWSDATA_API_KEY", "").strip()
@@ -1412,10 +1456,23 @@ class ManualOrdersListResponse(BaseModel):
 
 
 @app.post("/manual-orders", response_model=ManualOrderItem)
-def create_manual_order(body: ManualOrderCreateRequest, http_request: Request):
+def create_manual_order(body: ManualOrderCreateRequest, http_request: Request,
+                        x_demo_token: Optional[str] = Header(default=None)):
     """Place a manual-fulfilment order (certified copy / 30-year search
     report). Status starts at 'pending'; the partner walks it through
     quoted → in_progress → delivered over 2-5 working days."""
+    # ── DEMO MODE ── echo back a created order (status 'pending') in-memory
+    # only, never touching Supabase. Same ManualOrderItem shape.
+    if demo_mode.is_valid_token(x_demo_token):
+        for field, value in (("District", body.district), ("Taluka", body.taluka),
+                             ("Village", body.village), ("Survey number", body.survey_no)):
+            if not value or not value.strip():
+                raise HTTPException(status_code=400, detail=f"{field} is required")
+        return ManualOrderItem(**demo_mode.demo_create_manual_order(
+            (body.email or "").strip().lower() or demo_mode.DEMO_EMAIL,
+            body.state or "GJ", body.district, body.taluka, body.village,
+            body.survey_no, body.sku, body.notes or ""))
+
     _enforce_rate_limit(http_request, "manual-orders", limit=5)
 
     email = _validate_email(body.email)
@@ -1461,8 +1518,14 @@ def create_manual_order(body: ManualOrderCreateRequest, http_request: Request):
 
 
 @app.get("/manual-orders", response_model=ManualOrdersListResponse)
-def list_manual_orders(http_request: Request, email: str = ""):
+def list_manual_orders(http_request: Request, email: str = "",
+                       x_demo_token: Optional[str] = Header(default=None)):
     """All manual-fulfilment orders for an email, newest first."""
+    # ── DEMO MODE ── serve the in-memory sample orders (email not required)
+    if demo_mode.is_valid_token(x_demo_token):
+        return ManualOrdersListResponse(
+            orders=[ManualOrderItem(**o) for o in demo_mode.demo_list_manual_orders()])
+
     _enforce_rate_limit(http_request, "manual-orders-list", limit=30)
     email = email.strip().lower()
     if not email:
@@ -1503,7 +1566,8 @@ def risk_layers_endpoint():
 
 
 @app.post("/risk-screen")
-def risk_screen_endpoint(body: RiskScreenRequest, http_request: Request):
+def risk_screen_endpoint(body: RiskScreenRequest, http_request: Request,
+                         x_demo_token: Optional[str] = Header(default=None)):
     """Screen a parcel against all 12 restriction layers deterministically.
 
     All fields optional. Layers computable from the inputs return real findings
@@ -1511,6 +1575,16 @@ def risk_screen_endpoint(body: RiskScreenRequest, http_request: Request):
     zone + road width, agri/NA from is_agricultural); layers that need geodata
     we don't yet hold return outcome "unknown" with an honest verification note
     rather than a fabricated distance. Same inputs -> same output."""
+    # ── DEMO MODE ── when a demo token is present and the caller supplied no
+    # inputs, screen a sensible sample parcel so the /risk-intel page shows a
+    # nicely-populated result instead of all-unknown. This reuses the SAME
+    # deterministic screen_parcel() engine (no network) — the non-demo path
+    # below is untouched. If the demo caller DID supply inputs, honour them.
+    if demo_mode.is_valid_token(x_demo_token) and not any(
+        v is not None for v in (body.lat, body.lng, body.region, body.zone,
+                                body.road_width_m, body.is_agricultural)):
+        return screen_parcel(**demo_mode.DEMO_RISK_SCREEN_DEFAULTS)
+
     _enforce_rate_limit(http_request, "risk-screen", limit=30)
 
     # Light input hygiene mirroring /land-report's coordinate + length checks.
