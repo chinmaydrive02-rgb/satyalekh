@@ -530,7 +530,12 @@ from title_report import (
     parse_mutation_entries, structure_chain_with_gemini,
 )
 
-JOBS = JobStore()
+# Enable only with a persistent volume and one Uvicorn worker.
+if os.getenv("JOB_DB_PATH"):
+    from durable_jobs import DurableJobStore
+    JOBS = DurableJobStore(os.environ["JOB_DB_PATH"])
+else:
+    JOBS = JobStore()
 TITLE_REPORT_CACHE_DAYS = 7
 MAX_VF6_FETCHES = 5  # cap per-entry VF-6 scrapes per report
 # SECURITY F-08: bound the in-memory job store and concurrent live scrapes.
@@ -624,7 +629,15 @@ def _get_cached_title_report(req: TitleReportJobRequest) -> Optional[dict]:
                .gte("created_at", cutoff)
                .order("created_at", desc=True).limit(1).execute())
         if res.data:
-            return res.data[0]["report"]
+            report = res.data[0]["report"]
+            # Older cache entries lack source coverage and may have been scored
+            # before incomplete evidence was distinguished from clean findings.
+            coverage = report.get("coverage") if isinstance(report, dict) else None
+            if not isinstance(coverage, dict) or coverage.get("assessment_version") != 2:
+                return None
+            if req.include_chain and not coverage.get("chain_requested"):
+                return None
+            return report
     except Exception as e:
         print(f"[title-report] cache read failed (non-fatal): {e}")
     return None
@@ -675,12 +688,15 @@ async def _run_title_report_job(job_id: str, req: TitleReportJobRequest, email: 
         entry_nos = parse_mutation_entries(mutation_text)
         vf6_texts: list = []
         chain: list = []
+        attempted_entries = 0
+        failed_entries = 0
 
         if req.include_chain and entry_nos:
             JOBS.set_progress(
                 job_id, "fetching_chain",
                 f"Fetching VF-6 details for {min(len(entry_nos), MAX_VF6_FETCHES)} mutation entries…", 72)
             for i, entry_no in enumerate(entry_nos[:MAX_VF6_FETCHES]):
+                attempted_entries += 1
                 try:
                     JOBS.set_progress(
                         job_id, "fetching_chain",
@@ -692,7 +708,10 @@ async def _run_title_report_job(job_id: str, req: TitleReportJobRequest, email: 
                         record_type="VF6", max_captcha_attempts=3)
                     if "error" not in vf6:
                         vf6_texts.append(json.dumps(vf6, ensure_ascii=False))
+                    else:
+                        failed_entries += 1
                 except Exception as e:
+                    failed_entries += 1
                     print(f"[title-report] VF-6 fetch for entry {entry_no} failed (non-fatal): {e}")
 
         JOBS.set_progress(job_id, "building_report", "Building your title report…", 88)
@@ -709,6 +728,25 @@ async def _run_title_report_job(job_id: str, req: TitleReportJobRequest, email: 
                 chain = fallback_chain_from_entries(entry_nos)
 
         report = compose_title_report(record, chain, cached=False)
+        report["coverage"] = {
+            "assessment_version": 2,
+            "chain_requested": req.include_chain,
+            "mutation_entries_identified": len(entry_nos),
+            "mutation_records_retrieved": len(vf6_texts),
+            "mutation_records_failed": failed_entries,
+            "mutation_records_not_attempted": len(entry_nos) - attempted_entries,
+            # This measures retrieval of identified entries, not completeness
+            # of legal title or the full historic record.
+            "chain_complete": bool(req.include_chain and entry_nos and len(vf6_texts) == len(entry_nos)),
+        }
+        if not report["coverage"]["chain_complete"]:
+            report["risk"]["checks"].append({
+                "name": "mutation_source_coverage", "status": "unavailable",
+                "detail": f"Retrieved {len(vf6_texts)} of {len(entry_nos)} identified mutation records. "
+                          "Full supporting mutation evidence has not been established.",
+            })
+            if report["risk"]["verdict"] == "CLEAR":
+                report["risk"]["verdict"] = "CAUTION"
 
         # Deduct one credit on success (cached hits never reach this point)
         if STRIPE_ENABLED and email:
@@ -1611,6 +1649,12 @@ def risk_screen_endpoint(body: RiskScreenRequest, http_request: Request,
 @app.get("/")
 def read_root():
     return {"status": "Satya-Lekh API is running", "version": "2.1"}
+
+@app.get("/health/live")
+def liveness():
+    """Cheap probe: no browser launch, portal traffic, or AI charges."""
+    return {"status": "ok"}
+
 
 @app.get("/health")
 async def health_check():

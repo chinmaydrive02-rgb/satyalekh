@@ -1,3 +1,5 @@
+> **Superseded deployment instructions (28 September 2026).** Use [deploy/README.md](deploy/README.md) and the Compose configuration instead. The claims below that Indian hosting guarantees access and that free capacity is permanent are unverified. Oracle free capacity is availability-dependent and idle instances may be reclaimed. Do not copy the legacy credential configuration below into a new deployment.
+
 # Deploy the backend on a FREE Indian server (Oracle Cloud Mumbai)
 
 AnyROR blocks/throttles foreign data-center IPs, so the scraper must run from India.

@@ -216,7 +216,8 @@ def apply_chain_flags(chain: list, now: Optional[datetime] = None) -> list:
 # Risk scoring
 # ──────────────────────────────────────────────────────────────────────────────
 
-_NO_ENCUMBRANCE_VALUES = {"none", "null", "", "n/a", "no", "nil", "—", "-", "clear"}
+_NO_ENCUMBRANCE_VALUES = {"none", "no", "nil", "clear"}
+_UNKNOWN_VALUES = {"", "null", "n/a", "na", "unknown", "not available", "not visible", "not readable", "—", "-"}
 
 
 def basic_risk_level(tenure_type: str, encumbrances: str) -> tuple:
@@ -226,11 +227,13 @@ def basic_risk_level(tenure_type: str, encumbrances: str) -> tuple:
     encum = (encumbrances or "").strip()
 
     risk_level, risk_reason = "GREEN", "Clear Title"
+    if tenure.strip() in _UNKNOWN_VALUES or encum.lower() in _UNKNOWN_VALUES:
+        risk_level, risk_reason = "YELLOW", "Insufficient record information"
     restricted = "new" in tenure or "navi" in tenure or any(
         k in tenure for k in RESTRICTED_TENURE_KEYWORDS)
     if restricted:
         risk_level, risk_reason = "YELLOW", "Restricted Development / New Tenure"
-    if encum and encum.lower() not in _NO_ENCUMBRANCE_VALUES:
+    if encum.lower() not in _NO_ENCUMBRANCE_VALUES | _UNKNOWN_VALUES:
         risk_level, risk_reason = "RED", "Mortgaged or Encumbered"
         if restricted:
             risk_reason = "Restricted & Mortgaged"
@@ -254,7 +257,7 @@ def compute_risk(record: dict, chain: list, now: Optional[datetime] = None) -> d
 
     # 1. Tenure type
     tenure = str(record.get("tenure_type") or "").strip()
-    if not tenure or tenure in ("—", "-"):
+    if tenure.lower() in _UNKNOWN_VALUES:
         _add("tenure_type", "unavailable", "Tenure type not visible on the record.")
     elif any(k in tenure.lower() for k in RESTRICTED_TENURE_KEYWORDS) or "new" in tenure.lower():
         _add("tenure_type", "fail",
@@ -264,35 +267,38 @@ def compute_risk(record: dict, chain: list, now: Optional[datetime] = None) -> d
 
     # 2. Encumbrances (boja)
     encum = str(record.get("encumbrances") or "").strip()
-    if not encum or encum in ("—", "-"):
+    if encum.lower() in _UNKNOWN_VALUES:
         _add("encumbrances", "unavailable", "Encumbrance column not readable on the record.")
     elif encum.lower() in _NO_ENCUMBRANCE_VALUES:
         _add("encumbrances", "pass", "No encumbrances (boja) recorded.")
     else:
         _add("encumbrances", "fail", f"Encumbrance recorded: {encum}", 30)
 
-    # 3. Ownership churn (2+ transfers in last 3 years)
-    if not chain:
-        _add("ownership_churn", "unavailable", "No structured mutation chain available.")
+    # Known adverse findings must survive incomplete neighbouring entries.
+    churned = [e for e in chain if "RECENT_CHURN" in (e.get("flags") or [])]
+    if churned:
+        _add("ownership_churn", "warn",
+             f"{len(churned)} ownership transfers in the last 3 years — review rapid turnover.", 20)
+    elif not chain or any(not parse_entry_date(e.get("date")) or
+                          str(e.get("mutation_type") or "").strip().lower() in _UNKNOWN_VALUES for e in chain):
+        _add("ownership_churn", "unavailable", "Mutation dates or types are incomplete; ownership turnover cannot be assessed.")
     else:
-        churned = [e for e in chain if "RECENT_CHURN" in (e.get("flags") or [])]
-        if churned:
-            _add("ownership_churn", "warn",
-                 f"{len(churned)} ownership transfers in the last 3 years — rapid flipping is a fraud marker.", 20)
-        else:
-            _add("ownership_churn", "pass", "No rapid ownership turnover in the last 3 years.")
+        _add("ownership_churn", "pass", "No rapid ownership turnover found in the available entries.")
 
     # 4. Chain continuity
-    if len(chain) < 2:
+    transfers = [e for e in chain if _is_transfer(e)]
+    gaps = [e for e in chain if "CHAIN_GAP" in (e.get("flags") or [])]
+    if gaps:
+        _add("chain_continuity", "warn",
+             f"{len(gaps)} possible gap(s): a seller does not match the previous recorded owner.", 15)
+    elif len(transfers) < 2 or any(
+        str(e.get(field) or "").strip().lower() in _UNKNOWN_VALUES
+        for e in transfers for field in ("from_party", "to_party")
+    ) or any(str(e.get("mutation_type") or "").strip().lower() in _UNKNOWN_VALUES for e in chain):
         _add("chain_continuity", "unavailable",
-             "Fewer than 2 chain entries — continuity cannot be assessed.")
+             "Transfer parties or mutation details are incomplete — continuity cannot be assessed.")
     else:
-        gaps = [e for e in chain if "CHAIN_GAP" in (e.get("flags") or [])]
-        if gaps:
-            _add("chain_continuity", "warn",
-                 f"{len(gaps)} possible gap(s): a seller does not match the previous recorded owner.", 15)
-        else:
-            _add("chain_continuity", "pass", "Each transfer connects to the previous recorded owner.")
+        _add("chain_continuity", "pass", "Available transfers connect to the previous recorded owner.")
 
     # 5. Court / stay / litigation language anywhere in the record or chain
     haystack = " ".join([
@@ -304,11 +310,16 @@ def compute_risk(record: dict, chain: list, now: Optional[datetime] = None) -> d
     if lit_hits:
         _add("litigation_mentions", "fail",
              f"Litigation language found in record/chain: {', '.join(lit_hits)}.", 25)
+    elif all(str(record.get(k) or "").strip().lower() in _UNKNOWN_VALUES
+             for k in ("mutation_entries", "encumbrances")) and not chain:
+        _add("litigation_mentions", "unavailable", "No readable text available to check for court or stay references.")
     else:
-        _add("litigation_mentions", "pass", "No court/stay language found in the record or chain.")
+        _add("litigation_mentions", "pass", "No court/stay language found in the available record text; this is not a court-record search.")
 
     score = min(100, score)
     verdict = "CLEAR" if score < 20 else ("CAUTION" if score < 50 else "HIGH_RISK")
+    if verdict == "CLEAR" and any(c["status"] == "unavailable" for c in checks):
+        verdict = "CAUTION"
     return {"score": score, "verdict": verdict, "checks": checks}
 
 

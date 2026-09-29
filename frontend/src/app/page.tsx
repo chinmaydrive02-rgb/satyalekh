@@ -4,7 +4,6 @@ import React from "react";
 import Link from "next/link";
 import SearchWidget from "@/components/SearchWidget";
 import TopNav from "@/components/TopNav";
-import WelcomeIntro from "@/components/WelcomeIntro";
 import { Reveal, CountUp, Parallax } from "@/components/motion";
 import HeroBackdrop from "@/components/HeroBackdrop";
 import RecordRails from "@/components/RecordRails";
@@ -267,7 +266,6 @@ const DOC_MARQUEE = [
 export default function Home() {
   return (
     <main className="min-h-screen bg-bg">
-      <WelcomeIntro />
       <TopNav />
 
       {/* ── Hero ─────────────────────────────────────────────────── */}

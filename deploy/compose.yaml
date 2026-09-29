@@ -1,0 +1,53 @@
+# Run: docker compose --env-file .env -f compose.yaml up -d --build
+# One API worker: the portal gate and job registry are process-local.
+services:
+  api:
+    image: ${API_IMAGE:-satyalekh-api:local}
+    build: ../backend
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      JOB_DB_PATH: /data/jobs.sqlite3
+      PORTAL_CONCURRENCY: '1'
+      PORTAL_MIN_INTERVAL_SECONDS: '5'
+      PORTAL_COOLDOWN_SECONDS: '300'
+      MAX_CONCURRENT_SCRAPE_JOBS: '3'
+    volumes:
+      - jobs:/data
+    shm_size: 256mb
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN in .env}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+volumes:
+  jobs:
+  caddy_data:
+  caddy_config:
