@@ -33,3 +33,8 @@ Thumbs.db
 .claire/
 .claude/
 .vercel/
+
+# Durable local job data
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

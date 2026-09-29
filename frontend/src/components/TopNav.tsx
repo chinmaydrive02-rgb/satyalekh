@@ -115,7 +115,7 @@ export default function TopNav() {
           </Link>
 
           {/* Desktop Links */}
-          <div className="hidden lg:flex gap-0.5 items-center">
+          <div className="hidden xl:flex gap-0.5 items-center">
             {primaryLinks.map((link) => {
                const isActive = pathname === link.href;
                return (
@@ -170,8 +170,10 @@ export default function TopNav() {
           {/* Mobile Toggle */}
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="lg:hidden p-2 -mr-2 text-muted hover:text-ink transition-colors"
-            aria-label="Toggle menu"
+            className="xl:hidden p-2 -mr-2 text-muted hover:text-ink transition-colors"
+            aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-navigation"
           >
             {mobileOpen ? <X size={22}/> : <Menu size={22}/>}
           </button>
@@ -179,12 +181,14 @@ export default function TopNav() {
 
        {/* Mobile Dropdown — smooth height/opacity via grid-rows trick */}
        <div
-         className={`lg:hidden grid transition-[grid-template-rows,opacity] duration-300 [transition-timing-function:cubic-bezier(0.22,0.61,0.36,1)] ${
+         id="mobile-navigation"
+         inert={!mobileOpen}
+         className={`xl:hidden grid transition-[grid-template-rows,opacity] duration-300 [transition-timing-function:cubic-bezier(0.22,0.61,0.36,1)] ${
            mobileOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 pointer-events-none'
          }`}
        >
         <div className="overflow-hidden min-h-0">
-         <div className="px-4 pb-4 pt-2 border-t border-border bg-surface flex flex-col gap-0.5 max-h-[calc(100vh-64px)] overflow-y-auto">
+         <div className="px-4 pb-4 pt-2 border-t border-border bg-surface flex flex-col gap-0.5 max-h-[calc(100dvh-64px)] overflow-y-auto">
            {allLinks.map((link) => {
               const isActive = pathname === link.href;
               const badge = 'badge' in link ? (link as { badge?: number }).badge : 0;
@@ -193,7 +197,7 @@ export default function TopNav() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-2.5 min-h-11 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     isActive ? 'text-brand bg-brand-soft' : 'text-ink-soft hover:bg-surface-soft'
                   }`}
                 >
@@ -210,7 +214,7 @@ export default function TopNav() {
              <Link
                href="/pricing"
                onClick={() => setMobileOpen(false)}
-               className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-brand"
+               className="flex items-center gap-2.5 min-h-11 px-3 py-2.5 rounded-lg text-sm font-medium text-brand"
              >
                <Wallet size={15}/> {creditsInfo.credits} search credit{creditsInfo.credits === 1 ? '' : 's'}
              </Link>

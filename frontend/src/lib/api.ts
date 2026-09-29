@@ -193,7 +193,18 @@ export interface TitleRisk {
   checks: RiskCheck[];
 }
 
+export interface ReportCoverage {
+  chain_requested: boolean;
+  mutation_entries_identified: number;
+  mutation_records_retrieved: number;
+  mutation_records_failed: number;
+  mutation_records_not_attempted: number;
+  chain_complete: boolean;
+}
+
 export interface TitleReport {
+  demo?: boolean;
+  coverage?: ReportCoverage;
   record: LandRecord;
   chain_of_title: ChainEntry[];
   risk: TitleRisk;

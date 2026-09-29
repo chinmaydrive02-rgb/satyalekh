@@ -4,7 +4,7 @@
 // Shared by property/[id] (core flow) and upload (Auto Web Scraper tab).
 
 import React, { useEffect, useState } from 'react';
-import { Loader2, Check, Clock } from 'lucide-react';
+import { Loader2, Check, Clock, AlertTriangle } from 'lucide-react';
 import { Job, JOB_STAGES } from '@/lib/api';
 
 function formatElapsed(ms: number): string {
@@ -30,6 +30,8 @@ export default function JobProgress({
     return () => clearInterval(t);
   }, []);
 
+  const finished = job?.status === 'done';
+  const failed = job?.status === 'error';
   const currentIdx = job?.stage ? JOB_STAGES.findIndex((s) => s.key === job.stage) : -1;
   const progress = Math.min(100, Math.max(0, job?.progress ?? 0));
   const elapsed = startedAt ? now - startedAt : 0;
@@ -40,8 +42,8 @@ export default function JobProgress({
       {/* Header row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <Loader2 size={18} className="text-brand animate-spin shrink-0" />
-          <h2 className="text-base font-semibold text-ink">{title}</h2>
+          {failed ? <AlertTriangle size={18} className="text-warning shrink-0" /> : finished ? <Check size={18} className="text-success shrink-0" /> : <Loader2 size={18} className="text-brand animate-spin shrink-0" />}
+          <h2 className="text-base font-semibold text-ink">{failed ? 'Report could not be completed' : finished ? 'Report ready' : title}</h2>
         </div>
         {startedAt && (
           <span className="flex items-center gap-1.5 text-sm font-mono text-muted">
@@ -53,12 +55,12 @@ export default function JobProgress({
       {/* Progress bar — animated shimmer sweep while working */}
       <div>
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-xs text-muted">
-            {queued ? 'Queued — waiting for a worker…' : job?.stage_label || 'Working…'}
+          <span className="text-xs text-muted" role="status" aria-live="polite">
+            {failed ? job?.error || 'Please try again or upload the official record.' : finished ? 'Completed' : queued ? 'Your search is queued…' : job?.stage_label || 'Working…'}
           </span>
           <span className="text-sm font-mono tnum text-brand font-semibold">{progress}%</span>
         </div>
-        <div className="w-full h-2.5 bg-surface-soft border border-border rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(22,36,31,0.06)]">
+        <div role="progressbar" aria-label="Report progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} className="w-full h-2.5 bg-surface-soft border border-border rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(22,36,31,0.06)]">
           <div
             className="shimmer h-full rounded-full bg-gradient-to-r from-brand-strong via-brand to-brand transition-all duration-700 ease-out"
             style={{ width: `${Math.max(progress, 2)}%` }}
@@ -103,10 +105,10 @@ export default function JobProgress({
 
       {/* Honest expectations */}
       <p className="text-xs leading-relaxed text-muted border-t border-border pt-4">
-        A live bot is navigating the government AnyROR portal for you — solving the CAPTCHA and
-        translating the Gujarati record. <span className="text-ink-soft font-medium">The first search can take
-        2–3 minutes</span> (free hosting cold start + government portal speed). Repeat searches of
-        the same parcel return instantly from cache. Keep this page open.
+        {failed ? 'No completed report is available from this attempt. You can retry the search or upload an official record for analysis.' : finished ? 'Your report is ready to review.' : <>
+          We are retrieving and analysing the available land records. <span className="text-ink-soft font-medium">Live searches can take several minutes</span>, depending on government portal availability. Saved results may load faster. Keep this page open to follow progress.
+          {elapsed > 180000 && <span className="block mt-2 text-warning">This is taking longer than usual. Avoid starting duplicate searches while this request is still running.</span>}
+        </>}
       </p>
     </div>
   );

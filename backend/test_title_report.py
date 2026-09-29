@@ -150,11 +150,11 @@ CLEAN_RECORD = {
 
 
 class TestRiskScoring:
-    def test_clean_record_is_clear(self):
+    def test_clean_record_with_unassessed_continuity_needs_review(self):
         chain = apply_chain_flags(
             [_entry("12", "1998", frm="Ambalal Patel", to="Ramesh Patel")], now=NOW)
         risk = compute_risk(CLEAN_RECORD, chain, now=NOW)
-        assert risk["verdict"] == "CLEAR"
+        assert risk["verdict"] == "CAUTION"
         assert risk["score"] < 20
         assert all(c["status"] in ("pass", "unavailable") for c in risk["checks"])
 

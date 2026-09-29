@@ -52,7 +52,7 @@ const STATUS_LABEL: Record<CheckStatus, string> = {
   pass: 'Pass',
   warn: 'Warning',
   fail: 'Fail',
-  unavailable: 'N/A',
+  unavailable: 'Not verified',
 };
 
 const STATUS_PILL: Record<CheckStatus, string> = {
@@ -66,10 +66,10 @@ const STATUS_PILL: Record<CheckStatus, string> = {
 function ScoreDial({ score, stroke, textCls }: { score: number; stroke: string; textCls: string }) {
   const r = 46;
   const c = 2 * Math.PI * r; // ≈ 289
-  const clamped = Math.min(100, Math.max(0, score));
+  const clamped = Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : 0;
   const offset = c * (1 - clamped / 100);
   return (
-    <div className="relative w-[108px] h-[108px] shrink-0" role="img" aria-label={`Title score ${clamped} out of 100`}>
+    <div className="relative w-[108px] h-[108px] shrink-0" role="img" aria-label={`Risk score ${clamped} out of 100; higher means more risk`}>
       <svg viewBox="0 0 110 110" className="w-full h-full -rotate-90">
         <circle cx="55" cy="55" r={r} fill="none" stroke="var(--border)" strokeWidth="7" />
         <circle
@@ -86,7 +86,7 @@ function ScoreDial({ score, stroke, textCls }: { score: number; stroke: string; 
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className={`text-3xl font-mono font-bold tnum leading-none ${textCls}`}>{clamped}</span>
-        <span className="text-[9px] uppercase tracking-[0.14em] text-muted mt-1">of 100</span>
+        <span className="text-[9px] uppercase tracking-[0.14em] text-muted mt-1">risk / 100</span>
       </div>
     </div>
   );
@@ -102,12 +102,13 @@ function Detail({ label, value, wide = false }: { label: string; value?: string 
 }
 
 export default function TitleReport({ report }: { report: TitleReportData }) {
-  const { record, risk, chain_of_title: chain, cached, generated_at } = report;
+  const { record, risk, chain_of_title: chain, cached, generated_at, coverage } = report;
   const verdict = VERDICT_STYLES[risk.verdict] ?? VERDICT_STYLES.CAUTION;
 
   let generatedLabel = '';
   try {
-    generatedLabel = generated_at ? new Date(generated_at).toLocaleString('en-IN') : '';
+    const generatedDate = new Date(generated_at);
+    generatedLabel = generated_at && Number.isFinite(generatedDate.getTime()) ? generatedDate.toLocaleString('en-IN') : '';
   } catch {
     generatedLabel = generated_at || '';
   }
@@ -115,11 +116,9 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
   // Presentational document reference — deterministic from record identity.
   const refNo = `SL/${(record.district || 'GUJ').slice(0, 3).toUpperCase()}/${(record.survey_no || '—').replace(/\s+/g, '')}`;
 
-  const hasEncumbrances =
-    !!record.encumbrances &&
-    !['none', 'nil', 'n/a', 'no', 'null', '—', 'clear', ''].includes(
-      record.encumbrances.trim().toLowerCase()
-    );
+  const encumbranceText = record.encumbrances?.trim() || '';
+  const encumbrancesUnavailable = ['', 'unknown', 'not available', 'not found', 'n/a', 'null', '—', '-'].includes(encumbranceText.toLowerCase());
+  const hasEncumbrances = !encumbrancesUnavailable && !['none', 'nil', 'no', 'clear'].includes(encumbranceText.toLowerCase());
 
   return (
     <article className="sl-report flex flex-col gap-6">
@@ -139,15 +138,21 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
         }
       `}</style>
 
+      {report.demo && (
+        <section className="rounded-xl border-2 border-warning-border bg-warning-soft p-4 text-warning">
+          <p className="text-sm font-bold">SAMPLE REPORT · DEMONSTRATION DATA</p>
+          <p className="mt-1 text-xs">Illustrative records only. No live government record was retrieved for this report.</p>
+        </section>
+      )}
       {/* ── Document header: memo masthead + verdict ─────────────── */}
       <section className="card overflow-hidden">
         {/* Masthead strip — ref no + issue date, like an official opinion */}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-6 md:px-8 py-3 border-b border-border bg-surface-soft/50">
           <span className="eyebrow text-brand">Title Intelligence Report — 7/12 Record</span>
-          <span className="flex items-center gap-3 font-mono text-[11px] text-muted tnum">
+          <span className="flex items-center gap-3 flex-wrap font-mono text-[11px] text-muted tnum break-all">
             <span>Ref {refNo}</span>
-            {generatedLabel && <span className="hidden sm:inline text-faint">·</span>}
-            {generatedLabel && <span className="hidden sm:inline">{generatedLabel}</span>}
+            {generatedLabel && <span className="text-faint">·</span>}
+            {generatedLabel && <span className="block">{generatedLabel}</span>}
           </span>
         </div>
         {/* Gold registrar rule */}
@@ -155,7 +160,7 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
 
         <div className="p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex flex-col gap-2 min-w-0">
-            <h2 className="font-serif text-3xl md:text-4xl font-semibold text-ink leading-tight">
+            <h2 className="font-serif text-3xl md:text-4xl font-semibold text-ink leading-tight break-words">
               Survey No. <span className="font-mono font-bold tnum">{record.survey_no || '—'}</span>
             </h2>
             <p className="text-sm text-muted flex items-center gap-2">
@@ -172,7 +177,7 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
           </div>
 
           {/* Score dial + stamp-style verdict */}
-          <div className="flex items-center gap-6 shrink-0">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 shrink-0">
             <ScoreDial score={risk.score} stroke={verdict.stroke} textCls={verdict.text} />
             <div className="flex flex-col items-center gap-1.5">
               <span
@@ -181,15 +186,36 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
               >
                 {verdict.label}
               </span>
-              <span className="eyebrow text-[9px]">Verdict</span>
+              <span className="eyebrow text-[9px]">Automated assessment</span>
+              <span className="text-[10px] text-muted">Higher score = more risk</span>
             </div>
           </div>
         </div>
       </section>
 
+      {coverage && (
+        <section className="card p-6 md:p-8" aria-labelledby="report-coverage-heading">
+          <h3 id="report-coverage-heading" className="text-base font-semibold text-ink">Evidence coverage</h3>
+          <p className="text-sm text-muted leading-relaxed mt-2">
+            {coverage.chain_requested
+              ? `${coverage.mutation_records_retrieved} of ${coverage.mutation_entries_identified} identified mutation records retrieved.`
+              : 'Mutation record retrieval was not requested for this report.'}
+            {' '}{coverage.chain_complete
+              ? 'The requested mutation retrieval is complete. The assessment remains limited to the records available.'
+              : 'The ownership history is incomplete. Review the outstanding evidence before relying on the assessment.'}
+          </p>
+          {(coverage.mutation_records_failed > 0 || coverage.mutation_records_not_attempted > 0) && (
+            <p className="mt-2 text-sm text-warning">
+              {coverage.mutation_records_failed} could not be retrieved; {coverage.mutation_records_not_attempted} not yet attempted.
+            </p>
+          )}
+          <p className="mt-3 text-xs text-muted leading-relaxed">A risk score describes findings in the available records. It does not establish that the title is clear.</p>
+        </section>
+      )}
+
       {/* ── Risk checks — ledger rows ─────────────────────────────── */}
       <section className="card p-6 md:p-8">
-        <div className="flex items-baseline justify-between border-b-2 border-ink/10 pb-3 mb-2">
+        <div className="flex flex-wrap gap-2 items-baseline justify-between border-b-2 border-ink/10 pb-3 mb-2">
           <h3 className="text-base font-semibold text-ink">Title Checks</h3>
           <span className="font-mono text-[11px] text-faint tnum">{risk.checks.length} automated checks</span>
         </div>
@@ -200,16 +226,16 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
                 <CheckIcon status={check.status} />
               </span>
               <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-sm font-semibold text-ink whitespace-nowrap">
-                    {check.name}
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="text-sm font-semibold text-ink break-words">
+                    {check.name.replaceAll("_", " ").replace(/^./, letter => letter.toUpperCase())}
                   </span>
                   <span className="leader hidden sm:block" aria-hidden="true" />
                   <span className={`badge border text-[10px] uppercase tracking-wide shrink-0 ${STATUS_PILL[check.status] ?? STATUS_PILL.unavailable}`}>
                     {STATUS_LABEL[check.status] ?? check.status}
                   </span>
                 </div>
-                <p className="text-sm text-muted leading-relaxed mt-1">{check.detail}</p>
+                <p className="text-sm text-muted leading-relaxed mt-1 break-words">{check.detail}</p>
               </div>
             </div>
           ))}
@@ -221,9 +247,9 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
 
       {/* ── Record details — ruled grid ───────────────────────────── */}
       <section className="card p-6 md:p-8">
-        <div className="flex items-baseline justify-between border-b-2 border-ink/10 pb-3 mb-5">
+        <div className="flex flex-wrap gap-2 items-baseline justify-between border-b-2 border-ink/10 pb-3 mb-5">
           <h3 className="text-base font-semibold text-ink">Record Details</h3>
-          <span className="font-mono text-[11px] text-faint">as per AnyROR</span>
+          <span className="font-mono text-[11px] text-faint">{report.demo ? "sample data" : "as per retrieved record"}</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5">
           <div className="flex flex-col gap-1.5 col-span-2 md:col-span-3 rounded-xl border border-border bg-surface-soft/50 px-4 py-3.5 border-l-[3px] border-l-accent/60">
@@ -242,9 +268,9 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
           <div className="flex flex-col gap-1">
             <span className="eyebrow text-[10px]">Encumbrances</span>
             <span
-              className={`text-sm break-words ${hasEncumbrances ? 'text-danger font-semibold' : 'text-success'}`}
+              className={`text-sm break-words ${hasEncumbrances ? 'text-danger font-semibold' : encumbrancesUnavailable ? 'text-muted' : 'text-ink'}`}
             >
-              {record.encumbrances || 'None detected'}
+              {encumbrancesUnavailable ? 'Not available in the extracted record' : encumbranceText}
             </span>
           </div>
           <Detail label="Mutation Entries (summary)" value={record.mutation_entries} wide />
@@ -265,7 +291,7 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
       {/* Footer / disclaimer */}
       <p className="text-xs text-faint leading-relaxed border-t border-border pt-4">
         Automated report <span className="font-mono tnum">{refNo}</span> generated{' '}
-        {generatedLabel && <>on {generatedLabel} </>}from the official AnyROR 7/12 record.
+        {generatedLabel && <>on {generatedLabel} </>}{report.demo ? "from demonstration data, not a live government record." : "from the retrieved AnyROR record."}
         This is not a legal title opinion — for transactions, verify the index-2, a 30-year
         search report and pending litigation with a lawyer.
       </p>
