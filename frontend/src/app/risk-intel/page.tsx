@@ -15,8 +15,9 @@ import {
   localScreen,
   SCREEN_REGIONS, SCREEN_ZONES, SCREEN_ROAD_WIDTHS,
   type LayerStatus, type CheckOutcome,
-  type RiskScreenResponse, type ScreenLayerResult, type ScreenOutcome,
+  type RiskScreenResponse, type ScreenOutcome,
 } from "@/lib/riskLayers";
+import { normaliseScreen } from "@/lib/normaliseRiskScreen";
 import {
   Landmark, Trees, PlaneTakeoff, Activity, Wheat, ShieldAlert, Flame, Zap,
   Waves, Building2, Map as MapIcon, Gavel, Scale, Layers, ShieldCheck,
@@ -59,35 +60,6 @@ const SCREEN_OUTCOME_META: Record<ScreenOutcome, { label: string; cls: string; i
   ...OUTCOME_META,
   unknown: { label: "Unknown", cls: "text-muted", icon: <HelpCircle size={15} className="text-muted" /> },
 };
-
-const VALID_OUTCOMES: ScreenOutcome[] = ["clear", "caution", "restricted", "unknown"];
-
-/** Defensively normalise a possibly-partial backend payload into safe shape. */
-function normaliseScreen(raw: RiskScreenResponse | null | undefined): RiskScreenResponse {
-  const layers: ScreenLayerResult[] = Array.isArray(raw?.layers)
-    ? raw!.layers
-        .filter((l): l is ScreenLayerResult => !!l && typeof l.layer === "string")
-        .map((l) => ({
-          layer: l.layer,
-          outcome: VALID_OUTCOMES.includes(l.outcome) ? l.outcome : "unknown",
-          finding: typeof l.finding === "string" ? l.finding : "",
-          ...(typeof l.advice === "string" && l.advice ? { advice: l.advice } : {}),
-          ...(typeof l.citation === "string" && l.citation ? { citation: l.citation } : {}),
-        }))
-    : [];
-  const counts: Record<ScreenOutcome, number> = {
-    clear: layers.filter((l) => l.outcome === "clear").length,
-    caution: layers.filter((l) => l.outcome === "caution").length,
-    restricted: layers.filter((l) => l.outcome === "restricted").length,
-    unknown: layers.filter((l) => l.outcome === "unknown").length,
-  };
-  return {
-    verdict: typeof raw?.verdict === "string" ? raw.verdict : undefined,
-    summary: typeof raw?.summary === "string" ? raw.summary : undefined,
-    layers,
-    counts,
-  };
-}
 
 const STATUTE_MARQUEE = [
   "AMASR Act 1958", "Wildlife (Protection) Act 1972", "IS 1893 (Part 1) : 2016",
@@ -291,7 +263,7 @@ function InteractiveScreening() {
       });
       clearTimeout(timeout);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const raw = (await res.json()) as RiskScreenResponse;
+      const raw: unknown = await res.json();
       const norm = normaliseScreen(raw);
       if (!norm.layers?.length) throw new Error("empty payload");
       setResult(norm);
