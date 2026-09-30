@@ -886,6 +886,10 @@ async def _scrape_anyror_data(
 _village_cache: dict[str, list[dict]] = {}
 
 
+class VillageLookupUnavailable(RuntimeError):
+    """The upstream lookup failed; an empty list is not a successful result."""
+
+
 async def fetch_villages(district: str, taluka: str) -> list[dict]:
     """
     Fetch available villages from AnyROR for a given district+taluka.
@@ -893,7 +897,7 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
     Results are cached in memory to avoid repeated scrapes.
     """
     cache_key = f"{district.lower()}_{taluka.lower()}"
-    if cache_key in _village_cache:
+    if _village_cache.get(cache_key):
         print(f"  [cache] Returning cached villages for {district}/{taluka}")
         return _village_cache[cache_key]
 
@@ -920,18 +924,20 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
                       "--disable-dev-shm-usage", "--disable-gpu",
                       "--single-process", "--no-zygote"]
             )
-            context = await browser.new_context(
-                viewport={"width": 1280, "height": 900},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            )
-            page = await context.new_page()
-
+            context = None
             try:
-                await page.goto(
-                    "https://anyror.gujarat.gov.in/LandRecordRural.aspx",
-                    wait_until="commit", timeout=100000
+                context = await browser.new_context(
+                    viewport={"width": 1280, "height": 900},
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 )
-                await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=60000)
+                page = await context.new_page()
+                response = await page.goto(
+                    "https://anyror.gujarat.gov.in/LandRecordRural.aspx",
+                    wait_until="commit", timeout=20000
+                )
+                if response is None or response.status >= 400:
+                    return {"code": "PORTAL_UNAVAILABLE"}
+                await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=10000)
 
                 # Select district
                 ok = await _select_cascading_option(
@@ -940,7 +946,7 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
                 )
                 if not ok:
                     print(f"  ✗ District '{district}' not found")
-                    return []
+                    return {"code": "PORTAL_UNAVAILABLE"}
 
                 # Select taluka
                 taluka_clean = taluka.replace("_", " ")
@@ -950,7 +956,7 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
                 )
                 if not ok:
                     print(f"  ✗ Taluka '{taluka}' not found")
-                    return []
+                    return {"code": "PORTAL_UNAVAILABLE"}
 
                 # Collect village options
                 village_el = page.locator(ELEMENTS["village"])
@@ -963,29 +969,39 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
                         gujarati_names.append(text)
 
                 print(f"  ✓ Found {len(gujarati_names)} villages")
-                return gujarati_names
+                return {"villages": gujarati_names} if gujarati_names else {"code": "PORTAL_UNAVAILABLE"}
 
-            except Exception as e:
-                print(f"  ✗ Village fetch error: {e}")
-                return []
             finally:
-                await context.close()
-                await browser.close()
+                try:
+                    if context is not None:
+                        await context.close()
+                finally:
+                    await browser.close()
 
+    async def bounded_fetch():
+        try:
+            return await asyncio.wait_for(_run(), timeout=40.0)
+        except Exception as e:
+            print(f"  ✗ Village fetch unavailable: {type(e).__name__}: {e}")
+            return {"code": "PORTAL_UNAVAILABLE"}
+
+    # Share the scraper's gate: repeated village requests must also honour
+    # an explicit portal refusal and avoid hammering an unavailable portal.
+    from scrape_control import portal_gate
     try:
-        gujarati_names = await asyncio.wait_for(_run(), timeout=180.0)
+        result = await asyncio.wait_for(portal_gate.run(bounded_fetch), timeout=45.0)
     except asyncio.TimeoutError:
-        print("  ✗ Village fetch timed out")
-        return []
-    except Exception as e:
-        print(f"  ✗ Village fetch fatal error: {e}")
-        return []
+        raise VillageLookupUnavailable("The record portal is busy. Please try later or upload an official record.")
+    if result.get("code") == "PORTAL_UNAVAILABLE":
+        raise VillageLookupUnavailable("Village names could not be retrieved from AnyROR. Please try later or upload an official record.")
+    gujarati_names = result["villages"]
 
-    if not gujarati_names:
-        return []
-
-    # Batch-translate Gujarati names to English using Gemini
-    villages = await _batch_translate_villages(gujarati_names, district, taluka)
+    # Translation is optional: retain the actual Gujarati labels if it is slow.
+    try:
+        villages = await asyncio.wait_for(
+            _batch_translate_villages(gujarati_names, district, taluka), timeout=10.0)
+    except asyncio.TimeoutError:
+        villages = [{"english": name, "gujarati": name} for name in gujarati_names]
     _village_cache[cache_key] = villages
 
     # Persist to Supabase so the 20-30s scrape never has to repeat after a restart

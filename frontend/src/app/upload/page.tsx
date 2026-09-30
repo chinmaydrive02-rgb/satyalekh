@@ -28,6 +28,20 @@ const RECORD_TYPES = [
   { value: "REVENUE_CASE", label: "REVENUE CASE DETAILS (જમીન રેકર્ડ ને લગતા કેસની વિગત)" },
 ];
 
+interface UploadAnalysis {
+  owner_name?: string;
+  survey_no?: string;
+  total_area?: string;
+  tenure_type?: string;
+  encumbrances?: string;
+  risk_level?: string;
+  risk_reason?: string;
+}
+
+function extractedValue(value?: string): string {
+  return value?.trim() || 'Not available in the document';
+}
+
 export default function DocumentUpload() {
   const supabase = createClient();
   const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('auto');
@@ -35,7 +49,8 @@ export default function DocumentUpload() {
   // Manual Upload State
   const [file, setFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [uploadError, setUploadError] = useState('');
+  const [result, setResult] = useState<UploadAnalysis | null>(null);
 
   // Automation State
   const [recordType, setRecordType] = useState('OLD_SCAN_712');
@@ -54,6 +69,8 @@ export default function DocumentUpload() {
   const [autoError, setAutoError] = useState<string | null>(null);
   const [autoSuggestions, setAutoSuggestions] = useState<string[]>([]);
   const [jobStartedAt, setJobStartedAt] = useState<number | null>(null);
+  const launchPendingRef = useRef(false);
+  const [isStarting, setIsStarting] = useState(false);
   const autoAbortRef = useRef<AbortController | null>(null);
 
   // Cascading dropdown data
@@ -64,6 +81,11 @@ export default function DocumentUpload() {
   const [loadingDistricts, setLoadingDistricts] = useState(false);
   const [loadingTalukas, setLoadingTalukas]     = useState(false);
   const [loadingVillages, setLoadingVillages]   = useState(false);
+  const [districtError, setDistrictError] = useState('');
+  const [talukaError, setTalukaError] = useState('');
+  const [villageError, setVillageError] = useState('');
+  const [locationRetry, setLocationRetry] = useState(0);
+  const villageRequestRef = useRef<AbortController | null>(null);
 
   const handleSaveToPortfolio = async () => {
     const rec = autoReport?.record;
@@ -123,19 +145,22 @@ export default function DocumentUpload() {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) return;
+    if (!file || isAnalyzing) return;
+    setUploadError('');
     setIsAnalyzing(true);
     setResult(null);
     const formData = new FormData();
     formData.append("file", file);
     try {
       const res = await fetch(`${API_BASE_URL}/analyze-record`, { method: "POST", body: formData, headers: demoHeaders() });
-      if (!res.ok) throw new Error("Analysis Failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(typeof body.detail === 'string' ? body.detail : 'The document could not be analysed. Please try again.');
+      }
       const data = await res.json();
       setResult(data);
     } catch (error) {
-      console.error(error);
-      alert("System error reading document.");
+      setUploadError(error instanceof Error ? error.message : 'The document could not be analysed. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -143,40 +168,42 @@ export default function DocumentUpload() {
 
   /** Starts the background scrape job (same jobs API as the property page). */
   const launchJob = async (surveyOverride?: string) => {
-    if (autoPhase === 'running') return;
-
-    // Credit gate: if payments are enabled on the backend and the user has
-    // no credits, redirect to the pricing page before launching the bot.
-    let userEmail = getUserEmail();
-    const cfg = await fetchConfig();
-    if (cfg?.payments_enabled && !userEmail) {
-      const entered = window.prompt(
-        `Enter your email to claim ${cfg.free_trial_credits} free search${cfg.free_trial_credits === 1 ? '' : 'es'} (no card needed). Credits are linked to your email.`
-      );
-      if (!entered || !entered.includes('@')) return;
-      userEmail = entered.trim().toLowerCase();
-      setUserEmail(userEmail);
-    }
-    if (userEmail) {
-      const info = await fetchCredits(userEmail);
-      if (info?.payments_enabled && info.credits <= 0) {
-        alert("No search credits remaining. You'll be redirected to the pricing page.");
-        window.location.href = '/pricing';
-        return;
-      }
-    }
-
-    const surveyValue = surveyOverride ?? (needsOwnerName ? ownerName.trim() : surveyNo.trim());
-
-    setAutoPhase('running');
-    setAutoJob(null);
-    setAutoReport(null);
-    setAutoError(null);
-    setAutoSuggestions([]);
-    setSaveState('idle');
-    setJobStartedAt(Date.now());
-
+    if (autoPhase === 'running' || launchPendingRef.current) return;
+    launchPendingRef.current = true;
+    setIsStarting(true);
     try {
+
+      // Credit gate: if payments are enabled on the backend and the user has
+      // no credits, redirect to the pricing page before launching the bot.
+      let userEmail = getUserEmail();
+      const cfg = await fetchConfig();
+      if (cfg?.payments_enabled && !userEmail) {
+        const entered = window.prompt(
+          `Enter your email to claim ${cfg.free_trial_credits} free search${cfg.free_trial_credits === 1 ? '' : 'es'} (no card needed). Credits are linked to your email.`
+        );
+        if (!entered || !entered.includes('@')) return;
+        userEmail = entered.trim().toLowerCase();
+        setUserEmail(userEmail);
+      }
+      if (userEmail) {
+        const info = await fetchCredits(userEmail);
+        if (info?.payments_enabled && info.credits <= 0) {
+          alert("No search credits remaining. You'll be redirected to the pricing page.");
+          window.location.href = '/pricing';
+          return;
+        }
+      }
+
+      const surveyValue = surveyOverride ?? (needsOwnerName ? ownerName.trim() : surveyNo.trim());
+
+      setAutoPhase('running');
+      setAutoJob(null);
+      setAutoReport(null);
+      setAutoError(null);
+      setAutoSuggestions([]);
+      setSaveState('idle');
+      setJobStartedAt(Date.now());
+
       const { job_id } = await startTitleReport(
         {
           record_type: recordType,
@@ -218,6 +245,9 @@ export default function DocumentUpload() {
       setAutoError(msg);
       setAutoSuggestions(parseSurveySuggestions(msg));
       setAutoPhase('error');
+    } finally {
+      launchPendingRef.current = false;
+      setIsStarting(false);
     }
   };
 
@@ -238,45 +268,82 @@ export default function DocumentUpload() {
 
   // Warm up the Render backend as soon as the page mounts (free tier cold-starts)
   useEffect(() => {
-    fetch(`${API_BASE_URL}/health`).catch(() => {});
+    fetch(`${API_BASE_URL}/health/live`).catch(() => {});
   }, []);
 
-  // Cascading dropdown effects
+  // Cancel stale location requests and keep failures recoverable in the form.
   useEffect(() => {
+    const controller = new AbortController();
     setLoadingDistricts(true);
-    fetch(`${API_BASE_URL}/options/districts`)
-      .then(r => r.json()).then(d => setDistricts(d.districts || [])).catch(() => {})
-      .finally(() => setLoadingDistricts(false));
-  }, []);
+    setDistrictError('');
+    fetch(`${API_BASE_URL}/options/districts`, { signal: controller.signal })
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => {
+        if (controller.signal.aborted) return;
+        if (!Array.isArray(d.districts) || !d.districts.length) throw new Error();
+        setDistricts(d.districts);
+      })
+      .catch(() => { if (!controller.signal.aborted) setDistrictError('Districts could not be loaded. Please retry.'); })
+      .finally(() => { if (!controller.signal.aborted) setLoadingDistricts(false); });
+    return () => controller.abort();
+  }, [locationRetry]);
 
   useEffect(() => {
-    if (!district) { setTalukas([]); setTaluka(''); setVillages([]); return; }
+    const controller = new AbortController();
+    setTalukas([]);
+    setTaluka('');
+    setTalukaError('');
+    if (!district) { setLoadingTalukas(false); return; }
     setLoadingTalukas(true);
-    setTaluka(''); setVillages([]);
-    fetch(`${API_BASE_URL}/options/talukas?district=${encodeURIComponent(district)}`)
-      .then(r => r.json()).then(d => setTalukas(d.talukas || [])).catch(() => setTalukas([]))
-      .finally(() => setLoadingTalukas(false));
-  }, [district]);
+    fetch(`${API_BASE_URL}/options/talukas?district=${encodeURIComponent(district)}`, { signal: controller.signal })
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => {
+        if (controller.signal.aborted) return;
+        if (!Array.isArray(d.talukas) || !d.talukas.length) throw new Error();
+        setTalukas(d.talukas);
+      })
+      .catch(() => { if (!controller.signal.aborted) setTalukaError('Talukas could not be loaded. Please retry.'); })
+      .finally(() => { if (!controller.signal.aborted) setLoadingTalukas(false); });
+    return () => controller.abort();
+  }, [district, locationRetry]);
 
-  // Clear stale village suggestions when location changes (typed village is kept usable)
   useEffect(() => {
     setVillages([]);
+    setVillageGujarati('');
+    setVillageError('');
+    setLoadingVillages(false);
+    return () => villageRequestRef.current?.abort();
   }, [district, taluka]);
 
-  // OPTIONAL: load live village suggestions from AnyROR (~20s Playwright scrape).
-  // The form is fully usable without this — the backend fuzzy-matches the
-  // free-typed English village name against the live AnyROR dropdown.
   const loadVillageSuggestions = () => {
     if (!district || !taluka || loadingVillages) return;
+    const controller = new AbortController();
+    villageRequestRef.current?.abort();
+    villageRequestRef.current = controller;
     setLoadingVillages(true);
-    fetch(`${API_BASE_URL}/options/villages?district=${encodeURIComponent(district)}&taluka=${encodeURIComponent(taluka)}`)
-      .then(r => r.json()).then(d => setVillages(d.villages || [])).catch(() => setVillages([]))
-      .finally(() => setLoadingVillages(false));
+    setVillageError('');
+    fetch(`${API_BASE_URL}/options/villages?district=${encodeURIComponent(district)}&taluka=${encodeURIComponent(taluka)}`, { signal: controller.signal, headers: demoHeaders() })
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => {
+        if (controller.signal.aborted) return;
+        if (!Array.isArray(d.villages) || !d.villages.length) throw new Error();
+        setVillages(d.villages);
+      })
+      .catch(() => { if (!controller.signal.aborted) setVillageError('Village suggestions are unavailable. Retry loading them, or type the village name in English or Gujarati.'); })
+      .finally(() => { if (!controller.signal.aborted) setLoadingVillages(false); });
   };
 
   const inputClass = "input";
   const selectClass = "input cursor-pointer";
   const isAutoFormValid = district && taluka && village.trim() && (needsOwnerName ? ownerName.trim() : surveyNo.trim());
+
+  const riskLevel = result?.risk_level?.toUpperCase();
+  const riskTone = riskLevel === 'RED' ? 'text-danger bg-danger-soft border-danger-border'
+    : riskLevel === 'YELLOW' ? 'text-warning bg-warning-soft border-warning-border'
+    : riskLevel === 'GREEN' ? 'text-success bg-success-soft border-success-border'
+    : 'text-muted bg-surface-soft border-border';
+  const riskLabel = riskLevel === 'RED' ? 'High risk' : riskLevel === 'YELLOW' ? 'Review required'
+    : riskLevel === 'GREEN' ? 'No flags in extracted fields' : 'Risk assessment unavailable';
 
   // LIVE PROGRESS SCREEN — real job stages streamed from the backend
   if (autoPhase === 'running') {
@@ -317,10 +384,12 @@ export default function DocumentUpload() {
             style={{ animation: 'sl-fade-up 0.4s cubic-bezier(0.22,0.61,0.36,1) both' }}
           >
              <div className="w-full h-40 border-2 border-dashed border-border-strong rounded-xl flex flex-col items-center justify-center text-muted hover:border-brand transition-colors relative cursor-pointer group">
-                <input type="file" accept="image/*,application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                 <UploadCloud size={36} className="mb-3 group-hover:text-brand transition-colors" />
                 <span className="text-sm font-medium group-hover:text-ink">{file ? file.name : "Drop your 7/12 image or PDF here"}</span>
              </div>
+             <p className="text-xs text-muted">JPG, PNG, WebP or PDF, up to 10 MB.</p>
+             {uploadError && <p role="alert" className="text-sm text-danger">{uploadError}</p>}
              <button type="submit" disabled={!file || isAnalyzing} className="btn btn-primary w-full py-3">
                {isAnalyzing ? <><Loader2 className="animate-spin" size={16}/> Analyzing document…</> : "Analyze Document"}
              </button>
@@ -371,6 +440,12 @@ export default function DocumentUpload() {
                 </div>
               </div>
 
+              {(districtError || talukaError) && <div role="alert" className="rounded-lg border border-warning-border bg-warning-soft p-3 text-sm text-warning">
+                {districtError && <p>{districtError}</p>}
+                {talukaError && <p>{talukaError}</p>}
+                <button type="button" onClick={() => setLocationRetry(n => n + 1)} className="min-h-11 underline underline-offset-2 font-semibold">Retry loading locations</button>
+              </div>}
+
               {/* Village — free text input (English or Gujarati; backend fuzzy-matches on AnyROR) */}
               <div className="flex flex-col gap-1.5">
                 <label className="label flex items-center gap-2">
@@ -397,7 +472,7 @@ export default function DocumentUpload() {
                   type="button"
                   onClick={loadVillageSuggestions}
                   disabled={!district || !taluka || loadingVillages}
-                  className="text-left text-xs text-brand hover:text-brand-strong underline underline-offset-2 decoration-brand/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 w-fit"
+                  className="min-h-11 text-left text-xs text-brand hover:text-brand-strong underline underline-offset-2 decoration-brand/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 w-fit"
                 >
                   {loadingVillages
                     ? <><Loader2 size={11} className="animate-spin" /> Loading suggestions from AnyROR…</>
@@ -406,6 +481,8 @@ export default function DocumentUpload() {
                       : <>Load village suggestions from AnyROR (takes ~20s)</>}
                 </button>
               </div>
+
+              {villageError && <p role="alert" className="text-sm text-muted">{villageError}</p>}
 
               {/* Survey / Owner */}
               {needsOwnerName ? (
@@ -428,8 +505,8 @@ export default function DocumentUpload() {
               <span className="block mt-1 text-muted">The first search may take 60–90s extra while the backend warms up (free hosting cold start).</span>
             </div>
 
-             <button type="submit" disabled={!isAutoFormValid} className="btn btn-primary w-full py-3">
-               <Cpu size={16}/> Fetch Record
+             <button type="submit" disabled={!isAutoFormValid || isStarting} className="btn btn-primary w-full py-3">
+               {isStarting ? <Loader2 size={16} className="animate-spin" /> : <Cpu size={16}/>} {isStarting ? 'Preparing search…' : 'Fetch Record'}
              </button>
           </form>
         )}
@@ -517,19 +594,22 @@ export default function DocumentUpload() {
         {/* Manual OCR result */}
         {result && (
            <div
-             className="sl-anim card p-6 border-l-4 border-l-success flex flex-col gap-4"
+             className="sl-anim card p-6 flex flex-col gap-4"
              style={{ animation: 'sl-fade-up 0.45s cubic-bezier(0.22,0.61,0.36,1) both' }}
            >
               <div className="flex items-center justify-between flex-wrap gap-2">
-                 <div className="flex items-center gap-2 text-success font-semibold text-sm"><ShieldCheck size={16}/> Record Retrieved Successfully</div>
-                 <span className="badge bg-success-soft text-success border border-success-border">Verified &amp; translated</span>
+                 <div className="flex items-center gap-2 text-ink font-semibold text-sm"><ShieldCheck size={16}/> Document analysis complete</div>
+                 <span className={`badge border ${riskTone}`}>{riskLabel}</span>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                 <div><span className="eyebrow">Owner</span><div className="text-sm text-ink font-medium mt-0.5">{result.owner_name}</div></div>
-                 <div><span className="eyebrow">Survey No</span><div className="text-sm text-ink font-mono mt-0.5">{result.survey_no}</div></div>
-                 <div><span className="eyebrow">Tenure Type</span><div className="text-sm text-ink mt-0.5">{result.tenure_type}</div></div>
-                 <div><span className="eyebrow">Encumbrances</span><div className="text-sm text-danger font-medium mt-0.5">{result.encumbrances}</div></div>
+              <p className="text-sm text-ink-soft leading-relaxed">{result.risk_reason || 'The available document did not support a risk assessment.'}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 break-words">
+                 <div><span className="eyebrow">Owner</span><div className="text-sm text-ink font-medium mt-0.5">{extractedValue(result.owner_name)}</div></div>
+                 <div><span className="eyebrow">Survey No</span><div className="text-sm text-ink font-mono mt-0.5">{extractedValue(result.survey_no)}</div></div>
+                 <div><span className="eyebrow">Total Area</span><div className="text-sm text-ink mt-0.5">{extractedValue(result.total_area)}</div></div>
+                 <div><span className="eyebrow">Tenure Type</span><div className="text-sm text-ink mt-0.5">{extractedValue(result.tenure_type)}</div></div>
+                 <div><span className="eyebrow">Encumbrances</span><div className="text-sm text-ink mt-0.5">{extractedValue(result.encumbrances)}</div></div>
               </div>
+              <p className="text-xs text-muted leading-relaxed">This analysis translates the uploaded document. Its authenticity and current title position have not been independently verified.</p>
               <div className="flex flex-col md:flex-row gap-3 mt-2 pt-4 border-t border-border">
                   <Link href="/dashboard" className="btn btn-outline flex-1 text-center">View Portfolio</Link>
               </div>
