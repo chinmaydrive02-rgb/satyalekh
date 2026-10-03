@@ -6,14 +6,15 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import AccountGate from '@/components/AccountGate';
+import { createClient } from '@/utils/supabase/client';
 import TopNav from '@/components/TopNav';
 import { Reveal } from '@/components/motion';
 import {
-  Bell, BellRing, Loader2, Trash2, Mail, MapPin, Clock, ArrowRight,
+  Bell, BellRing, Loader2, Trash2, MapPin, Clock, ArrowRight,
   CheckCheck, AlertTriangle, Search, Eye,
 } from 'lucide-react';
 import {
-  getUserEmail, setUserEmail,
   fetchWatchlist, removeFromWatchlist, fetchWatchlistAlerts, markWatchAlertsSeen,
   WatchlistItem, WatchAlert,
   isDemoActive, DEMO_EMAIL,
@@ -47,7 +48,6 @@ function fmtDate(iso?: string | null): string {
 
 export default function WatchlistPage() {
   const [email, setEmail] = useState('');
-  const [emailInput, setEmailInput] = useState('');
   const [hasEmail, setHasEmail] = useState<boolean | null>(null); // null = booting
 
   const [items, setItems] = useState<WatchlistItem[]>([]);
@@ -58,18 +58,20 @@ export default function WatchlistPage() {
   const [markingId, setMarkingId] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = getUserEmail();
-    if (saved) {
-      setEmail(saved);
-      setHasEmail(true);
-    } else if (isDemoActive()) {
-      // ── DEMO MODE ── skip the email prompt; the backend serves the
-      // in-memory demo watchlist whenever a valid X-Demo-Token is attached.
-      setEmail(DEMO_EMAIL);
-      setHasEmail(true);
-    } else {
-      setHasEmail(false);
-    }
+    if (isDemoActive()) { setEmail(DEMO_EMAIL); setHasEmail(true); return; }
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      const user = data.user;
+      setEmail(user?.email_confirmed_at ? user.email || '' : '');
+      setHasEmail(Boolean(user?.email_confirmed_at));
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user;
+      setEmail(user?.email_confirmed_at ? user.email || '' : '');
+      setHasEmail(Boolean(user?.email_confirmed_at));
+      if (!user) { setItems([]); setAlerts([]); }
+    });
+    return () => data.subscription.unsubscribe();
   }, []);
 
   const load = useCallback(async (em: string) => {
@@ -80,6 +82,10 @@ export default function WatchlistPage() {
         fetchWatchlist(em),
         fetchWatchlistAlerts(em),
       ]);
+      if (!isDemoActive()) {
+        const { data } = await createClient().auth.getSession();
+        if (data.session?.user.email !== em) return;
+      }
       setItems(list);
       setAlerts(alertList);
     } catch (e: unknown) {
@@ -96,15 +102,6 @@ export default function WatchlistPage() {
   useEffect(() => {
     if (hasEmail && email) load(email);
   }, [hasEmail, email, load]);
-
-  const handleEmailSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const em = emailInput.trim().toLowerCase();
-    if (!em.includes('@')) return;
-    setUserEmail(em);
-    setEmail(em);
-    setHasEmail(true);
-  };
 
   const handleRemove = async (item: WatchlistItem) => {
     if (!confirm(`Stop watching Survey ${item.survey_no}, ${item.village}?`)) return;
@@ -176,32 +173,7 @@ export default function WatchlistPage() {
 
         {/* Email capture */}
         {hasEmail === false && (
-          <form
-            onSubmit={handleEmailSubmit}
-            className="sl-anim card p-8 flex flex-col gap-4 max-w-md"
-            style={{ animation: 'sl-fade-up 0.5s cubic-bezier(0.22,0.61,0.36,1) 0.1s both' }}
-          >
-            <div className="flex items-center gap-3">
-              <span className="w-10 h-10 rounded-lg bg-brand-soft text-brand flex items-center justify-center shrink-0">
-                <Mail size={18} />
-              </span>
-              <div>
-                <h2 className="text-base font-semibold text-ink">Link your email</h2>
-                <p className="text-sm text-muted">Your watchlist is tied to your email — the same one used for search credits.</p>
-              </div>
-            </div>
-            <input
-              type="email"
-              required
-              value={emailInput}
-              onChange={e => setEmailInput(e.target.value)}
-              placeholder="you@email.com"
-              className="input"
-            />
-            <button type="submit" className="btn btn-primary">
-              Open my watchlist
-            </button>
-          </form>
+          <AccountGate feature="watchlist"/>
         )}
 
         {hasEmail && (

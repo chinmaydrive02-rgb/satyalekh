@@ -10,8 +10,9 @@ import TitleReportView from '@/components/TitleReport';
 import {
   API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, fetchConfig,
   startTitleReport, pollJob, parseSurveySuggestions,
-  ApiError, Job, TitleReport, demoHeaders,
+  ApiError, Job, TitleReport, demoHeaders, isDemoActive,
 } from '@/lib/api';
+import { requireUser } from '@/lib/auth';
 import { createClient } from '@/utils/supabase/client';
 
 // Exact AnyROR Record Types from https://anyror.gujarat.gov.in/LandRecordRural.aspx
@@ -36,6 +37,10 @@ interface UploadAnalysis {
   encumbrances?: string;
   risk_level?: string;
   risk_reason?: string;
+  report?: TitleReport;
+  evidence?: Array<{ field?: string; value?: string; snippet?: string; page?: number; method?: string }>;
+  raw_text?: string;
+  metadata?: { reader?: string; external_processing?: boolean; translation_performed?: boolean; pages_total?: number; pages_processed?: number; truncated?: boolean; manual_review_required?: boolean; warnings?: string[] };
 }
 
 function extractedValue(value?: string): string {
@@ -44,7 +49,7 @@ function extractedValue(value?: string): string {
 
 export default function DocumentUpload() {
   const supabase = createClient();
-  const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('auto');
+  const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('manual');
 
   // Manual Upload State
   const [file, setFile] = useState<File | null>(null);
@@ -90,11 +95,14 @@ export default function DocumentUpload() {
   const handleSaveToPortfolio = async () => {
     const rec = autoReport?.record;
     if (!rec || saveState === 'saving' || saveState === 'saved') return;
+    if (isDemoActive()) { setSaveState('saved'); return; }
     setSaveState('saving');
     try {
+      const user = await requireUser();
       const { data: existing } = await supabase
         .from('portfolio_assets')
         .select('id')
+        .eq('owner_id', user.id)
         .eq('survey_no', rec.survey_no || surveyNo.trim())
         .eq('village', rec.village || village.trim())
         .limit(1);
@@ -106,6 +114,7 @@ export default function DocumentUpload() {
       }
 
       const { error } = await supabase.from('portfolio_assets').insert({
+        owner_id: user.id,
         survey_no: rec.survey_no || surveyNo.trim(),
         district: rec.district || district.trim(),
         taluka: rec.taluka || taluka.trim(),
@@ -388,7 +397,8 @@ export default function DocumentUpload() {
                 <UploadCloud size={36} className="mb-3 group-hover:text-brand transition-colors" />
                 <span className="text-sm font-medium group-hover:text-ink">{file ? file.name : "Drop your 7/12 image or PDF here"}</span>
              </div>
-             <p className="text-xs text-muted">JPG, PNG, WebP or PDF, up to 10 MB.</p>
+             <p className="text-xs text-muted">JPG, PNG, WebP or PDF, up to 10 MB. <a href="https://anyror.gujarat.gov.in/" target="_blank" rel="noopener noreferrer" className="text-brand underline">Get an official record from AnyROR</a>.</p>
+             <p className="text-sm text-warning bg-warning-soft border border-warning-border rounded-lg p-3">Documents are read on our server using local text extraction and OCR by default; this upload flow does not send them to an external AI provider. Gujarati source text is retained. External AI translation remains pending approval of the processing arrangements. During this beta, use synthetic or fully anonymised records.</p>
              {uploadError && <p role="alert" className="text-sm text-danger">{uploadError}</p>}
              <button type="submit" disabled={!file || isAnalyzing} className="btn btn-primary w-full py-3">
                {isAnalyzing ? <><Loader2 className="animate-spin" size={16}/> Analyzing document…</> : "Analyze Document"}
@@ -400,6 +410,7 @@ export default function DocumentUpload() {
             className="sl-anim card p-6 sm:p-8 flex flex-col gap-5"
             style={{ animation: 'sl-fade-up 0.4s cubic-bezier(0.22,0.61,0.36,1) 0.08s both' }}
           >
+            <p className="text-sm text-warning bg-warning-soft border border-warning-border rounded-lg p-3">Government record retrieval is currently unavailable. You can obtain your official record from <a href="https://anyror.gujarat.gov.in/" target="_blank" rel="noopener noreferrer" className="underline">AnyROR</a> and use the upload tab for a preliminary review.</p>
             {/* AnyROR Record Type */}
             <div className="flex flex-col gap-1.5">
               <label className="label">Record type (કોઇ એક પસંદ કરો)</label>
@@ -598,7 +609,7 @@ export default function DocumentUpload() {
              style={{ animation: 'sl-fade-up 0.45s cubic-bezier(0.22,0.61,0.36,1) both' }}
            >
               <div className="flex items-center justify-between flex-wrap gap-2">
-                 <div className="flex items-center gap-2 text-ink font-semibold text-sm"><ShieldCheck size={16}/> Document analysis complete</div>
+                 <div className="flex items-center gap-2 text-ink font-semibold text-sm"><ShieldCheck size={16}/> Preliminary document analysis</div>
                  <span className={`badge border ${riskTone}`}>{riskLabel}</span>
               </div>
               <p className="text-sm text-ink-soft leading-relaxed">{result.risk_reason || 'The available document did not support a risk assessment.'}</p>
@@ -609,7 +620,11 @@ export default function DocumentUpload() {
                  <div><span className="eyebrow">Tenure Type</span><div className="text-sm text-ink mt-0.5">{extractedValue(result.tenure_type)}</div></div>
                  <div><span className="eyebrow">Encumbrances</span><div className="text-sm text-ink mt-0.5">{extractedValue(result.encumbrances)}</div></div>
               </div>
-              <p className="text-xs text-muted leading-relaxed">This analysis translates the uploaded document. Its authenticity and current title position have not been independently verified.</p>
+              <p className="text-sm text-muted leading-relaxed">{isDemoActive() ? 'Sample document analysis for the demo. This result does not verify your uploaded file.' : result.metadata?.external_processing ? 'Analysis used an approved external reader. Check every finding against the source and obtain lawyer review.' : 'Local reading; Gujarati source retained, English translation not performed; lawyer review required. OCR may misread the document.'} Authenticity and current title position have not been independently verified.</p>
+              {result.metadata && <div className="rounded-lg border border-border p-3 text-xs text-muted space-y-2"><p>Reader: {result.metadata.reader || 'unspecified'} · Pages read: {result.metadata.pages_processed ?? 'not supplied'} of {result.metadata.pages_total ?? 'not supplied'}{result.metadata.truncated ? ' · Partial document: remaining pages require review' : ''}</p>{result.metadata.warnings?.map((warning, i) => <p key={i} className="text-warning">{warning}</p>)}</div>}
+              {result.report && <div className="border-t border-border pt-5"><p className="eyebrow mb-3">Preliminary document review</p><TitleReportView report={result.report}/></div>}
+              {result.evidence && result.evidence.length > 0 && <details className="border border-border rounded-lg p-4"><summary className="cursor-pointer text-sm font-semibold">Source evidence ({result.evidence.length})</summary><div className="mt-3 space-y-3">{result.evidence.map((entry, index) => <div key={index} className="text-sm border-b border-border pb-3 last:border-0"><p className="font-medium">{entry.field?.replace(/_/g, ' ') || `Evidence ${index + 1}`}{entry.page ? ` · page ${entry.page}` : ''}</p>{entry.value && <p className="mt-1">{entry.value}</p>}<blockquote className="text-muted mt-1 whitespace-pre-wrap break-words">{entry.snippet || 'Source excerpt not supplied.'}</blockquote></div>)}</div></details>}
+              {result.raw_text && <details className="border border-border rounded-lg p-4"><summary className="cursor-pointer text-sm font-semibold">Text read from this document</summary><pre className="mt-3 whitespace-pre-wrap break-words text-xs max-h-96 overflow-auto font-sans">{result.raw_text}</pre></details>}
               <div className="flex flex-col md:flex-row gap-3 mt-2 pt-4 border-t border-border">
                   <Link href="/dashboard" className="btn btn-outline flex-1 text-center">View Portfolio</Link>
               </div>

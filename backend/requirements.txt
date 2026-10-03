@@ -8,5 +8,6 @@ pydantic
 playwright==1.42.0
 stripe
 httpx
+Pillow==11.3.0
 # Dev/test only (not required at runtime on Render):
 #   pip install pytest && python3 -m pytest backend/test_title_report.py

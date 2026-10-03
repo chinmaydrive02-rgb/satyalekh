@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Database, ShieldCheck, Zap, Send, X, CheckCircle2, Loader2, CreditCard, Wallet } from 'lucide-react';
+import { authorizationHeaders, requireUser } from '@/lib/auth';
 import TopNav from '@/components/TopNav';
 import { Reveal } from '@/components/motion';
 import { API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, CreditsInfo } from '@/lib/api';
@@ -48,10 +49,11 @@ export default function Pricing() {
     setBuyLoading(quantity);
     setUserEmail(buyEmail);
     try {
+      const user = await requireUser();
       const res = await fetch(`${API_BASE_URL}/create-checkout-session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: buyEmail.trim().toLowerCase(), quantity }),
+        headers: { 'Content-Type': 'application/json', ...await authorizationHeaders() },
+        body: JSON.stringify({ email: user.email, quantity }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.checkout_url) {

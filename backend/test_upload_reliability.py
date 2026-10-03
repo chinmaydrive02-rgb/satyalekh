@@ -18,6 +18,9 @@ UPLOAD = {'file': ('record.png', b'\x89PNG\r\n\x1a\nmock-image', 'image/png')}
 
 
 def install_reader(monkeypatch, text=None, operation=None):
+    # Exercise the optional approved external reader with a mocked provider.
+    monkeypatch.setenv('DOCUMENT_READER', 'gemini')
+    monkeypatch.setenv('GEMINI_PERSONAL_DATA_APPROVED', 'true')
     state = {'closed': [], 'prompts': []}
 
     async def generate_content(**kwargs):

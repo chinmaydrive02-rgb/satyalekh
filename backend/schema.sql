@@ -23,12 +23,11 @@ CREATE TABLE IF NOT EXISTS portfolio_assets (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Enable Row Level Security (no auth required — open access for demo)
+-- Enable Row Level Security; owner policies are installed below.
 ALTER TABLE portfolio_assets ENABLE ROW LEVEL SECURITY;
 
--- Allow full public access (replace with auth-based policy when adding login)
-CREATE POLICY "Allow all access" ON portfolio_assets
-    FOR ALL USING (true) WITH CHECK (true);
+-- Demo fixtures are served separately; database access requires authentication.
+
 
 -- Index for fast lookup by survey number
 CREATE INDEX IF NOT EXISTS idx_portfolio_survey ON portfolio_assets (survey_no);
@@ -42,9 +41,8 @@ CREATE TABLE IF NOT EXISTS user_credits (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE user_credits ENABLE ROW LEVEL SECURITY;
--- Only the backend (service/anon key via API) touches this table; no public
--- policy is created on purpose. If your backend uses the anon key, uncomment:
-CREATE POLICY "backend access" ON user_credits FOR ALL USING (true) WITH CHECK (true);
+-- Only the backend service role accesses this table.
+
 
 -- ── Payments ledger (Stripe webhook idempotency + audit trail) ──
 CREATE TABLE IF NOT EXISTS payments (
@@ -56,7 +54,7 @@ CREATE TABLE IF NOT EXISTS payments (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "backend access" ON payments FOR ALL USING (true) WITH CHECK (true);
+
 
 -- ── Village cache (persists 20-30s AnyROR scrapes across restarts) ──
 CREATE TABLE IF NOT EXISTS village_cache (
@@ -68,7 +66,7 @@ CREATE TABLE IF NOT EXISTS village_cache (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE village_cache ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "backend access" ON village_cache FOR ALL USING (true) WITH CHECK (true);
+
 
 -- ── Survey options cache (real survey numbers seen on AnyROR) ──
 CREATE TABLE IF NOT EXISTS survey_options (
@@ -81,22 +79,20 @@ CREATE TABLE IF NOT EXISTS survey_options (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE survey_options ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "backend access" ON survey_options FOR ALL USING (true) WITH CHECK (true);
+
 
 -- ── Property Locker (document vault) ─────────────────────────
--- Files live in the public 'lockers' storage bucket under unguessable paths;
--- this table is the per-email index. Replace with auth-scoped RLS when
--- Supabase Auth lands.
+-- Files live in a private locker bucket under authenticated owner UUID paths.
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('lockers', 'lockers', true)
+VALUES ('lockers', 'lockers', false)
 ON CONFLICT (id) DO NOTHING;
 
 DROP POLICY IF EXISTS "locker upload" ON storage.objects;
-CREATE POLICY "locker upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'lockers');
+
 DROP POLICY IF EXISTS "locker read" ON storage.objects;
-CREATE POLICY "locker read" ON storage.objects FOR SELECT USING (bucket_id = 'lockers');
+
 DROP POLICY IF EXISTS "locker delete" ON storage.objects;
-CREATE POLICY "locker delete" ON storage.objects FOR DELETE USING (bucket_id = 'lockers');
+
 
 CREATE TABLE IF NOT EXISTS locker_documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -110,7 +106,7 @@ CREATE TABLE IF NOT EXISTS locker_documents (
 CREATE INDEX IF NOT EXISTS idx_locker_email ON locker_documents (user_email);
 ALTER TABLE locker_documents ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "backend access" ON locker_documents;
-CREATE POLICY "backend access" ON locker_documents FOR ALL USING (true) WITH CHECK (true);
+
 
 -- ── Title Reports (async job pipeline result cache) ──────────
 -- Finished /jobs/title-report results are mirrored here so they survive
@@ -131,7 +127,7 @@ CREATE TABLE IF NOT EXISTS title_reports (
 CREATE INDEX IF NOT EXISTS idx_title_reports_key ON title_reports (location_key, created_at DESC);
 ALTER TABLE title_reports ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "backend access" ON title_reports;
-CREATE POLICY "backend access" ON title_reports FOR ALL USING (true) WITH CHECK (true);
+
 
 -- ── Watchlist (parcel change monitoring) ─────────────────────
 CREATE TABLE IF NOT EXISTS watchlist (
@@ -150,7 +146,7 @@ CREATE TABLE IF NOT EXISTS watchlist (
 CREATE INDEX IF NOT EXISTS idx_watchlist_email ON watchlist (user_email);
 ALTER TABLE watchlist ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "backend access" ON watchlist;
-CREATE POLICY "backend access" ON watchlist FOR ALL USING (true) WITH CHECK (true);
+
 
 -- ── Watchlist alerts (diffs detected by /watchlist/run-checks) ──
 CREATE TABLE IF NOT EXISTS watchlist_alerts (
@@ -163,7 +159,7 @@ CREATE TABLE IF NOT EXISTS watchlist_alerts (
 CREATE INDEX IF NOT EXISTS idx_watchlist_alerts_wid ON watchlist_alerts (watchlist_id, created_at DESC);
 ALTER TABLE watchlist_alerts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "backend access" ON watchlist_alerts;
-CREATE POLICY "backend access" ON watchlist_alerts FOR ALL USING (true) WITH CHECK (true);
+
 
 -- ── Manual fulfilment orders (playbook channel 3) ────────────
 -- Certified/offline documents fetched by a human partner (v1: one document
@@ -190,65 +186,56 @@ CREATE TABLE IF NOT EXISTS manual_orders (
 CREATE INDEX IF NOT EXISTS idx_manual_orders_email ON manual_orders (user_email, created_at DESC);
 ALTER TABLE manual_orders ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "backend access" ON manual_orders;
-CREATE POLICY "backend access" ON manual_orders FOR ALL USING (true) WITH CHECK (true);
+
 
 -- ── Legacy geometry table (keep for reference, not used by app) ──
 -- CREATE EXTENSION IF NOT EXISTS postgis;
 -- CREATE TABLE IF NOT EXISTS land_parcels ( ... );
 
 
--- ============================================================
--- SECURITY: run this  (RLS lockdown — see SECURITY_TODO.md)
--- ============================================================
--- The blanket "backend access ... USING (true)" policies above date from
--- when the backend shared the browser's publishable (anon) key. They let
--- ANY visitor read/write every table (including granting themselves free
--- credits). Run the block below in the Supabase SQL Editor AFTER you have
--- set SUPABASE_SERVICE_KEY (the service-role secret) in the Render
--- dashboard — the backend prefers that key and it BYPASSES RLS, so the
--- backend keeps working while the anon key is locked out.
---
--- Designed for the current no-auth architecture:
---   * money/identity/watchlist/report tables → service-role (backend) only
---   * caches the frontend reads directly     → anon read-only
---   * portfolio_assets & locker_documents    → still browser-accessed
---     directly (no auth yet), so they stay open — accepted risk until
---     Supabase Auth lands. Do not store sensitive data there meanwhile.
 
--- 1) Money & identity: backend (service key) only. No anon access at all.
-DROP POLICY IF EXISTS "backend access" ON user_credits;
-DROP POLICY IF EXISTS "backend access" ON payments;
-REVOKE ALL ON user_credits, payments FROM anon;
--- (RLS stays ENABLED; with no policy + no grant, anon can do nothing;
---  the service-role key bypasses RLS so the backend still reads/writes.)
-
--- 2) Watchlist / alerts / title reports / manual orders: written & read by
---    the backend only.
-DROP POLICY IF EXISTS "backend access" ON watchlist;
-DROP POLICY IF EXISTS "backend access" ON watchlist_alerts;
-DROP POLICY IF EXISTS "backend access" ON title_reports;
-DROP POLICY IF EXISTS "backend access" ON manual_orders;
-REVOKE ALL ON watchlist, watchlist_alerts, title_reports, manual_orders FROM anon;
-
--- 3) Caches: the frontend may read them directly but must never write.
-DROP POLICY IF EXISTS "backend access" ON village_cache;
-DROP POLICY IF EXISTS "backend access" ON survey_options;
-DROP POLICY IF EXISTS "anon read caches" ON village_cache;
-DROP POLICY IF EXISTS "anon read caches" ON survey_options;
-CREATE POLICY "anon read caches" ON village_cache FOR SELECT TO anon USING (true);
-CREATE POLICY "anon read caches" ON survey_options FOR SELECT TO anon USING (true);
-REVOKE INSERT, UPDATE, DELETE ON village_cache, survey_options FROM anon;
-
--- 4) Locker bucket: stop serving documents from long-lived public URLs.
---    (Frontend must switch getPublicUrl → createSignedUrl; see
---    SECURITY_TODO.md step 6 before running this line.)
--- UPDATE storage.buckets SET public = false WHERE id = 'lockers';
-
--- 5) portfolio_assets / locker_documents: the browser queries these
---    DIRECTLY today with no identity claim, so they cannot be locked
---    without breaking the dashboard/locker pages. ACCEPTED RISK until
---    real auth ships. When Supabase Auth lands, replace with:
---      USING (user_email = auth.jwt()->>'email')
--- ============================================================
--- END SECURITY section
--- ============================================================
+-- Account ownership and private storage (applied after base definitions).
+-- Preserve legacy records without assigning them to an unverified account.
+alter table public.portfolio_assets add column if not exists owner_id uuid;
+alter table public.locker_documents add column if not exists owner_id uuid;
+alter table public.watchlist add column if not exists owner_id uuid;
+alter table public.manual_orders add column if not exists owner_id uuid;
+alter table public.title_reports add column if not exists owner_id uuid;
+create index if not exists idx_portfolio_owner on public.portfolio_assets(owner_id);
+create index if not exists idx_locker_owner on public.locker_documents(owner_id);
+create index if not exists idx_watchlist_owner on public.watchlist(owner_id);
+create index if not exists idx_orders_owner on public.manual_orders(owner_id);
+create index if not exists idx_reports_owner on public.title_reports(owner_id);
+do $$
+declare p record; t text;
+begin
+ foreach t in array array['portfolio_assets','locker_documents','watchlist','manual_orders','title_reports','watchlist_alerts','payments','user_credits','village_cache','survey_options'] loop
+  for p in select policyname from pg_policies where schemaname='public' and tablename=t loop
+   execute format('drop policy %I on public.%I',p.policyname,t);
+  end loop;
+  execute format('alter table public.%I enable row level security',t);
+  execute format('revoke all on public.%I from anon, authenticated',t);
+  execute format('grant all on public.%I to service_role',t);
+ end loop;
+end $$;
+grant select,insert,update,delete on public.portfolio_assets,public.locker_documents to authenticated;
+create policy portfolio_owner_access on public.portfolio_assets for all to authenticated
+ using ((select auth.uid()) = owner_id) with check ((select auth.uid()) = owner_id);
+create policy locker_owner_access on public.locker_documents for all to authenticated
+ using ((select auth.uid()) = owner_id) with check (
+ (select auth.uid()) = owner_id and split_part(storage_path,'/',1) = (select auth.uid())::text);
+update storage.buckets set public=false,file_size_limit=15728640,
+ allowed_mime_types=array['application/pdf','image/jpeg','image/png','image/webp']
+ where id='lockers';
+drop policy if exists "locker upload" on storage.objects;
+drop policy if exists "locker read" on storage.objects;
+drop policy if exists "locker delete" on storage.objects;
+drop policy if exists locker_authenticated_upload on storage.objects;
+drop policy if exists locker_authenticated_read on storage.objects;
+drop policy if exists locker_authenticated_delete on storage.objects;
+create policy locker_authenticated_upload on storage.objects for insert to authenticated
+ with check (bucket_id='lockers' and (storage.foldername(name))[1]=(select auth.uid())::text);
+create policy locker_authenticated_read on storage.objects for select to authenticated
+ using (bucket_id='lockers' and (storage.foldername(name))[1]=(select auth.uid())::text);
+create policy locker_authenticated_delete on storage.objects for delete to authenticated
+ using (bucket_id='lockers' and (storage.foldername(name))[1]=(select auth.uid())::text);

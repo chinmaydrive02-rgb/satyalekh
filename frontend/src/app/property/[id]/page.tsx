@@ -15,6 +15,7 @@ import {
   startTitleReport, pollJob, parseSurveySuggestions, addToWatchlist,
   ApiError, Job, TitleReport, isDemoActive, demoHeaders,
 } from '@/lib/api';
+import { requireUser } from '@/lib/auth';
 import { createClient } from '@/utils/supabase/client';
 
 type Phase =
@@ -196,13 +197,16 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
 
   const handleSaveToPortfolio = async () => {
     if (!record || saveState === 'saving' || saveState === 'saved') return;
+    if (isDemoActive()) { setSaveState('saved'); return; }
     setSaveState('saving');
     try {
+      const user = await requireUser();
       const surveyVal = record.survey_no || surveyNum;
       const villageVal = record.village || urlVillage;
       const { data: existing } = await supabase
         .from('portfolio_assets')
         .select('id')
+        .eq('owner_id', user.id)
         .eq('survey_no', surveyVal)
         .eq('village', villageVal)
         .limit(1);
@@ -214,6 +218,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
       }
 
       const { error: insertError } = await supabase.from('portfolio_assets').insert({
+        owner_id: user.id,
         survey_no: surveyVal,
         district: record.district || urlDistrict,
         taluka: record.taluka || urlTaluka,
@@ -236,18 +241,13 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
   };
 
   /** Watchlist: daily re-check + alerts on any change to this parcel. */
-  const handleWatchPlot = async (emailOverride?: string) => {
+  const handleWatchPlot = async (_emailOverride?: string) => {
     if (watchState === 'saving' || watchState === 'watching') return;
     // ── DEMO MODE ── no email prompt; the backend writes to the in-memory
     // demo watchlist when a valid X-Demo-Token accompanies the request.
-    const email = (emailOverride || getUserEmail() ||
-      (isDemoActive() ? 'demo@satya-lekh.example' : '')).trim().toLowerCase();
-    if (!email || !email.includes('@')) {
-      setWatchState('need_email');
-      return;
-    }
     setWatchState('saving');
     try {
+      const email = isDemoActive() ? 'demo@satya-lekh.example' : (await requireUser()).email!;
       await addToWatchlist({
         email,
         district: record?.district || urlDistrict,

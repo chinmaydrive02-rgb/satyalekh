@@ -40,10 +40,24 @@ def test_storage_probe_does_not_read_rows_or_leak_errors():
 
 def test_configuration_does_not_claim_generation_or_durability(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "test")
+    monkeypatch.setenv("DOCUMENT_READER", "gemini")
+    monkeypatch.setenv("GEMINI_PERSONAL_DATA_APPROVED", "true")
     monkeypatch.setenv("JOB_DB_PATH", "/tmp/jobs.sqlite")
     monkeypatch.delenv("CRON_SECRET", raising=False)
     result = capability_readiness(FakeStorage())
     assert result["ready"] is True
-    assert result["document_reader"] == "configured_not_probed"
+    assert result["document_reader"] == "external_configured_not_probed"
     assert result["job_storage"] == "local_file_not_verified_durable"
     assert result["watchlist_scheduler"] == "not_configured"
+
+
+def test_default_local_readiness_does_not_require_google(monkeypatch):
+    import readiness
+    monkeypatch.delenv("DOCUMENT_READER", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_PERSONAL_DATA_APPROVED", raising=False)
+    monkeypatch.setattr(readiness.shutil, "which", lambda name: '/usr/bin/' + name)
+    result = capability_readiness(FakeStorage())
+    assert result['ready'] is True
+    assert result['document_reader'] == 'local_tools_available_not_accuracy_verified'
+    assert result['external_personal_data_processing'] == 'disabled'

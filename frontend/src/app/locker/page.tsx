@@ -1,15 +1,16 @@
 "use client";
 
 // Property Locker — secure-vault style document hosting (Landeed parity).
-// Documents are stored in Supabase storage under unguessable per-user paths
-// and indexed by email (matches the app's current email-keyed account model).
+// Documents use authenticated account ownership and UUID-scoped storage paths.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import AccountGate from '@/components/AccountGate';
+import { requireUser } from '@/lib/auth';
 import TopNav from '@/components/TopNav';
 import { Reveal } from '@/components/motion';
 import { createClient } from '@/utils/supabase/client';
-import { getUserEmail, setUserEmail, isDemoActive, DEMO_EMAIL } from '@/lib/api';
-import { Vault, UploadCloud, FileText, Trash2, Download, Loader2, Mail, ShieldCheck, FlaskConical } from 'lucide-react';
+import { getUserEmail, isDemoActive, DEMO_EMAIL } from '@/lib/api';
+import { Vault, UploadCloud, FileText, Trash2, Download, Loader2, ShieldCheck, FlaskConical } from 'lucide-react';
 
 const DOC_TYPES = ['7/12 Extract', 'VF-6 / Mutation', 'Index-2 / Sale Deed', 'NA Order', 'EC', 'Property Tax', 'Approved Plan', 'Other'];
 const MAX_MB = 15;
@@ -25,13 +26,6 @@ const DEMO_DOCS: Doc[] = [
   { id: 'demo-5', file_name: 'VF-6_Mutation_Entries_128P.pdf',   storage_path: 'demo', doc_type: 'VF-6 / Mutation',     size_bytes: 528000,  created_at: '2026-02-20T08:48:00Z' },
   { id: 'demo-6', file_name: 'Property_Tax_Receipt_AMC.pdf',     storage_path: 'demo', doc_type: 'Property Tax',        size_bytes: 142000,  created_at: '2026-01-31T10:15:00Z' },
 ];
-
-function pathKey(email: string): string {
-  // Stable unguessable prefix per email (not security-grade — beta model)
-  let h = 0x811c9dc5;
-  for (let i = 0; i < email.length; i++) { h ^= email.charCodeAt(i); h = Math.imul(h, 0x01000193); }
-  return (h >>> 0).toString(36) + email.length.toString(36);
-}
 
 export default function Locker() {
   const supabase = createClient();
@@ -54,21 +48,32 @@ export default function Locker() {
       setEntered(true);
       return;
     }
-    const saved = getUserEmail();
-    if (saved) { setEmail(saved); setEntered(true); }
-  }, []);
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email_confirmed_at) { setEmail(data.user.email || ''); setEntered(true); }
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user;
+      setEmail(user?.email || ''); setEntered(Boolean(user?.email_confirmed_at));
+      if (!user) setDocs([]);
+    });
+    return () => data.subscription.unsubscribe();
+  }, [supabase.auth]);
 
-  const load = useCallback(async (em: string) => {
+  const load = useCallback(async () => {
     if (isDemoActive()) { setDocs(DEMO_DOCS); setBusy(false); return; }
+    const { data: identity } = await supabase.auth.getUser();
+    if (!identity.user?.email_confirmed_at) { setEntered(false); setDocs([]); return; }
     setBusy(true);
     const { data, error: e } = await supabase.from('locker_documents')
-      .select('*').eq('user_email', em).order('created_at', { ascending: false });
+      .select('*').eq('owner_id', identity.user.id).order('created_at', { ascending: false });
     setBusy(false);
-    if (e) { setError('Could not load locker — run the latest schema.sql in Supabase.'); return; }
+    if (e) { setError('Could not load your locker. Please try again.'); return; }
+    const { data: current } = await supabase.auth.getSession();
+    if (current.session?.user.id !== identity.user.id) return;
     setDocs((data || []) as Doc[]);
   }, [supabase]);
 
-  useEffect(() => { if (entered && email) load(email); }, [entered, email, load]);
+  useEffect(() => { if (entered && email) load(); }, [entered, email, load]);
 
   const onUpload = async (f: File) => {
     setError('');
@@ -88,16 +93,17 @@ export default function Locker() {
     if (f.size > MAX_MB * 1024 * 1024) { setError(`File too large — max ${MAX_MB} MB.`); return; }
     setUploading(true);
     try {
-      const path = `${pathKey(email)}/${crypto.randomUUID()}-${f.name.replace(/[^\w.\-]/g, '_')}`;
+      const user = await requireUser();
+      const path = `${user.id}/${crypto.randomUUID()}-${f.name.replace(/[^\w.\-]/g, '_')}`;
       const { error: upErr } = await supabase.storage.from('lockers').upload(path, f);
       if (upErr) throw upErr;
       const { error: insErr } = await supabase.from('locker_documents').insert({
-        user_email: email, file_name: f.name, storage_path: path, doc_type: docType, size_bytes: f.size,
+        owner_id: user.id, user_email: user.email, file_name: f.name, storage_path: path, doc_type: docType, size_bytes: f.size,
       });
-      if (insErr) throw insErr;
-      await load(email);
-    } catch (e: any) {
-      setError(e.message || 'Upload failed');
+      if (insErr) { await supabase.storage.from('lockers').remove([path]); throw insErr; }
+      await load();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
@@ -113,16 +119,21 @@ export default function Locker() {
       setTimeout(() => setError(''), 4000);
       return;
     }
-    const { data } = await supabase.storage.from('lockers').createSignedUrl(d.storage_path, 60);
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+    await requireUser();
+    const { data, error: downloadError } = await supabase.storage.from('lockers').createSignedUrl(d.storage_path, 60);
+    if (downloadError) { setError('Could not open this document. Please try again.'); return; }
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
   };
 
   const remove = async (d: Doc) => {
     if (!confirm(`Delete "${d.file_name}" from your locker?`)) return;
     if (isDemoActive()) { setDocs(prev => prev.filter(x => x.id !== d.id)); return; }
-    await supabase.storage.from('lockers').remove([d.storage_path]);
-    await supabase.from('locker_documents').delete().eq('id', d.id);
-    await load(email);
+    const user = await requireUser();
+    const { error: removeError } = await supabase.storage.from('lockers').remove([d.storage_path]);
+    if (removeError) { setError('Could not delete this document. Please try again.'); return; }
+    const { error: metadataError } = await supabase.from('locker_documents').delete().eq('id', d.id).eq('owner_id', user.id);
+    if (metadataError) { setError('The file was deleted but its listing could not be updated. Please refresh.'); return; }
+    await load();
   };
 
   const fmtSize = (b: number) => b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.ceil(b / 1024)} KB`;
@@ -161,17 +172,7 @@ export default function Locker() {
         )}
 
         {!entered ? (
-          <form
-            className="sl-anim card p-8 flex flex-col gap-4 max-w-md"
-            style={{ animation: 'sl-fade-up 0.5s cubic-bezier(0.22,0.61,0.36,1) 0.1s both' }}
-            onSubmit={e => { e.preventDefault(); const em = email.trim().toLowerCase(); if (!em.includes('@')) return; setUserEmail(em); setEmail(em); setEntered(true); }}>
-            <p className="text-sm text-muted leading-relaxed">Your locker is linked to your email — the same one used for search credits.</p>
-            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com"
-              className="input" />
-            <button type="submit" className="btn btn-primary">
-              <Mail size={14}/> Open My Locker
-            </button>
-          </form>
+          <AccountGate feature="document locker"/>
         ) : (
           <>
             {/* Upload */}
@@ -226,9 +227,8 @@ export default function Locker() {
 
             <p className="text-xs text-muted leading-relaxed flex items-start gap-2">
               <ShieldCheck size={12} className="mt-0.5 shrink-0"/>
-              Documents are stored under private, unguessable paths linked to your email. Account-level
-              encryption and sharing controls arrive with full accounts — avoid uploading Aadhaar or
-              other identity documents during beta.
+              Access is restricted to your signed-in account. Download links expire after 60 seconds.
+              Documents saved before accounts were introduced are preserved and require a verified, administrator-assisted migration.
             </p>
           </>
         )}

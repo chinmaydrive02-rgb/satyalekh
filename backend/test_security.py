@@ -154,7 +154,7 @@ class TestInputBounds:
 
     def test_credits_rejects_invalid_email(self, client):
         assert client.get("/credits", params={"email": "not-an-email"}).status_code == 400
-        assert client.get("/credits", params={"email": "a@b.co"}).status_code == 200
+        assert client.get("/credits", params={"email": "a@b.co"}).status_code == 401
 
     def test_litigation_rejects_bad_year(self, client):
         r = client.post("/litigation-search", json={
@@ -173,6 +173,8 @@ class TestJobStoreBounds:
         assert r.status_code == 503
 
     def test_concurrent_scrape_cap(self, client, main_mod, monkeypatch):
+        from authentication import AuthenticatedUser
+        monkeypatch.setattr(main_mod, "_account_identity", lambda *args: AuthenticatedUser("d2f5b917-9289-4f60-909b-1b829f43e47a", "a@b.co"))
         monkeypatch.setattr(main_mod, "MAX_CONCURRENT_SCRAPE_JOBS", 0)
         r = client.post("/jobs/title-report", json={
             "district": "Ahmedabad", "taluka": "City",
