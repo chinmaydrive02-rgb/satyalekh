@@ -66,3 +66,32 @@ def test_personal_data_provider_gate_stops_external_analysis(monkeypatch):
     response = TestClient(main.app).post('/litigation-search', json={
         'name': 'Synthetic Party', 'district': 'Ahmedabad', 'year': '2026'})
     assert response.status_code == 503
+
+
+def test_cancelled_request_keeps_ocr_slot_until_worker_finishes(monkeypatch):
+    import asyncio
+    import threading
+    import main
+    import local_document_reader
+    entered, finish = threading.Event(), threading.Event()
+    def reader(*args):
+        entered.set()
+        finish.wait(3)
+        return {'owner_name': 'Test'}
+    monkeypatch.setattr(local_document_reader, 'read_document', reader)
+    async def scenario():
+        monkeypatch.setattr(main, '_LOCAL_READER_GATE', asyncio.Semaphore(1))
+        task = asyncio.create_task(main._read_uploaded_locally(b'test', 'application/pdf'))
+        while not entered.is_set():
+            await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert main._LOCAL_READER_GATE.locked()
+        finish.set()
+        for _ in range(100):
+            if not main._LOCAL_READER_GATE.locked():
+                break
+            await asyncio.sleep(0.01)
+        assert not main._LOCAL_READER_GATE.locked()
+    asyncio.run(scenario())

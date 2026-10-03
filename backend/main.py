@@ -362,6 +362,25 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 _LOCAL_READER_GATE = asyncio.Semaphore(1)
 
 
+async def _read_uploaded_locally(contents, mime_type):
+    from local_document_reader import read_document
+    try:
+        await asyncio.wait_for(_LOCAL_READER_GATE.acquire(), timeout=2)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=429, detail="The local document reader is busy. Try again shortly.", headers={"Retry-After": "15"})
+    worker = asyncio.create_task(asyncio.to_thread(read_document, contents, mime_type))
+
+    def finished(task):
+        # Cancellation of an HTTP request must not open another OCR slot while
+        # the first bounded subprocess is still using memory.
+        _LOCAL_READER_GATE.release()
+        if not task.cancelled():
+            task.exception()
+
+    worker.add_done_callback(finished)
+    return await asyncio.shield(worker)
+
+
 def _require_personal_data_provider():
     if os.getenv("GEMINI_PERSONAL_DATA_APPROVED", "").lower() != "true":
         raise HTTPException(status_code=503, detail="This external analysis is unavailable with the current provider arrangement. Upload an official record for local preliminary analysis instead.")
@@ -410,19 +429,13 @@ async def analyze_record(http_request: Request, file: UploadFile = File(...),
         raise HTTPException(status_code=400, detail="File content is not a recognised JPG, PNG, WebP or PDF document.")
 
     if os.getenv("DOCUMENT_READER", "local").strip().lower() != "gemini":
-        from local_document_reader import read_document, LocalDocumentError
+        from local_document_reader import LocalDocumentError
         from local_report import build_local_analysis
         try:
-            await asyncio.wait_for(_LOCAL_READER_GATE.acquire(), timeout=2)
-        except asyncio.TimeoutError:
-            raise HTTPException(status_code=429, detail="The local document reader is busy. Try again shortly.", headers={"Retry-After": "15"})
-        try:
-            result = await asyncio.to_thread(read_document, contents, sniffed_type)
+            result = await _read_uploaded_locally(contents, sniffed_type)
             return build_local_analysis(result)
         except LocalDocumentError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
-        finally:
-            _LOCAL_READER_GATE.release()
 
     if os.getenv("GEMINI_PERSONAL_DATA_APPROVED", "").lower() != "true":
         raise HTTPException(status_code=503, detail="External document processing is not approved. Use the local document reader.")
