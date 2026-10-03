@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -355,6 +355,7 @@ class AnalysisResult(BaseModel):
     evidence: Optional[list] = None
     metadata: Optional[dict] = None
     raw_text: Optional[str] = None
+    status: Optional[str] = None
 
 # SECURITY F-11: upload hardening — size cap, content-type/extension
 # allowlist and magic-byte sniffing (never trust the client's content_type).
@@ -433,6 +434,10 @@ async def analyze_record(http_request: Request, file: UploadFile = File(...),
         from local_report import build_local_analysis
         try:
             result = await _read_uploaded_locally(contents, sniffed_type)
+            if all(result.get(name) in (None, "", "Unknown") for name in
+                   ("owner_name", "survey_no", "total_area", "tenure_type", "encumbrances")):
+                from review_record import pending_source_review
+                return pending_source_review(result)
             return build_local_analysis(result)
         except LocalDocumentError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
@@ -552,6 +557,34 @@ class AnyRORRequest(BaseModel):
     village: str
     survey_no: str
     record_type: Optional[str] = "OLD_SCAN_712"
+
+@app.post("/review-record", response_model=AnalysisResult, response_model_exclude_none=True)
+async def review_record(http_request: Request, file: UploadFile = File(...), review: str = Form(...)):
+    """Re-read the supplied original locally and attribute user-confirmed fields.
+
+    Does not authenticate the reviewer, verify excerpts, persist a report or
+    invoke an external provider. Every result remains preliminary.
+    """
+    from review_record import parse_review, build_reviewed_analysis
+    from local_document_reader import LocalDocumentError
+    _enforce_rate_limit(http_request, "analyze-record", limit=5)
+    confirmed_review = parse_review(review)
+    declared_type = (file.content_type or "").lower()
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if declared_type not in _ALLOWED_UPLOAD_TYPES and ext not in _ALLOWED_UPLOAD_EXTS:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, WebP or PDF files are supported.")
+    contents = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large — the maximum upload size is 10 MB.")
+    mime_type = _sniff_upload_mime(contents)
+    if mime_type is None:
+        raise HTTPException(status_code=400, detail="File content is not a recognised JPG, PNG, WebP or PDF document.")
+    try:
+        parsed = await _read_uploaded_locally(contents, mime_type)
+        return build_reviewed_analysis(parsed, confirmed_review)
+    except LocalDocumentError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
+
 
 @app.post("/fetch-anyror")
 async def fetch_anyror_endpoint(request: AnyRORRequest, http_request: Request,

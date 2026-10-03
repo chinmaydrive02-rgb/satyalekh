@@ -16,6 +16,7 @@ def test_mortgage_keeps_red_flag_and_source_evidence():
     evidence = [{"field": "encumbrances", "page": 1, "snippet": "Mortgage: Test Bank"}]
     result = build_local_analysis({"encumbrances": "Mortgage to Test Bank", "evidence": evidence})
     assert result["risk_level"] == "RED"
+    assert result["report"]["risk"]["verdict"] == "HIGH_RISK"
     assert result["report"]["source_evidence"] == evidence
     assert result["owner_name"] == "Unknown"
 

@@ -40,7 +40,11 @@ def build_local_analysis(parsed):
     }
     report["risk"]["checks"].append({"name": "supporting_title_evidence", "status": "unavailable",
         "detail": "Only the supplied extract was read. Deeds, registration, full mutation history, encumbrance evidence and litigation have not been verified."})
-    if report["risk"]["verdict"] == "CLEAR":
+    if level == "RED":
+        # A disclosed burden needs resolution even when unavailable supporting
+        # checks contribute no points to the aggregate heuristic score.
+        report["risk"]["verdict"] = "HIGH_RISK"
+    elif report["risk"]["verdict"] == "CLEAR":
         report["risk"]["verdict"] = "CAUTION"
     report["source_evidence"] = parsed.get("evidence", [])
     return {**fields, "risk_level": level, "risk_reason": reason, "report": report,

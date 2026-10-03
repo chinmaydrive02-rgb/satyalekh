@@ -195,6 +195,10 @@ export interface TitleRisk {
 }
 
 export interface ReportCoverage {
+  source?: string;
+  official_source_verified?: boolean;
+  user_review_confirmed?: boolean;
+  source_excerpt_verified?: boolean;
   chain_requested: boolean;
   mutation_entries_identified: number;
   mutation_records_retrieved: number;
@@ -206,6 +210,7 @@ export interface ReportCoverage {
 export interface TitleReport {
   demo?: boolean;
   coverage?: ReportCoverage;
+  source_evidence?: Array<{ field?: string; value?: string; page?: number; snippet?: string; method?: string; confidence?: string }>;
   record: LandRecord;
   chain_of_title: ChainEntry[];
   risk: TitleRisk;

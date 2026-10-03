@@ -118,7 +118,7 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
 
   const encumbranceText = record.encumbrances?.trim() || '';
   const encumbrancesUnavailable = ['', 'unknown', 'not available', 'not found', 'n/a', 'null', '—', '-'].includes(encumbranceText.toLowerCase());
-  const hasEncumbrances = !encumbrancesUnavailable && !['none', 'nil', 'no', 'clear'].includes(encumbranceText.toLowerCase());
+  const hasEncumbrances = !encumbrancesUnavailable && !/[\u0a80-\u0aff]/.test(encumbranceText) && !['none', 'nil', 'no', 'clear'].includes(encumbranceText.toLowerCase());
 
   return (
     <article className="sl-report flex flex-col gap-6">
@@ -142,6 +142,17 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
         <section className="rounded-xl border-2 border-warning-border bg-warning-soft p-4 text-warning">
           <p className="text-sm font-bold">SAMPLE REPORT · DEMONSTRATION DATA</p>
           <p className="mt-1 text-xs">Illustrative records only. No live government record was retrieved for this report.</p>
+        </section>
+      )}
+      {coverage?.source === 'user_supplied_record' && (
+        <section className="rounded-xl border border-warning-border bg-warning-soft p-4">
+          <p className="text-sm font-semibold text-warning">Preliminary analysis of an uploaded record</p>
+          <p className="mt-1 text-sm text-muted">
+            {coverage.user_review_confirmed
+              ? 'Based on entries confirmed by the user against the supplied document. The source excerpts and reviewer identity have not been independently verified.'
+              : 'Based on unreviewed text extraction. Compare the readings with the original document before relying on them.'}
+            {' '}Official source authenticity, supporting instruments and the complete title history remain unverified.
+          </p>
         </section>
       )}
       {/* ── Document header: memo masthead + verdict ─────────────── */}
@@ -186,7 +197,7 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
               >
                 {verdict.label}
               </span>
-              <span className="eyebrow text-[9px]">Automated assessment</span>
+              <span className="eyebrow text-[9px]">{coverage?.source === 'user_supplied_record' ? 'Preliminary risk screen' : 'Automated assessment'}</span>
               <span className="text-[10px] text-muted">Higher score = more risk</span>
             </div>
           </div>
@@ -249,7 +260,7 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
       <section className="card p-6 md:p-8">
         <div className="flex flex-wrap gap-2 items-baseline justify-between border-b-2 border-ink/10 pb-3 mb-5">
           <h3 className="text-base font-semibold text-ink">Record Details</h3>
-          <span className="font-mono text-[11px] text-faint">{report.demo ? "sample data" : "as per retrieved record"}</span>
+          <span className="font-mono text-[11px] text-faint">{report.demo ? "sample data" : coverage?.source === 'user_supplied_record' ? 'as per supplied readings' : 'as per retrieved record'}</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5">
           <div className="flex flex-col gap-1.5 col-span-2 md:col-span-3 rounded-xl border border-border bg-surface-soft/50 px-4 py-3.5 border-l-[3px] border-l-accent/60">
@@ -288,10 +299,26 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
         <ChainOfTitle entries={chain || []} />
       </section>
 
+      {report.source_evidence && report.source_evidence.length > 0 && (
+        <section className="card p-6 md:p-8">
+          <h3 className="text-base font-semibold text-ink">Source readings and references</h3>
+          <p className="mt-2 text-xs text-muted">Machine readings and user-entered excerpts are shown separately. A page reference does not independently verify an excerpt.</p>
+          <div className="mt-4 space-y-4">
+            {report.source_evidence.map((entry, index) => (
+              <div key={index} className="border-t border-border pt-3 text-sm break-words">
+                <p className="font-medium">{entry.field?.replace(/_/g, ' ') || 'Source reading'}{entry.page ? ` · page ${entry.page}` : ''}</p>
+                <p className="text-xs text-muted mt-1">{entry.method === 'user_review' ? 'User-entered reading · excerpt unverified' : 'Machine extraction · unreviewed'}</p>
+                {entry.value && <p className="mt-1">{entry.value}</p>}
+                <blockquote className="mt-1 whitespace-pre-wrap text-muted">{entry.snippet || 'Excerpt not supplied.'}</blockquote>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       {/* Footer / disclaimer */}
       <p className="text-xs text-faint leading-relaxed border-t border-border pt-4">
         Automated report <span className="font-mono tnum">{refNo}</span> generated{' '}
-        {generatedLabel && <>on {generatedLabel} </>}{report.demo ? "from demonstration data, not a live government record." : "from the retrieved AnyROR record."}
+        {generatedLabel && <>on {generatedLabel} </>}{report.demo ? "from demonstration data, not a live government record." : coverage?.source === 'user_supplied_record' ? "from a user-supplied document; no live government record was retrieved." : "from the retrieved AnyROR record."}
         This is not a legal title opinion — for transactions, verify the index-2, a 30-year
         search report and pending litigation with a lawyer.
       </p>

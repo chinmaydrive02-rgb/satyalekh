@@ -52,3 +52,11 @@ Supabase secure_account_ownership applied: owner UUID columns, private locker, p
 Current scraper investigation reproduced TLS failure and Chromium connection reset before page forms locally; no supported selector fix or proof that geography is the cause. Keep official-source acquisition/upload fallback and re-test permitted retrieval before monitoring.
 
 Marketing backlog, explicitly after real-report/core acceptance: create Satyalekh LinkedIn page, approve and populate product facts/posts, and create a dedicated Gmail account. Account names/availability, password/verification and acceptance of terms require owner involvement. Do not announce full title clearance, reliable scraping, confidentiality or DPDP compliance before the corresponding gates pass.
+
+## 4 October 2026: storage restored and source review implemented
+
+The owner replaced Render's account access token with the correct project secret. The live readiness check now returns ready=true and all four storage tables accessible. This confirms relation access, not authenticated CRUD, email delivery or scheduler execution.
+
+Real local RoR acceptance found zero supported fields in three genuine Gujarati PDFs despite successful OCR/native-text reading. The next release preserves that text and provides an original-document comparison form rather than ending at a field-extraction error. Each user-entered reading requires a page and excerpt, with explicit confirmation. `/review-record` re-reads the original locally, preserves machine readings and changes, and labels user evidence as unverified. Reports remain preliminary and contain source provenance in the printable output. Automatic preliminary reports and demo features are preserved. No external processing or report persistence is added by this flow.
+
+Remaining priority: verify authenticated workspace operations with two actual confirmed accounts; collect consented, anonymised VF7 examples with lawyer-reviewed ground truth; implement a layout-specific extraction parser; complete approved Gujarati translation and supporting document coverage. AnyROR retrieval is still not proven working. A storage-ready status must not be presented as proof of portal access or full title clearance.

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UploadCloud, Loader2, Cpu, ShieldCheck, BookmarkPlus, CheckCircle2, ChevronDown, AlertCircle, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import TopNav from '@/components/TopNav';
 import { Reveal } from '@/components/motion';
 import JobProgress from '@/components/JobProgress';
@@ -30,6 +31,7 @@ const RECORD_TYPES = [
 ];
 
 interface UploadAnalysis {
+  status?: 'review_required' | 'reviewed_preliminary';
   owner_name?: string;
   survey_no?: string;
   total_area?: string;
@@ -41,6 +43,20 @@ interface UploadAnalysis {
   evidence?: Array<{ field?: string; value?: string; snippet?: string; page?: number; method?: string }>;
   raw_text?: string;
   metadata?: { reader?: string; external_processing?: boolean; translation_performed?: boolean; pages_total?: number; pages_processed?: number; truncated?: boolean; manual_review_required?: boolean; warnings?: string[] };
+}
+
+const REVIEW_FIELDS = [
+  { key: 'owner_name', label: 'Owner name', required: true },
+  { key: 'survey_no', label: 'Survey number', required: true },
+  { key: 'total_area', label: 'Total area, including units', required: true },
+  { key: 'tenure_type', label: 'Tenure type', required: false },
+  { key: 'encumbrances', label: 'Encumbrances', required: false },
+] as const;
+type ReviewField = typeof REVIEW_FIELDS[number]['key'];
+type ReviewEntry = { value: string; page: string; source_excerpt: string };
+type ReviewForm = Record<ReviewField, ReviewEntry>;
+function emptyReview(): ReviewForm {
+  return Object.fromEntries(REVIEW_FIELDS.map(({ key }) => [key, { value: '', page: '1', source_excerpt: '' }])) as ReviewForm;
 }
 
 function extractedValue(value?: string): string {
@@ -56,6 +72,30 @@ export default function DocumentUpload() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [result, setResult] = useState<UploadAnalysis | null>(null);
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [reviewFields, setReviewFields] = useState<ReviewForm>(emptyReview);
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [machineReportCurrent, setMachineReportCurrent] = useState(false);
+  const [reviewedResult, setReviewedResult] = useState<UploadAnalysis | null>(null);
+  const manualRevisionRef = useRef(0);
+  useEffect(() => {
+    if (!file) { setSourceUrl(''); return; }
+    const url = URL.createObjectURL(file);
+    setSourceUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  const changeFile = (next: File | null) => {
+    manualRevisionRef.current += 1;
+    setFile(next); setResult(null); setReviewedResult(null); setMachineReportCurrent(false); setReviewError(''); setUploadError('');
+    setReviewFields(emptyReview()); setReviewConfirmed(false);
+  };
+  const changeReview = (key: ReviewField, part: keyof ReviewEntry, value: string) => {
+    manualRevisionRef.current += 1;
+    setReviewFields(prev => ({ ...prev, [key]: { ...prev[key], [part]: value } }));
+    setReviewedResult(null); setMachineReportCurrent(false); setReviewError(''); setReviewConfirmed(false);
+  };
 
   // Automation State
   const [recordType, setRecordType] = useState('OLD_SCAN_712');
@@ -157,7 +197,8 @@ export default function DocumentUpload() {
     if (!file || isAnalyzing) return;
     setUploadError('');
     setIsAnalyzing(true);
-    setResult(null);
+    setResult(null); setReviewedResult(null); setMachineReportCurrent(false); setReviewError(''); setReviewConfirmed(false); setReviewFields(emptyReview());
+    const revision = ++manualRevisionRef.current;
     const formData = new FormData();
     formData.append("file", file);
     try {
@@ -167,12 +208,44 @@ export default function DocumentUpload() {
         throw new Error(typeof body.detail === 'string' ? body.detail : 'The document could not be analysed. Please try again.');
       }
       const data = await res.json();
-      setResult(data);
+      if (manualRevisionRef.current === revision) { setResult(data); setMachineReportCurrent(true); }
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'The document could not be analysed. Please try again.');
+      if (manualRevisionRef.current === revision) setUploadError(error instanceof Error ? error.message : 'The document could not be analysed. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const submitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file || !result || reviewBusy || !reviewConfirmed) return;
+    const fields: Partial<Record<ReviewField, { value: string; source_excerpt: string; page: number }>> = {};
+    for (const { key, label, required } of REVIEW_FIELDS) {
+      const entry = reviewFields[key];
+      const value = entry.value.trim();
+      if (!value && !required) continue;
+      if (!value || !entry.source_excerpt.trim() || !Number.isInteger(Number(entry.page)) || Number(entry.page) < 1 || Number(entry.page) > 3) {
+        setReviewError(`${label}: enter a value, page 1–3 and the original source excerpt.`); return;
+      }
+      fields[key] = { value, source_excerpt: entry.source_excerpt.trim(), page: Number(entry.page) };
+    }
+    if (!/[0-9\u0ae6-\u0aef]/.test(fields.total_area?.value || '') || !/(?:\bsq\.?\s*(?:m|met(?:er|re)s?|ft|feet)\b|\bm[²2]\b|\bsqm\b|\bhectares?\b|\bha\b|\bacres?\b|\bgunthas?\b|\bsquare\s*(?:met(?:er|re)s?|feet)\b|ચો\.?\s*(?:મી|ફૂટ)|હેક્ટર|આર(?:ે)?|ગુઠા|ગુંઠા|એકર)/i.test(fields.total_area?.value || '')) {
+      setReviewError('Include the area units shown on the original record, such as sq m or hectares.'); return;
+    }
+    const revision = manualRevisionRef.current;
+    setReviewBusy(true); setReviewError(''); setReviewedResult(null);
+    const data = new FormData(); data.append('file', file);
+    data.append('review', JSON.stringify({ confirmed: true, fields }));
+    try {
+      const response = await fetch(`${API_BASE_URL}/review-record`, { method: 'POST', body: data });
+      const reviewed = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof reviewed.detail === 'string' ? reviewed.detail : 'The review could not be processed. Check your entries and try again.');
+      if (manualRevisionRef.current !== revision) return;
+      if (!reviewed.report) throw new Error('A preliminary report could not be produced. Compare the source and try again.');
+      setReviewedResult(reviewed);
+    } catch (e) {
+      if (manualRevisionRef.current === revision) setReviewError(e instanceof Error ? e.message : 'The review could not be processed.');
+    } finally { setReviewBusy(false); }
   };
 
   /** Starts the background scrape job (same jobs API as the property page). */
@@ -393,7 +466,7 @@ export default function DocumentUpload() {
             style={{ animation: 'sl-fade-up 0.4s cubic-bezier(0.22,0.61,0.36,1) both' }}
           >
              <div className="w-full h-40 border-2 border-dashed border-border-strong rounded-xl flex flex-col items-center justify-center text-muted hover:border-brand transition-colors relative cursor-pointer group">
-                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => changeFile(e.target.files?.[0] || null)} />
                 <UploadCloud size={36} className="mb-3 group-hover:text-brand transition-colors" />
                 <span className="text-sm font-medium group-hover:text-ink">{file ? file.name : "Drop your 7/12 image or PDF here"}</span>
              </div>
@@ -414,7 +487,7 @@ export default function DocumentUpload() {
             {/* AnyROR Record Type */}
             <div className="flex flex-col gap-1.5">
               <label className="label">Record type (કોઇ એક પસંદ કરો)</label>
-              <select value={recordType} onChange={e => setRecordType(e.target.value)} style={{ appearance: 'auto', WebkitAppearance: 'menulist' as any }} className={selectClass}>
+              <select value={recordType} onChange={e => setRecordType(e.target.value)} style={{ appearance: 'auto', WebkitAppearance: 'menulist' }} className={selectClass}>
                 {RECORD_TYPES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
@@ -613,6 +686,7 @@ export default function DocumentUpload() {
                  <span className={`badge border ${riskTone}`}>{riskLabel}</span>
               </div>
               <p className="text-sm text-ink-soft leading-relaxed">{result.risk_reason || 'The available document did not support a risk assessment.'}</p>
+              <p className="eyebrow">Machine reading — may be incomplete or incorrect</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 break-words">
                  <div><span className="eyebrow">Owner</span><div className="text-sm text-ink font-medium mt-0.5">{extractedValue(result.owner_name)}</div></div>
                  <div><span className="eyebrow">Survey No</span><div className="text-sm text-ink font-mono mt-0.5">{extractedValue(result.survey_no)}</div></div>
@@ -622,9 +696,21 @@ export default function DocumentUpload() {
               </div>
               <p className="text-sm text-muted leading-relaxed">{isDemoActive() ? 'Sample document analysis for the demo. This result does not verify your uploaded file.' : result.metadata?.external_processing ? 'Analysis used an approved external reader. Check every finding against the source and obtain lawyer review.' : 'Local reading; Gujarati source retained, English translation not performed; lawyer review required. OCR may misread the document.'} Authenticity and current title position have not been independently verified.</p>
               {result.metadata && <div className="rounded-lg border border-border p-3 text-xs text-muted space-y-2"><p>Reader: {result.metadata.reader || 'unspecified'} · Pages read: {result.metadata.pages_processed ?? 'not supplied'} of {result.metadata.pages_total ?? 'not supplied'}{result.metadata.truncated ? ' · Partial document: remaining pages require review' : ''}</p>{result.metadata.warnings?.map((warning, i) => <p key={i} className="text-warning">{warning}</p>)}</div>}
-              {result.report && <div className="border-t border-border pt-5"><p className="eyebrow mb-3">Preliminary document review</p><TitleReportView report={result.report}/></div>}
+              {machineReportCurrent && !reviewedResult && result.report && <div className="border-t border-border pt-5"><p className="eyebrow mb-3">{isDemoActive() ? 'Sample preliminary analysis' : 'Machine preliminary analysis · unreviewed'}</p><TitleReportView report={result.report}/><button type="button" onClick={() => window.print()} className="btn btn-outline mt-3 print:hidden">Print / save PDF</button></div>}
               {result.evidence && result.evidence.length > 0 && <details className="border border-border rounded-lg p-4"><summary className="cursor-pointer text-sm font-semibold">Source evidence ({result.evidence.length})</summary><div className="mt-3 space-y-3">{result.evidence.map((entry, index) => <div key={index} className="text-sm border-b border-border pb-3 last:border-0"><p className="font-medium">{entry.field?.replace(/_/g, ' ') || `Evidence ${index + 1}`}{entry.page ? ` · page ${entry.page}` : ''}</p>{entry.value && <p className="mt-1">{entry.value}</p>}<blockquote className="text-muted mt-1 whitespace-pre-wrap break-words">{entry.snippet || 'Source excerpt not supplied.'}</blockquote></div>)}</div></details>}
               {result.raw_text && <details className="border border-border rounded-lg p-4"><summary className="cursor-pointer text-sm font-semibold">Text read from this document</summary><pre className="mt-3 whitespace-pre-wrap break-words text-xs max-h-96 overflow-auto font-sans">{result.raw_text}</pre></details>}
+              {!isDemoActive() && result.metadata?.reader === 'local' && <section className="border-t border-border pt-5 space-y-5">
+                <div className="print:hidden"><p className="eyebrow">Compare against the original</p><h2 className="text-xl font-semibold mt-1">Review the fields before producing a preliminary analysis</h2><p className="text-sm text-muted mt-2">Keep the source open while entering your reading. Machine values above stay unchanged. Leave an optional field blank if the document does not establish it; blank does not mean clear.</p></div>
+                {sourceUrl && <div className="space-y-3 print:hidden"><a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline w-fit">Open original document</a>{file?.type === 'application/pdf' || file?.name.toLowerCase().endsWith('.pdf') ? <iframe title="Original uploaded document" src={sourceUrl} className="w-full h-80 sm:h-[520px] border border-border rounded-lg"/> : <Image unoptimized width={1600} height={1600} src={sourceUrl} alt="Original uploaded record for comparison" className="w-full max-h-[520px] object-contain border border-border rounded-lg"/>}<p className="text-xs text-muted">The preview uses your selected file. If the embedded PDF does not open on your phone, use the original-document link.</p></div>}
+                <form onSubmit={submitReview} className="space-y-5 print:hidden">
+                  {REVIEW_FIELDS.map(({ key, label, required }) => <fieldset key={key} className="rounded-lg border border-border p-4 space-y-3"><legend className="text-sm font-semibold px-1">{label}{required ? ' · required' : ' · optional'}</legend><p className="text-xs text-muted">Machine reading: {extractedValue(result[key])}</p><label className="block text-sm">Your reading<input className="input w-full mt-1" value={reviewFields[key].value} maxLength={250} required={required} onChange={e => changeReview(key, 'value', e.target.value)} placeholder={key === 'total_area' ? 'e.g. 123 sq m — use the source units' : required ? 'Read from the original' : 'Leave blank if unknown'}/></label><div className="grid sm:grid-cols-[100px_1fr] gap-3"><label className="block text-sm">Source page<input type="number" min={1} max={3} step={1} className="input w-full mt-1" value={reviewFields[key].page} required={Boolean(reviewFields[key].value.trim())} onChange={e => changeReview(key, 'page', e.target.value)}/></label><label className="block text-sm">Exact excerpt from the source<textarea className="input w-full mt-1 min-h-20" maxLength={500} required={Boolean(reviewFields[key].value.trim())} value={reviewFields[key].source_excerpt} onChange={e => changeReview(key, 'source_excerpt', e.target.value)} placeholder="Copy the original words supporting this field; retain Gujarati where present"/></label></div></fieldset>)}
+                  <label className="flex items-start gap-3 text-sm leading-relaxed"><input type="checkbox" className="mt-1 size-4 shrink-0" checked={reviewConfirmed} onChange={e => { manualRevisionRef.current += 1; setReviewConfirmed(e.target.checked); setReviewedResult(null); setMachineReportCurrent(false); }} required/><span>I compared these entries and excerpts with the original document. This confirms my reading only; it does not establish authenticity, ownership or legal title clearance.</span></label>
+                  {reviewError && <p role="alert" className="text-sm text-danger">{reviewError}</p>}
+                  <button type="submit" disabled={reviewBusy || !reviewConfirmed || isAnalyzing} className="btn btn-primary w-full">{reviewBusy ? <><Loader2 size={16} className="animate-spin"/> Processing your review…</> : 'Produce preliminary analysis from my review'}</button>
+                  <p className="text-xs text-muted">The server re-reads the original locally. Your entered readings are identified as user supplied; no external AI provider is used.</p>
+                </form>
+                {reviewedResult?.report && <div className="space-y-3 border-t border-border pt-5"><p className="eyebrow">Preliminary analysis · user reviewed fields</p><p className="text-sm text-muted">Based on your reading and the uploaded record. Independent source checks and lawyer review are still required.</p><TitleReportView report={reviewedResult.report}/><button type="button" onClick={() => window.print()} className="btn btn-outline print:hidden">Print / save PDF</button></div>}
+              </section>}
               <div className="flex flex-col md:flex-row gap-3 mt-2 pt-4 border-t border-border">
                   <Link href="/dashboard" className="btn btn-outline flex-1 text-center">View Portfolio</Link>
               </div>
