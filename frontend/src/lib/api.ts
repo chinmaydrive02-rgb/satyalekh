@@ -1,3 +1,4 @@
+import { authorizationHeaders, requireUser } from '@/lib/auth';
 // Central API configuration
 // Uses NEXT_PUBLIC_API_URL from .env.local (defaults to localhost:8000 for dev)
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://satyalekh-api-sg.onrender.com";
@@ -246,9 +247,10 @@ export async function startTitleReport(
   params: StartTitleReportParams,
   email?: string
 ): Promise<{ job_id: string }> {
+  if (!isDemoActive()) email = (await requireUser()).email;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...demoHeaders(), // demo mode: valid token → simulated backend job
+    ...(isDemoActive() ? demoHeaders() : await authorizationHeaders()), // demo mode: valid token → simulated backend job
   };
   if (email) headers["X-User-Email"] = email;
 
@@ -288,7 +290,7 @@ export async function startTitleReport(
 }
 
 export async function getJob(jobId: string, signal?: AbortSignal): Promise<Job> {
-  const res = await fetch(`${API_BASE_URL}/jobs/${encodeURIComponent(jobId)}`, { signal });
+  const res = await fetch(`${API_BASE_URL}/jobs/${encodeURIComponent(jobId)}`, { signal, headers: isDemoActive() ? demoHeaders() : await authorizationHeaders() });
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({} as { detail?: unknown }));
     const detail =
@@ -410,7 +412,7 @@ export async function fetchCredits(email: string): Promise<CreditsInfo | null> {
   if (!email) return null;
   try {
     const res = await fetch(`${API_BASE_URL}/credits?email=${encodeURIComponent(email)}`, {
-      headers: demoHeaders(), // demo mode: seeded credit balance
+      headers: isDemoActive() ? demoHeaders() : await authorizationHeaders(), // demo mode: seeded credit balance
     });
     if (!res.ok) return null;
     return (await res.json()) as CreditsInfo;
@@ -490,9 +492,10 @@ export interface AddWatchParams {
 }
 
 export async function addToWatchlist(params: AddWatchParams): Promise<WatchlistItem> {
+  if (!isDemoActive()) params = { ...params, email: (await requireUser()).email! };
   const res = await fetch(`${API_BASE_URL}/watchlist`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...demoHeaders() },
+    headers: { "Content-Type": "application/json", ...(isDemoActive() ? demoHeaders() : await authorizationHeaders()) },
     body: JSON.stringify(params),
   });
   if (!res.ok) {
@@ -508,7 +511,7 @@ export async function addToWatchlist(params: AddWatchParams): Promise<WatchlistI
 
 export async function fetchWatchlist(email: string): Promise<WatchlistItem[]> {
   const res = await fetch(`${API_BASE_URL}/watchlist?email=${encodeURIComponent(email)}`, {
-    headers: demoHeaders(),
+    headers: isDemoActive() ? demoHeaders() : await authorizationHeaders(),
   });
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({} as { detail?: unknown }));
@@ -528,7 +531,7 @@ export async function removeFromWatchlist(
 ): Promise<{ deleted: boolean; id: string }> {
   const res = await fetch(
     `${API_BASE_URL}/watchlist/${encodeURIComponent(id)}?email=${encodeURIComponent(email)}`,
-    { method: "DELETE", headers: demoHeaders() }
+    { method: "DELETE", headers: isDemoActive() ? demoHeaders() : await authorizationHeaders() }
   );
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({} as { detail?: unknown }));
@@ -543,7 +546,7 @@ export async function removeFromWatchlist(
 
 export async function fetchWatchlistAlerts(email: string): Promise<WatchAlert[]> {
   const res = await fetch(`${API_BASE_URL}/watchlist/alerts?email=${encodeURIComponent(email)}`, {
-    headers: demoHeaders(),
+    headers: isDemoActive() ? demoHeaders() : await authorizationHeaders(),
   });
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({} as { detail?: unknown }));
@@ -560,7 +563,7 @@ export async function fetchWatchlistAlerts(email: string): Promise<WatchAlert[]>
 export async function markWatchAlertsSeen(watchlistId: string): Promise<{ updated: number }> {
   const res = await fetch(
     `${API_BASE_URL}/watchlist/${encodeURIComponent(watchlistId)}/alerts/seen`,
-    { method: "POST", headers: demoHeaders() }
+    { method: "POST", headers: isDemoActive() ? demoHeaders() : await authorizationHeaders() }
   );
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({} as { detail?: unknown }));

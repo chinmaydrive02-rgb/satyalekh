@@ -7,6 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Local-only document reading; official Ubuntu packages, no cloud OCR upload.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr tesseract-ocr-eng tesseract-ocr-guj poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+RUN python -c "import shutil,subprocess; langs=subprocess.run(['tesseract','--list-langs'],check=True,capture_output=True,text=True).stdout.splitlines(); assert 'eng' in langs and 'guj' in langs; assert all(shutil.which(t) for t in ['pdfinfo','pdftotext','pdftoppm'])"
+
 # Install Python deps first (layer cache-friendly)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

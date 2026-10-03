@@ -11,6 +11,7 @@ import traceback
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 from typing import List, Optional
+from authentication import authenticate_user
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -33,7 +34,7 @@ app.add_middleware(
     allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-User-Email", "X-Demo-Token", "X-Cron-Secret"],
+    allow_headers=["Authorization", "Content-Type", "X-User-Email", "X-Demo-Token", "X-Cron-Secret"],
 )
 
 
@@ -213,11 +214,12 @@ class CheckoutRequest(BaseModel):
 
 
 @app.post("/create-checkout-session")
-async def create_checkout_session(body: CheckoutRequest, request: Request):
+async def create_checkout_session(body: CheckoutRequest, request: Request, authorization: Optional[str] = Header(default=None)):
     """Create a Stripe Checkout session for search credits (₹1,500 each, ₹6,000 for 5)."""
     if not STRIPE_ENABLED:
         raise HTTPException(status_code=503, detail="Payments are not enabled yet. Please use the contact form on the pricing page.")
-    email = _validate_email(body.email)
+    identity = _account_identity(authorization, body.email)
+    email = identity.email
     quantity = max(1, min(int(body.quantity or 1), 100))
 
     stripe = _get_stripe()
@@ -243,7 +245,7 @@ async def create_checkout_session(body: CheckoutRequest, request: Request):
         }]
         credits = quantity
 
-    origin = request.headers.get("origin") or os.getenv("FRONTEND_URL", "http://localhost:3000")
+    origin = os.getenv("FRONTEND_URL", "https://satyalekh.vercel.app").rstrip("/")
     try:
         session = stripe.checkout.Session.create(
             mode="payment",
@@ -261,16 +263,19 @@ async def create_checkout_session(body: CheckoutRequest, request: Request):
 
 @app.get("/credits")
 def credits_endpoint(request: Request, email: str = "",
-                     x_demo_token: Optional[str] = Header(default=None)):
+                     x_demo_token: Optional[str] = Header(default=None),
+                     authorization: Optional[str] = Header(default=None)):
     """Return the current search-credit balance for an email."""
     # ── DEMO MODE ── generous demo credits (payments disabled) so the nav
     # looks healthy and nothing in the UI ever prompts for payment. Email is
     # optional here (the frictionless demo has no account email).
-    if demo_mode.is_valid_token(x_demo_token) or (email or "").strip().lower() == demo_mode.DEMO_EMAIL:
+    if demo_mode.is_valid_token(x_demo_token):
         return demo_mode.demo_credits(email)
 
     _enforce_rate_limit(request, "credits", limit=30)
-    email = _validate_email(email)
+    _validate_email(email)
+    identity = _account_identity(authorization, email)
+    email = identity.email
     return {
         "email": email,
         "credits": _get_credits(email) if STRIPE_ENABLED else 0,
@@ -346,10 +351,39 @@ class AnalysisResult(BaseModel):
     encumbrances: str
     risk_level: str
     risk_reason: str
+    report: Optional[dict] = None
+    evidence: Optional[list] = None
+    metadata: Optional[dict] = None
+    raw_text: Optional[str] = None
 
 # SECURITY F-11: upload hardening — size cap, content-type/extension
 # allowlist and magic-byte sniffing (never trust the client's content_type).
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+_LOCAL_READER_GATE = asyncio.Semaphore(1)
+
+
+async def _read_uploaded_locally(contents, mime_type):
+    from local_document_reader import read_document
+    try:
+        await asyncio.wait_for(_LOCAL_READER_GATE.acquire(), timeout=2)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=429, detail="The local document reader is busy. Try again shortly.", headers={"Retry-After": "15"})
+    worker = asyncio.create_task(asyncio.to_thread(read_document, contents, mime_type))
+
+    def finished(task):
+        # Cancellation of an HTTP request must not open another OCR slot while
+        # the first bounded subprocess is still using memory.
+        _LOCAL_READER_GATE.release()
+        if not task.cancelled():
+            task.exception()
+
+    worker.add_done_callback(finished)
+    return await asyncio.shield(worker)
+
+
+def _require_personal_data_provider():
+    if os.getenv("GEMINI_PERSONAL_DATA_APPROVED", "").lower() != "true":
+        raise HTTPException(status_code=503, detail="This external analysis is unavailable with the current provider arrangement. Upload an official record for local preliminary analysis instead.")
 _ALLOWED_UPLOAD_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 _ALLOWED_UPLOAD_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
 
@@ -367,12 +401,12 @@ def _sniff_upload_mime(data: bytes) -> Optional[str]:
     return None
 
 
-@app.post("/analyze-record", response_model=AnalysisResult)
+@app.post("/analyze-record", response_model=AnalysisResult, response_model_exclude_none=True)
 async def analyze_record(http_request: Request, file: UploadFile = File(...),
                          x_demo_token: Optional[str] = Header(default=None)):
     """
-    Analyzes an uploaded 7/12 Land Record using Gemini Vision.
-    Extracts key information and assigns a risk label.
+    Reads supplied records locally by default. Optional external processing
+    requires a separately verified provider arrangement.
     """
     # ── DEMO MODE ── return a deterministic parsed analysis (no Gemini call,
     # no file read beyond FastAPI's upload). Lets the title-scanner/upload flow
@@ -393,6 +427,18 @@ async def analyze_record(http_request: Request, file: UploadFile = File(...),
     sniffed_type = _sniff_upload_mime(contents)
     if sniffed_type is None:
         raise HTTPException(status_code=400, detail="File content is not a recognised JPG, PNG, WebP or PDF document.")
+
+    if os.getenv("DOCUMENT_READER", "local").strip().lower() != "gemini":
+        from local_document_reader import LocalDocumentError
+        from local_report import build_local_analysis
+        try:
+            result = await _read_uploaded_locally(contents, sniffed_type)
+            return build_local_analysis(result)
+        except LocalDocumentError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
+
+    if os.getenv("GEMINI_PERSONAL_DATA_APPROVED", "").lower() != "true":
+        raise HTTPException(status_code=503, detail="External document processing is not approved. Use the local document reader.")
 
     from google.genai.errors import APIError
 
@@ -509,7 +555,8 @@ class AnyRORRequest(BaseModel):
 
 @app.post("/fetch-anyror")
 async def fetch_anyror_endpoint(request: AnyRORRequest, http_request: Request,
-                                x_user_email: Optional[str] = Header(default=None)):
+                                x_user_email: Optional[str] = Header(default=None),
+                                authorization: Optional[str] = Header(default=None)):
     """
     Automated RPA endpoint to scrape AnyROR 7/12 Land Records.
     Uses Playwright + Gemini Vision for CAPTCHA solving and data extraction.
@@ -526,8 +573,9 @@ async def fetch_anyror_endpoint(request: AnyRORRequest, http_request: Request,
         ("Survey number", request.survey_no, MAX_SURVEY_LEN),
     )
 
+    identity = _account_identity(authorization, x_user_email or "")
+    email = identity.email
     # Credit gate (only enforced when payments are enabled)
-    email = (x_user_email or "").strip().lower()
     if STRIPE_ENABLED:
         if not email:
             raise HTTPException(
@@ -540,6 +588,7 @@ async def fetch_anyror_endpoint(request: AnyRORRequest, http_request: Request,
                 detail="No search credits remaining. Purchase credits on the pricing page (₹1,500/search)."
             )
 
+    _require_personal_data_provider()
     result = await scrape_anyror_data(
         district=request.district.strip(),
         taluka=request.taluka.strip(),
@@ -659,8 +708,10 @@ def _location_key(district: str, taluka: str, village: str, survey_no: str) -> s
     return "|".join(x.strip().lower() for x in (district, taluka, village, survey_no))
 
 
-def _get_cached_title_report(req: TitleReportJobRequest) -> Optional[dict]:
-    """Fresh (< TITLE_REPORT_CACHE_DAYS old) report for the same parcel, or None."""
+def _get_cached_title_report(req: TitleReportJobRequest, owner_id: Optional[str] = None) -> Optional[dict]:
+    """Fresh report belonging to this authenticated account, or None."""
+    if not owner_id:
+        return None
     try:
         sb = _get_supabase()
         if sb is None:
@@ -669,6 +720,7 @@ def _get_cached_title_report(req: TitleReportJobRequest) -> Optional[dict]:
         res = (sb.table("title_reports").select("report, created_at")
                .eq("location_key", _location_key(req.district, req.taluka, req.village, req.survey_no))
                .eq("record_type", req.record_type or "OLD_SCAN_712")
+               .eq("owner_id", owner_id)
                .gte("created_at", cutoff)
                .order("created_at", desc=True).limit(1).execute())
         if res.data:
@@ -686,8 +738,10 @@ def _get_cached_title_report(req: TitleReportJobRequest) -> Optional[dict]:
     return None
 
 
-def _save_title_report(req: TitleReportJobRequest, report: dict, email: str):
-    """Mirror a finished report to Supabase. Fire-and-forget."""
+def _save_title_report(req: TitleReportJobRequest, report: dict, email: str, owner_id: Optional[str] = None):
+    """Mirror a finished owned report to Supabase."""
+    if not owner_id:
+        return
     try:
         sb = _get_supabase()
         if sb is None:
@@ -699,6 +753,7 @@ def _save_title_report(req: TitleReportJobRequest, report: dict, email: str):
             "record_type": req.record_type or "OLD_SCAN_712",
             "report": report,
             "user_email": email or None,
+            "owner_id": owner_id,
         }).execute()
     except Exception as e:
         print(f"[title-report] cache write failed (non-fatal): {e}")
@@ -798,7 +853,7 @@ async def _run_title_report_job(job_id: str, req: TitleReportJobRequest, email: 
             except Exception as e:
                 print(f"[credits] deduction failed for {email}: {e}")
 
-        _save_title_report(req, report, email)
+        _save_title_report(req, report, email, ((JOBS.get(job_id) or {}).get("meta") or {}).get("owner_id"))
         JOBS.finish(job_id, report)
     except Exception as e:
         print(f"[title-report] job {job_id} crashed: {e}")
@@ -810,6 +865,7 @@ async def _run_title_report_job(job_id: str, req: TitleReportJobRequest, email: 
 async def create_title_report_job(body: TitleReportJobRequest,
                                   http_request: Request,
                                   x_user_email: Optional[str] = Header(default=None),
+                                  authorization: Optional[str] = Header(default=None),
                                   x_demo_token: Optional[str] = Header(default=None)):
     """
     Start an async title-report job (scrape + chain of title + risk score).
@@ -845,12 +901,14 @@ async def create_title_report_job(body: TitleReportJobRequest,
             demo_mode.run_demo_title_report_job(JOBS, job_id, body.model_dump()))
         return JobCreatedResponse(job_id=job_id, status="queued")
 
-    # Cache first: instant + free
-    cached_report = _get_cached_title_report(body)
+    identity = _account_identity(authorization, email)
+    email = identity.email
+    # Cache is scoped to this authenticated owner.
+    cached_report = _get_cached_title_report(body, identity.user_id)
     if cached_report is not None:
         cached_report = dict(cached_report)
         cached_report["cached"] = True
-        job_id = JOBS.create(meta={"request": body.model_dump(), "email": email, "cached": True})
+        job_id = JOBS.create(meta={"request": body.model_dump(), "email": email, "owner_id": identity.user_id, "cached": True})
         JOBS.finish(job_id, cached_report)
         return JobCreatedResponse(job_id=job_id, status="done", cached=True)
 
@@ -872,18 +930,28 @@ async def create_title_report_job(body: TitleReportJobRequest,
                             detail="All scraping slots are busy — please retry in a minute.",
                             headers={"Retry-After": "60"})
 
-    job_id = JOBS.create(meta={"request": body.model_dump(), "email": email})
+    _require_personal_data_provider()
+    job_id = JOBS.create(meta={"request": body.model_dump(), "email": email, "owner_id": identity.user_id})
     asyncio.create_task(_run_title_report_job(job_id, body, email))
     return JobCreatedResponse(job_id=job_id, status="queued")
 
 
 @app.get("/jobs/{job_id}", response_model=JobStatusResponse)
-def get_job_status(job_id: str):
+def get_job_status(job_id: str, authorization: Optional[str] = Header(default=None),
+                   x_demo_token: Optional[str] = Header(default=None)):
     """Poll the status of a title-report job. Poll every 2-3s until
     status is 'done' (read result) or 'error' (read error + suggestions)."""
     job = JOBS.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found (it may have expired — jobs are kept for 2 hours)")
+    meta = job.get("meta") or {}
+    if meta.get("demo"):
+        if not demo_mode.is_valid_token(x_demo_token):
+            raise HTTPException(status_code=401, detail="Open the demo again to view this sample job.")
+    else:
+        identity = _account_identity(authorization)
+        if meta.get("owner_id") != identity.user_id:
+            raise HTTPException(status_code=404, detail="Job not found")
     return JobStatusResponse(**{k: job[k] for k in (
         "job_id", "status", "stage", "stage_label", "progress",
         "result", "error", "suggestions")})
@@ -944,6 +1012,13 @@ class RunChecksResponse(BaseModel):
     skipped: int
 
 
+def _account_identity(authorization, requested_email=""):
+    identity = authenticate_user(authorization, _get_supabase())
+    if requested_email and requested_email.strip().lower() != identity.email:
+        raise HTTPException(status_code=403, detail="The requested account does not match your signed-in account.")
+    return identity
+
+
 def _require_supabase():
     sb = _get_supabase()
     if sb is None:
@@ -953,7 +1028,8 @@ def _require_supabase():
 
 @app.post("/watchlist", response_model=WatchlistItem)
 def add_to_watchlist(body: WatchlistCreateRequest,
-                     x_demo_token: Optional[str] = Header(default=None)):
+                     x_demo_token: Optional[str] = Header(default=None),
+                     authorization: Optional[str] = Header(default=None)):
     """Watch a parcel for changes. Idempotent — re-adding the same parcel for
     the same email returns the existing row instead of duplicating it."""
     # ── DEMO MODE ── mutate only the in-memory demo watchlist (never Supabase)
@@ -967,7 +1043,8 @@ def add_to_watchlist(body: WatchlistCreateRequest,
             body.district, body.taluka, body.village, body.survey_no,
             body.record_type or "OLD_SCAN_712"))
 
-    email = _validate_email(body.email)
+    identity = _account_identity(authorization, body.email)
+    email = identity.email
     _validate_location_fields(
         ("District", body.district, MAX_LOCATION_LEN),
         ("Taluka", body.taluka, MAX_LOCATION_LEN),
@@ -979,7 +1056,7 @@ def add_to_watchlist(body: WatchlistCreateRequest,
     record_type = body.record_type or "OLD_SCAN_712"
     try:
         existing = (sb.table("watchlist").select("*")
-                    .eq("user_email", email)
+                    .eq("owner_id", identity.user_id)
                     .eq("district", body.district.strip()).eq("taluka", body.taluka.strip())
                     .eq("village", body.village.strip()).eq("survey_no", body.survey_no.strip())
                     .eq("record_type", record_type).limit(1).execute())
@@ -987,6 +1064,7 @@ def add_to_watchlist(body: WatchlistCreateRequest,
             return WatchlistItem(**existing.data[0])
         res = sb.table("watchlist").insert({
             "user_email": email,
+            "owner_id": identity.user_id,
             "district": body.district.strip(), "taluka": body.taluka.strip(),
             "village": body.village.strip(), "survey_no": body.survey_no.strip(),
             "record_type": record_type,
@@ -1001,19 +1079,19 @@ def add_to_watchlist(body: WatchlistCreateRequest,
 
 @app.get("/watchlist", response_model=WatchlistListResponse)
 def list_watchlist(email: str = "",
-                   x_demo_token: Optional[str] = Header(default=None)):
+                   x_demo_token: Optional[str] = Header(default=None),
+                     authorization: Optional[str] = Header(default=None)):
     """All watched parcels for an email, newest first."""
     # ── DEMO MODE ── serve the in-memory demo fixtures (email not required)
     if demo_mode.is_valid_token(x_demo_token):
         return WatchlistListResponse(
             items=[WatchlistItem(**r) for r in demo_mode.demo_list_watchlist()])
 
-    email = email.strip().lower()
-    if not email:
-        raise HTTPException(status_code=400, detail="email query param is required")
+    identity = _account_identity(authorization, email)
+    email = identity.email
     sb = _require_supabase()
     try:
-        res = (sb.table("watchlist").select("*").eq("user_email", email)
+        res = (sb.table("watchlist").select("*").eq("owner_id", identity.user_id)
                .order("created_at", desc=True).execute())
         return WatchlistListResponse(items=[WatchlistItem(**r) for r in (res.data or [])])
     except Exception as e:
@@ -1023,7 +1101,8 @@ def list_watchlist(email: str = "",
 
 @app.delete("/watchlist/{watchlist_id}")
 def remove_from_watchlist(watchlist_id: str, email: str = "",
-                          x_demo_token: Optional[str] = Header(default=None)):
+                          x_demo_token: Optional[str] = Header(default=None),
+                     authorization: Optional[str] = Header(default=None)):
     """Stop watching a parcel (must supply the owning email)."""
     # ── DEMO MODE ── delete only from the in-memory demo set (never Supabase)
     if demo_mode.is_valid_token(x_demo_token):
@@ -1031,13 +1110,12 @@ def remove_from_watchlist(watchlist_id: str, email: str = "",
             raise HTTPException(status_code=404, detail="Watchlist entry not found")
         return {"deleted": True, "id": watchlist_id}
 
-    email = email.strip().lower()
-    if not email:
-        raise HTTPException(status_code=400, detail="email query param is required")
+    identity = _account_identity(authorization, email)
+    email = identity.email
     sb = _require_supabase()
     try:
         res = (sb.table("watchlist").delete()
-               .eq("id", watchlist_id).eq("user_email", email).execute())
+               .eq("id", watchlist_id).eq("owner_id", identity.user_id).execute())
     except Exception as e:
         print(f"[watchlist] delete failed: {e}")
         raise HTTPException(status_code=502, detail="Watchlist delete failed. Please try again.")
@@ -1048,19 +1126,19 @@ def remove_from_watchlist(watchlist_id: str, email: str = "",
 
 @app.get("/watchlist/alerts", response_model=WatchlistAlertsResponse)
 def list_watchlist_alerts(email: str = "",
-                          x_demo_token: Optional[str] = Header(default=None)):
+                          x_demo_token: Optional[str] = Header(default=None),
+                     authorization: Optional[str] = Header(default=None)):
     """All change alerts for an email's watched parcels, newest first."""
     # ── DEMO MODE ── serve the in-memory demo alerts (email not required)
     if demo_mode.is_valid_token(x_demo_token):
         return WatchlistAlertsResponse(
             alerts=[WatchlistAlert(**a) for a in demo_mode.demo_list_alerts()])
 
-    email = email.strip().lower()
-    if not email:
-        raise HTTPException(status_code=400, detail="email query param is required")
+    identity = _account_identity(authorization, email)
+    email = identity.email
     sb = _require_supabase()
     try:
-        wl = sb.table("watchlist").select("id, district, taluka, village, survey_no").eq("user_email", email).execute()
+        wl = sb.table("watchlist").select("id, district, taluka, village, survey_no").eq("owner_id", identity.user_id).execute()
         parcels = {r["id"]: r for r in (wl.data or [])}
         if not parcels:
             return WatchlistAlertsResponse(alerts=[])
@@ -1084,17 +1162,25 @@ def list_watchlist_alerts(email: str = "",
 
 @app.post("/watchlist/{watchlist_id}/alerts/seen")
 def mark_alerts_seen(watchlist_id: str,
-                     x_demo_token: Optional[str] = Header(default=None)):
+                     x_demo_token: Optional[str] = Header(default=None),
+                     authorization: Optional[str] = Header(default=None)):
     """Mark all alerts for one watchlist entry as seen."""
     # ── DEMO MODE ── flip the in-memory demo alerts only
     if demo_mode.is_valid_token(x_demo_token):
         return {"updated": demo_mode.demo_mark_alerts_seen(watchlist_id)}
 
+    identity = _account_identity(authorization)
     sb = _require_supabase()
     try:
+        owned = (sb.table("watchlist").select("id")
+                 .eq("id", watchlist_id).eq("owner_id", identity.user_id).limit(1).execute())
+        if not owned.data:
+            raise HTTPException(status_code=404, detail="Watchlist entry not found")
         res = (sb.table("watchlist_alerts").update({"seen": True})
                .eq("watchlist_id", watchlist_id).eq("seen", False).execute())
         return {"updated": len(res.data or [])}
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[watchlist] alert update failed: {e}")
         raise HTTPException(status_code=502, detail="Alert update failed. Please try again.")
@@ -1127,9 +1213,11 @@ async def watchlist_run_checks(x_cron_secret: Optional[str] = Header(default=Non
     if not secret:
         raise HTTPException(status_code=503,
                             detail="Cron checks are not configured (CRON_SECRET is unset)")
-    if (x_cron_secret or "").strip() != secret:
+    import hmac
+    if not hmac.compare_digest((x_cron_secret or "").strip(), secret):
         raise HTTPException(status_code=403, detail="Invalid or missing X-Cron-Secret header")
 
+    _require_personal_data_provider()
     sb = _require_supabase()
     try:
         rows = sb.table("watchlist").select("*").execute().data or []
@@ -1268,6 +1356,7 @@ async def land_report(body: LandReportRequest, http_request: Request,
         raise HTTPException(status_code=400, detail="place_hint is too long")
     if body.verified_facts and len(body.verified_facts) > 4000:
         raise HTTPException(status_code=400, detail="verified_facts is too long")
+    _require_personal_data_provider()
     cache_key = f"{round(body.lat, 4)},{round(body.lng, 4)},{int(body.area_sqm)}"
     if cache_key in _land_report_cache:
         return _land_report_cache[cache_key]
@@ -1386,6 +1475,7 @@ async def litigation_search(body: LitigationRequest, http_request: Request,
     _validate_location_fields(("District", body.district, MAX_LOCATION_LEN))
     if body.year and not re.fullmatch(r"\d{4}", body.year.strip()):
         raise HTTPException(status_code=400, detail="Year must be a 4-digit year")
+    _require_personal_data_provider()
     import datetime
     year = body.year.strip() or str(datetime.date.today().year)
     from litigation import search_litigation
@@ -1543,7 +1633,8 @@ class ManualOrdersListResponse(BaseModel):
 
 @app.post("/manual-orders", response_model=ManualOrderItem)
 def create_manual_order(body: ManualOrderCreateRequest, http_request: Request,
-                        x_demo_token: Optional[str] = Header(default=None)):
+                        x_demo_token: Optional[str] = Header(default=None),
+                     authorization: Optional[str] = Header(default=None)):
     """Place a manual-fulfilment order (certified copy / 30-year search
     report). Status starts at 'pending'; the partner walks it through
     quoted → in_progress → delivered over 2-5 working days."""
@@ -1561,7 +1652,8 @@ def create_manual_order(body: ManualOrderCreateRequest, http_request: Request,
 
     _enforce_rate_limit(http_request, "manual-orders", limit=5)
 
-    email = _validate_email(body.email)
+    identity = _account_identity(authorization, body.email)
+    email = identity.email
     _validate_location_fields(
         ("District", body.district, MAX_LOCATION_LEN),
         ("Taluka", body.taluka, MAX_LOCATION_LEN),
@@ -1587,6 +1679,7 @@ def create_manual_order(body: ManualOrderCreateRequest, http_request: Request,
     try:
         res = sb.table("manual_orders").insert({
             "user_email": email,
+            "owner_id": identity.user_id,
             "state": state,
             "district": body.district.strip(), "taluka": body.taluka.strip(),
             "village": body.village.strip(), "survey_no": body.survey_no.strip(),
@@ -1605,7 +1698,8 @@ def create_manual_order(body: ManualOrderCreateRequest, http_request: Request,
 
 @app.get("/manual-orders", response_model=ManualOrdersListResponse)
 def list_manual_orders(http_request: Request, email: str = "",
-                       x_demo_token: Optional[str] = Header(default=None)):
+                       x_demo_token: Optional[str] = Header(default=None),
+                     authorization: Optional[str] = Header(default=None)):
     """All manual-fulfilment orders for an email, newest first."""
     # ── DEMO MODE ── serve the in-memory sample orders (email not required)
     if demo_mode.is_valid_token(x_demo_token):
@@ -1613,12 +1707,11 @@ def list_manual_orders(http_request: Request, email: str = "",
             orders=[ManualOrderItem(**o) for o in demo_mode.demo_list_manual_orders()])
 
     _enforce_rate_limit(http_request, "manual-orders-list", limit=30)
-    email = email.strip().lower()
-    if not email:
-        raise HTTPException(status_code=400, detail="email query param is required")
+    identity = _account_identity(authorization, email)
+    email = identity.email
     sb = _require_supabase()
     try:
-        res = (sb.table("manual_orders").select("*").eq("user_email", email)
+        res = (sb.table("manual_orders").select("*").eq("owner_id", identity.user_id)
                .order("created_at", desc=True).execute())
         return ManualOrdersListResponse(orders=[ManualOrderItem(**r) for r in (res.data or [])])
     except Exception as e:

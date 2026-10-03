@@ -5,7 +5,9 @@ import { Database, AlertTriangle, CheckCircle2, Crosshair, Plus, Loader2, X, Fol
 import TopNav from '@/components/TopNav';
 import Link from 'next/link';
 import { Reveal } from '@/components/motion';
-import { API_BASE_URL, getUserEmail, setUserEmail, addToWatchlist, isDemoActive } from '@/lib/api';
+import { API_BASE_URL, addToWatchlist, isDemoActive } from '@/lib/api';
+import AccountGate from '@/components/AccountGate';
+import { authorizationHeaders, requireUser } from '@/lib/auth';
 import { createClient } from '@/utils/supabase/client';
 import { FlaskConical } from 'lucide-react';
 
@@ -36,6 +38,8 @@ const DEMO_HOLDINGS: PortfolioAsset[] = [
 export default function Dashboard() {
   const supabase = createClient();
   const [demoActive, setDemoActive] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const [portfolioError, setPortfolioError] = useState('');
 
   const [holdings, setHoldings] = useState<PortfolioAsset[]>([]);
   const [isLoadingPortfolio, setIsLoadingPortfolio] = useState(true);
@@ -60,20 +64,33 @@ export default function Dashboard() {
     }
     setIsLoadingPortfolio(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email_confirmed_at) { setHoldings([]); setSignedIn(false); return; }
+      setSignedIn(true);
       const { data, error } = await supabase
         .from('portfolio_assets')
         .select('*')
+        .eq('owner_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
+      const { data: current } = await supabase.auth.getSession();
+      if (current.session?.user.id !== user.id) return;
       setHoldings(data || []);
-    } catch (err) {
-      console.error('Failed to load portfolio:', err);
+    } catch {
+      setPortfolioError('Could not load your portfolio. Please try again.');
     } finally {
       setIsLoadingPortfolio(false);
     }
-  }, []);
+  }, [supabase]);
 
-  useEffect(() => { loadPortfolio(); }, [loadPortfolio]);
+  useEffect(() => {
+    loadPortfolio();
+    if (isDemoActive()) return;
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) { setHoldings([]); setSignedIn(false); setWatchedIds(new Set()); }
+    });
+    return () => data.subscription.unsubscribe();
+  }, [loadPortfolio, supabase]);
 
   // ── Fetch from AnyROR + save to Supabase ─────────────────
   const handleIngest = async (e: React.FormEvent) => {
@@ -81,9 +98,10 @@ export default function Dashboard() {
     if (!district.trim() || !taluka.trim() || !village.trim() || !surveyNo.trim()) return;
     setIsFetching(true);
     try {
+      const user = await requireUser();
       const res = await fetch(`${API_BASE_URL}/fetch-anyror`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...await authorizationHeaders() },
         body: JSON.stringify({ district: district.trim(), taluka: taluka.trim(), village: village.trim(), survey_no: surveyNo.trim() })
       });
       if (!res.ok) {
@@ -97,6 +115,7 @@ export default function Dashboard() {
       const { data: existing } = await supabase
         .from('portfolio_assets')
         .select('id')
+        .eq('owner_id', user.id)
         .eq('survey_no', data.survey_no || surveyNo.trim())
         .eq('village', data.village || village.trim())
         .limit(1);
@@ -108,7 +127,8 @@ export default function Dashboard() {
         return;
       }
 
-      await supabase.from('portfolio_assets').insert({
+      const { error: saveError } = await supabase.from('portfolio_assets').insert({
+        owner_id: user.id,
         survey_no: data.survey_no || surveyNo.trim(),
         district: data.district || district.trim(),
         taluka: data.taluka || taluka.trim(),
@@ -123,13 +143,14 @@ export default function Dashboard() {
         record_type: 'OLD_SCAN_712',
       });
 
+      if (saveError) throw saveError;
       await loadPortfolio();
       setShowIngest(false);
       setDistrict(''); setTaluka(''); setVillage(''); setSurveyNo('');
-    } catch (err: any) {
-      alert(err?.message?.includes('fetch')
+    } catch (err: unknown) {
+      alert((err instanceof Error ? err.message : '').includes('fetch')
         ? "Could not connect to the backend. Please start the backend server."
-        : `Error: ${err?.message || "Unknown error"}`);
+        : `Error: ${err instanceof Error ? err.message : "Unknown error"}`);
     } finally {
       setIsFetching(false);
     }
@@ -141,11 +162,12 @@ export default function Dashboard() {
     if (isDemoActive()) { setHoldings(prev => prev.filter(h => h.id !== id)); return; }
     setDeletingId(id);
     try {
-      const { error } = await supabase.from('portfolio_assets').delete().eq('id', id);
+      const user = await requireUser();
+      const { error } = await supabase.from('portfolio_assets').delete().eq('id', id).eq('owner_id', user.id);
       if (error) throw error;
       setHoldings(prev => prev.filter(h => h.id !== id));
-    } catch (err: any) {
-      alert(`Delete failed: ${err?.message}`);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? `Delete failed: ${err.message}` : 'Delete failed. Please try again.');
     } finally {
       setDeletingId(null);
     }
@@ -154,15 +176,9 @@ export default function Dashboard() {
   // ── Watch a portfolio parcel (daily re-check + alerts) ────
   const handleWatch = async (asset: PortfolioAsset) => {
     if (watchingId || watchedIds.has(asset.id)) return;
-    let email = getUserEmail();
-    if (!email) {
-      const entered = window.prompt('Enter your email to get change alerts for this parcel:');
-      if (!entered || !entered.includes('@')) return;
-      email = entered.trim().toLowerCase();
-      setUserEmail(email);
-    }
     setWatchingId(asset.id);
     try {
+      const email = isDemoActive() ? 'demo@satya-lekh.example' : (await requireUser()).email!;
       await addToWatchlist({
         email,
         district: asset.district || '',
@@ -202,6 +218,9 @@ export default function Dashboard() {
   return (
     <main className="min-h-screen bg-bg text-ink flex flex-col pt-24 pb-12 px-4 sm:px-6">
       <TopNav />
+      {!isLoadingPortfolio && !signedIn && !demoActive ? <AccountGate feature="portfolio"/> : null}
+      {portfolioError && <p role="alert" className="text-danger">{portfolioError}</p>}
+      {signedIn && <p className="text-xs text-muted mb-4">Records saved before accounts were introduced need a verified, administrator-assisted migration. They have been preserved.</p>}
       <div className="w-full max-w-[1200px] mx-auto flex flex-col gap-8">
 
         {/* Header */}
@@ -223,7 +242,7 @@ export default function Dashboard() {
             <button onClick={() => loadPortfolio()} title="Refresh" className="btn btn-outline px-3">
               <RefreshCw size={14}/>
             </button>
-            <button onClick={() => setShowIngest(!showIngest)} className="btn btn-primary">
+            <button onClick={async () => { if (!isDemoActive() && !signedIn) { window.location.assign('/account'); return; } setShowIngest(!showIngest); }} className="btn btn-primary">
               {showIngest ? <><X size={14}/> Close</> : <><Plus size={14}/> Add Asset</>}
             </button>
           </div>

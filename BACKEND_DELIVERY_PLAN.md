@@ -42,3 +42,13 @@ Keep the existing Vercel frontend, Render API and Supabase database while valida
 ## Next-agent brief
 
 Start with step 1 and the live `/health/ready` result, not a redesign or new features. Inspect Render environment/logs without exposing secrets; authenticate storage safely; exercise non-demo CRUD and cleanup. Then implement step 2 before collecting client documents. Preserve the original dirty checkout at `/Users/chinmaymistry/Downloads/SATYALEKH`; use the managed release checkout for source changes. Treat demo outputs as fixtures and label them. Update this matrix with dated live evidence for each completed gate.
+
+
+## Delivery update — 3 October 2026
+Owner confirmed unpaid Gemini and privacy/grievance email chinmaydrive02@gmail.com. Local PDF reading/English+Gujarati OCR is now the default upload route, returns a preliminary full report with source snippets/pages and missing evidence, and does not perform English translation. External personal-data analysis is gated until a permitted provider arrangement is verified. No billing enabled.
+
+Supabase secure_account_ownership applied: owner UUID columns, private locker, public grants revoked, owner policies for browser workspace. Legacy one portfolio row and two locker records/files preserved unassigned. Two-identity SQL portfolio read/write/forged-owner checks passed with rollback. Backend JWT ownership, job/cache isolation and account frontend implemented. Auth email delivery, actual account object-isolation and legacy recovery still require live acceptance. Render logs confirmed permission denied42501 for watchlist: replace the deployed limited key with a valid server-only service credential after guarded routes deploy. Browser credential changes require user entry and submission.
+
+Current scraper investigation reproduced TLS failure and Chromium connection reset before page forms locally; no supported selector fix or proof that geography is the cause. Keep official-source acquisition/upload fallback and re-test permitted retrieval before monitoring.
+
+Marketing backlog, explicitly after real-report/core acceptance: create Satyalekh LinkedIn page, approve and populate product facts/posts, and create a dedicated Gmail account. Account names/availability, password/verification and acceptance of terms require owner involvement. Do not announce full title clearance, reliable scraping, confidentiality or DPDP compliance before the corresponding gates pass.

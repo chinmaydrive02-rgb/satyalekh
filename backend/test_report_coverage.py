@@ -69,7 +69,7 @@ def test_cache_respects_assessment_version_and_requested_scope(api, monkeypatch,
             return SimpleNamespace(data=[{'report': report}])
     monkeypatch.setattr(api, '_get_supabase', Query)
     req = api.TitleReportJobRequest(district='A', taluka='B', village='C', survey_no='12', include_chain=include_chain)
-    assert (api._get_cached_title_report(req) is not None) is hit
+    assert (api._get_cached_title_report(req, "test-owner") is not None) is hit
 
 
 def test_missing_neighbouring_entries_do_not_hide_known_risks():

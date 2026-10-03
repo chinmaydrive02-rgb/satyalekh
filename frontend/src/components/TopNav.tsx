@@ -69,6 +69,7 @@ export default function TopNav() {
   ];
 
   const moreLinks = [
+    { href: '/account', label: 'My account', icon: <Users size={15}/> },
     { href: '/coverage', label: 'Coverage', icon: <Globe2 size={15}/> },
     { href: '/investors', label: 'Investors', icon: <Briefcase size={15}/> },
     { href: '/market', label: 'Market Intel', icon: <TrendingUp size={15}/> },

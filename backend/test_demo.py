@@ -232,7 +232,7 @@ class TestJobsEndpointDemoRouting:
         # Sleeps are patched to instant, so a few polls complete the job.
         status = None
         for _ in range(50):
-            body = client.get(f"/jobs/{job_id}").json()
+            body = client.get(f"/jobs/{job_id}", headers={"X-Demo-Token": token}).json()
             status = body["status"]
             if status in ("done", "error"):
                 break
@@ -240,21 +240,11 @@ class TestJobsEndpointDemoRouting:
         assert body["result"]["demo"] is True
         assert body["result"]["risk"]["verdict"] == "CLEAR"
 
-    def test_stale_token_falls_through_to_normal_path(self, client, main_mod, monkeypatch):
-        """A stale/invalid token must never be an error — the request takes the
-        regular path exactly as if no token were sent."""
-        monkeypatch.setattr(main_mod, "_get_cached_title_report",
-                            lambda req: {"record": {"owner_name": "Cached Owner"},
-                                         "chain_of_title": [], "risk": {},
-                                         "generated_at": "", "cached": True})
+    def test_stale_token_requires_real_authentication(self, client):
         r = client.post("/jobs/title-report", headers={"X-Demo-Token": "stale-token"},
                         json={"district": "Ahmedabad", "taluka": "City",
                               "village": "Navrangpura", "survey_no": "1"})
-        assert r.status_code == 202
-        assert r.json()["status"] == "done"          # served from (mocked) cache
-        job = client.get(f"/jobs/{r.json()['job_id']}").json()
-        assert job["result"]["record"]["owner_name"] == "Cached Owner"
-        assert "demo" not in job["result"]
+        assert r.status_code == 401
 
 
 # ── Demo watchlist: fixtures served, mutations in-memory, Supabase untouched ─
@@ -302,9 +292,9 @@ class TestDemoWatchlist:
         # No Supabase configured (fixture forces None) → the real endpoint
         # still 503s and never leaks demo fixtures to non-demo callers.
         r = client.get("/watchlist", params={"email": "someone@example.com"})
-        assert r.status_code == 503
+        assert r.status_code == 401
         r = client.get("/watchlist")  # missing email, no token
-        assert r.status_code == 400
+        assert r.status_code == 401
 
 
 # ── Demo dropdown options ────────────────────────────────────────────────────
@@ -437,7 +427,7 @@ class TestDemoManualOrders:
     def test_without_token_requires_email_and_supabase(self, client):
         # No token → real path: missing email → 400 (demo fixture never served)
         r = client.get("/manual-orders")
-        assert r.status_code == 400
+        assert r.status_code == 401
 
 
 class TestDemoAnalyzeRecord:
@@ -467,10 +457,9 @@ class TestDemoCredits:
         assert body["payments_enabled"] is False
 
     def test_without_token_uses_normal_path(self, client):
-        # No token, payments disabled in test env → real handler returns 0
+        # Email alone is never an account credential, even with payments off.
         r = client.get("/credits", params={"email": "someone@example.com"})
-        assert r.status_code == 200
-        assert r.json()["credits"] == 0
+        assert r.status_code == 401
 
 
 class TestDemoRiskScreen:
