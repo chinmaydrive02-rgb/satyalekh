@@ -4,11 +4,11 @@ import React from "react";
 import Link from "next/link";
 import SearchWidget from "@/components/SearchWidget";
 import TopNav from "@/components/TopNav";
-import { Reveal, CountUp, Parallax } from "@/components/motion";
-import HeroBackdrop from "@/components/HeroBackdrop";
+import { Reveal, CountUp } from "@/components/motion";
+import dynamic from "next/dynamic";
+const HomeMap = dynamic(() => import("@/components/HomeMap"), { ssr: false });
 import RecordRails from "@/components/RecordRails";
 import { MagneticButton, Tilt } from "@/components/MagneticButton";
-import DemoHeroLink from "@/components/DemoHeroLink";
 import {
   Landmark, Languages, ShieldCheck, FileSearch, Bell, GitBranch,
   Vault, Scale, TrendingUp, Search, Cpu, FileCheck2, ArrowRight,
@@ -265,69 +265,48 @@ const DOC_MARQUEE = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-bg">
+    <main className="min-h-screen bg-bg overflow-x-clip">
       <TopNav />
 
-      {/* ── Hero ─────────────────────────────────────────────────── */}
-      <section className="hero-mesh relative isolate pt-28 pb-16 sm:pb-20 px-4 sm:px-6 overflow-hidden">
-        <HeroBackdrop />
-        <div className="relative z-10 max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
-          <div className="sl-anim flex flex-col gap-7 lg:pt-8" style={{ animation: "sl-fade-up 0.7s cubic-bezier(0.22,0.61,0.36,1) both" }}>
-            <span className="inline-flex items-center gap-2.5 w-fit rounded-full border border-brand-border bg-brand-soft/70 px-3.5 py-1.5 text-xs font-semibold text-brand">
-              <span className="pulse-dot" aria-hidden="true" />
-              Gujarat live today · pan-India rollout underway
-            </span>
-            <h1 className="font-serif text-[2.65rem] sm:text-6xl font-semibold text-ink leading-[1.04] tracking-tight">
-              <span className="sl-anim inline-block" style={{ animation: "sl-fade-up 0.55s cubic-bezier(0.22,0.61,0.36,1) 0.05s both" }}>
-                Know the truth
-              </span>{" "}
-              <span className="sl-anim inline-block" style={{ animation: "sl-fade-up 0.55s cubic-bezier(0.22,0.61,0.36,1) 0.16s both" }}>
-                of a title
-              </span>{" "}
-              <em className="sl-anim inline-block text-sheen not-italic sm:italic font-medium" style={{ animation: "sl-fade-up 0.55s cubic-bezier(0.22,0.61,0.36,1) 0.28s both" }}>
-                before the token changes hands.
-              </em>
-            </h1>
-            <p className="text-lg text-ink-soft leading-relaxed max-w-lg">
-              India&apos;s land records sit behind CAPTCHAs, regional scripts and
-              registrar queues. Satya-Lekh reads them for you — in English, with a
-              clear title-risk verdict for buyers, lawyers and banks. Gujarat&apos;s
-              7/12 (સાતબાર) records today; Maharashtra and Karnataka next.
+      <section className="relative isolate overflow-hidden bg-[#102b29] pt-24 pb-10 sm:pt-32 sm:pb-16 px-4 sm:px-8">
+        <div className="absolute inset-0 opacity-80" aria-hidden="true">
+          <HomeMap />
+        </div>
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-[#102b29]/95 via-[#102b29]/65 to-[#102b29]/20" />
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-[#102b29] via-transparent to-[#102b29]/20" />
+        <div className="relative max-w-[1280px] mx-auto grid lg:grid-cols-[1.1fr_0.9fr] gap-9 lg:gap-16 items-center">
+          <div className="py-3 lg:py-10">
+            <p className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-[#102b29]/60 px-3 py-1.5 text-[10px] sm:text-xs uppercase tracking-[0.16em] text-[#d9e8df]">
+              <MapPin size={12} /> Land intelligence · Gujarat
             </p>
-
-            {/* Trust indicators */}
-            <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm text-muted">
-              <span className="flex items-center gap-2"><Landmark size={15} className="text-brand" /> Official government data</span>
-              <span className="flex items-center gap-2"><Languages size={15} className="text-brand" /> Local script → English</span>
-              <span className="flex items-center gap-2"><ShieldCheck size={15} className="text-brand" /> Risk-scored reports</span>
+            <h1 className="mt-7 font-serif text-[3rem] sm:text-[4.5rem] xl:text-[5.2rem] leading-[1.02] tracking-tight text-white">
+              Every parcel.<br />A story worth<br /><em className="font-normal text-[#e1c990]">knowing.</em>
+            </h1>
+            <p className="mt-6 max-w-md text-base sm:text-lg leading-relaxed text-[#dce7e0]">
+              From the land beneath your feet to the records behind its title. Read, translate and assess property records in one place.
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <a href="#title-search" className="inline-flex items-center gap-2 rounded-lg bg-[#e1c990] px-5 py-3 text-sm font-semibold text-[#102b29] hover:bg-[#efdcaf] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
+                <FileSearch size={16} /> Check a title <ArrowRight size={15} />
+              </a>
+              <Link href="/land-intel" className="inline-flex items-center gap-2 rounded-lg border border-white/35 bg-[#102b29]/65 px-5 py-3 text-sm font-semibold text-white hover:bg-[#102b29]">
+                <MapPin size={16} /> Explore the map
+              </Link>
             </div>
-
-            {/* Live investor demo — subtle, non-disruptive entry point */}
-            <DemoHeroLink />
-
-            <div className="flex flex-wrap gap-x-8 gap-y-3 border-t border-border pt-6">
-              {[
-                { n: 33, suffix: "", label: "districts live" },
-                { n: 250, suffix: "+", label: "talukas" },
-                { n: 18000, suffix: "+", label: "villages indexed" },
-                { n: 12, suffix: "", label: "states on the roadmap" },
-              ].map((s) => (
-                <span key={s.label} className="flex flex-col">
-                  <strong className="font-mono tnum text-2xl font-bold text-ink leading-none">
-                    <CountUp target={s.n} suffix={s.suffix} />
-                  </strong>
-                  <span className="text-xs text-muted mt-1 uppercase tracking-[0.08em]">{s.label}</span>
-                </span>
-              ))}
+            <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[#dce7e0]">
+              <span className="flex items-center gap-1.5"><Languages size={14} /> Gujarati to English</span>
+              <span className="flex items-center gap-1.5"><GitBranch size={14} /> Title history</span>
+              <span className="flex items-center gap-1.5"><ShieldCheck size={14} /> Evidence-led checks</span>
             </div>
+            <p className="mt-7 text-[10px] uppercase tracking-[0.16em] text-[#c3d2c8]">Ahmedabad satellite view · illustrative parcel boundary</p>
           </div>
-
-          {/* Search card front-and-center — gentle parallax drift on scroll */}
-          <Parallax maxShift={24} className="w-full max-w-xl mx-auto lg:mx-0 lg:pt-2">
-            <div className="sl-anim" style={{ animation: "sl-fade-up 0.7s cubic-bezier(0.22,0.61,0.36,1) 0.15s both" }}>
-              <SearchWidget />
-            </div>
-          </Parallax>
+          <div id="title-search" className="scroll-mt-24 w-full max-w-xl mx-auto rounded-2xl shadow-2xl">
+            <SearchWidget />
+          </div>
+        </div>
+        <div className="relative max-w-[1280px] mx-auto mt-8 border-t border-white/15 pt-5 flex flex-wrap items-center justify-between gap-4 text-xs text-[#dce7e0]">
+          <span>Built for property buyers, lawyers and lending teams.</span>
+          <Link href="/demo" className="inline-flex items-center gap-2 text-[#e1c990] hover:underline">Explore a sample report <ArrowRight size={14} /></Link>
         </div>
       </section>
 

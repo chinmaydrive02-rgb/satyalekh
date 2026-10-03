@@ -156,7 +156,7 @@ export default function LandIntel() {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.detail || 'Server error');
       }
-      setReport(await res.json());
+      setReport({ ...await res.json(), sample: isDemoActive() });
     } catch (e: any) {
       setError(e.message?.includes('fetch') ? 'Backend warming up (60-90s on free hosting) — try again shortly.' : e.message);
     } finally {
@@ -239,7 +239,7 @@ export default function LandIntel() {
         </div>
 
         {/* Side panel */}
-        <div className="w-full lg:w-[420px] border-l border-border bg-surface overflow-y-auto p-5 flex flex-col gap-5">
+        <div className={`w-full lg:w-[420px] border-l border-border bg-surface overflow-y-auto p-5 flex flex-col gap-5 ${demoActive ? 'pb-24' : ''}`}>
           <Reveal>
             <div>
               <p className="eyebrow mb-1">Land Intel</p>
@@ -309,6 +309,11 @@ export default function LandIntel() {
           {/* Report */}
           {report && (
             <div className="flex flex-col gap-3">
+              {report.sample && (
+                <div className="rounded-lg border border-warning-border bg-warning-soft p-3 text-sm text-ink">
+                  <strong>Sample report — demonstration data.</strong> This worked example describes a Sanand parcel, not the parcel currently drawn on the map. No live assessment was performed.
+                </div>
+              )}
               {/* Formal report header */}
               <div
                 className="sl-anim card p-4 bg-surface-soft/60"
@@ -326,8 +331,8 @@ export default function LandIntel() {
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 text-xs font-mono text-muted">
-                  <span>Coordinates: {centroid ? `${centroid[1].toFixed(5)}, ${centroid[0].toFixed(5)}` : '—'}</span>
-                  <span>Extent: {fmt(area / 4046.86, 2)} acres</span>
+                  <span>Coordinates: {typeof report.lat === 'number' && typeof report.lng === 'number' ? `${report.lat.toFixed(5)}, ${report.lng.toFixed(5)}` : '—'}</span>
+                  <span>Extent: {typeof report.area_sqm === 'number' ? fmt(report.area_sqm / 4046.86, 2) : '—'} acres</span>
                   {report.elevation_m != null && <span>Elevation: {fmt(report.elevation_m, 0)} m AMSL</span>}
                   {report.annual_rain_mm != null && <span>Annual precipitation: {fmt(report.annual_rain_mm, 0)} mm</span>}
                 </div>
