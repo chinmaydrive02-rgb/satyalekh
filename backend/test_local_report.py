@@ -20,6 +20,19 @@ def test_mortgage_keeps_red_flag_and_source_evidence():
     assert result["owner_name"] == "Unknown"
 
 
+def test_native_gujarati_is_not_assumed_unrestricted_or_encumbered():
+    result = build_local_analysis({'owner_name': 'Synthetic', 'tenure_type': 'નવી શરત',
+                                  'encumbrances': 'બોજો નથી'})
+    assert result['tenure_type'] == 'નવી શરત'
+    assert result['encumbrances'] == 'બોજો નથી'
+    assert result['risk_level'] == 'YELLOW'
+    checks = {c['name']: c for c in result['report']['risk']['checks']}
+    assert checks['tenure_type']['status'] == 'unavailable'
+    assert checks['encumbrances']['status'] == 'unavailable'
+    assert checks['litigation_mentions']['status'] == 'unavailable'
+    assert checks['source_language_review']['status'] == 'unavailable'
+
+
 def test_unreadable_fields_do_not_generate_a_report():
     with pytest.raises(HTTPException) as exc:
         build_local_analysis({})
