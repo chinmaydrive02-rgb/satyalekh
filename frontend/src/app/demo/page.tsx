@@ -7,6 +7,8 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+const HomeMap = dynamic(() => import('@/components/HomeMap'), { ssr: false });
 import { FlaskConical, KeyRound, Loader2, LogIn, ShieldCheck, User, Sparkles, ArrowRight } from 'lucide-react';
 import TopNav from '@/components/TopNav';
 import { Reveal } from '@/components/motion';
@@ -61,17 +63,37 @@ export default function DemoLoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-bg">
+    <main className="min-h-screen bg-[#102b29] relative isolate overflow-x-clip">
+      <div className="absolute inset-0 -z-10 opacity-50" aria-hidden="true"><HomeMap /></div>
+      <div className="absolute inset-0 -z-10 pointer-events-none bg-gradient-to-r from-[#102b29] via-[#102b29]/75 to-[#102b29]/30" />
       <TopNav />
-      <div className="pt-16 min-h-screen flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
+      <div className="relative min-h-screen max-w-[1200px] mx-auto grid lg:grid-cols-[1.1fr_0.9fr] items-center gap-10 px-5 sm:px-8 pt-28 pb-24">
+        <div className="text-white">
+          <p className="text-xs uppercase tracking-[0.2em] text-[#e1c990]">The Satya-Lekh experience</p>
+          <h1 className="mt-6 font-serif text-5xl sm:text-7xl leading-[1.04] tracking-tight">One parcel.<br />The bigger<br /><em className="text-[#e1c990] font-normal">picture.</em></h1>
+          <p className="mt-6 max-w-md text-[#dce7e0] text-base sm:text-lg leading-relaxed">Follow a Gujarat property from its record of rights to the questions that matter. Explore the product with a ready-made case file.</p>
+          <div className="mt-8 max-w-md border-t border-white/20">
+            {[
+              ['01', 'Read the record', 'Ownership, tenure and encumbrances, organised in English.'],
+              ['02', 'Follow the history', 'Trace mutations and explore illustrative litigation results.'],
+              ['03', 'See the wider context', 'Explore maps, screening layers and your property portfolio.'],
+            ].map(([number, title, description]) => (
+              <div key={number} className="flex gap-4 py-4 border-b border-white/15">
+                <span className="font-mono text-xs text-[#e1c990] pt-1">{number}</span>
+                <div><h2 className="text-base font-semibold">{title}</h2><p className="text-sm leading-relaxed text-[#c3d2c8] mt-1">{description}</p></div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-5 text-xs text-[#c3d2c8]">Illustrative records. Real product interactions. No client documents required.</p>
+        </div>
+        <div className="w-full max-w-md mx-auto lg:ml-auto">
           <Reveal variant="reveal-scale">
           <div className="card p-7 sm:p-8 flex flex-col gap-5 shadow-lg">
             <div className="flex flex-col gap-2">
               <span className="eyebrow flex items-center gap-1.5">
                 <FlaskConical size={12} /> Demo access
               </span>
-              <h1 className="text-2xl font-bold text-ink">Try Satya-Lekh in demo mode</h1>
+              <h2 className="font-serif text-3xl font-semibold text-ink">Your case file is ready.</h2>
               <p className="text-sm text-muted leading-relaxed">
                 Sample data, real product flow — the full title-check pipeline, risk
                 scoring, chain of title and watchlist, powered by realistic Gujarat
@@ -106,7 +128,7 @@ export default function DemoLoginPage() {
             >
               {launching
                 ? <><Loader2 size={16} className="animate-spin" /> Starting your demo…</>
-                : <><Sparkles size={16} /> Launch the investor demo <ArrowRight size={15} /></>}
+                : <><Sparkles size={16} /> Start exploring <ArrowRight size={15} /></>}
             </button>
             <p className="text-xs text-faint leading-relaxed -mt-2">
               No sign-in required — this opens a guided tour with realistic seeded data across every feature.
@@ -118,6 +140,8 @@ export default function DemoLoginPage() {
               </p>
             )}
 
+            <details className="rounded-lg border border-border p-3">
+              <summary className="cursor-pointer text-xs font-semibold text-muted">Have demo credentials?</summary>
             {/* Divider */}
             <div className="flex items-center gap-3 my-1">
               <span className="h-px flex-1 bg-border" />
@@ -176,6 +200,7 @@ export default function DemoLoginPage() {
                   : <><LogIn size={15} /> Enter demo</>}
               </button>
             </form>
+            </details>
 
             <p className="text-xs text-faint leading-relaxed">
               Demo sessions last 24 hours and never touch live government portals or
@@ -188,9 +213,9 @@ export default function DemoLoginPage() {
           </Reveal>
 
           <Reveal delay={150}>
-            <p className="text-center text-xs text-faint mt-4">
+            <p className="text-center text-xs text-[#dce7e0] mt-4">
               Looking for real searches?{' '}
-              <Link href="/" className="text-brand hover:text-brand-strong underline underline-offset-2">
+              <Link href="/" className="text-[#e1c990] hover:text-white underline underline-offset-2">
                 Back to the live product
               </Link>
             </p>
