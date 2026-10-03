@@ -169,23 +169,22 @@ export default function DemoTour() {
       <TopNav />
 
       {/* Hero */}
-      <section className="section-dark pt-28 pb-14 sm:pb-16 px-4 sm:px-6 overflow-hidden">
+      <section className="section-dark tour-atlas relative isolate pt-28 pb-14 sm:pb-16 px-4 sm:px-6 overflow-hidden">
         <div className="relative z-10 max-w-[1100px] mx-auto flex flex-col gap-6">
           <Reveal>
             <span className="inline-flex items-center gap-2.5 w-fit rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-white/80">
-              <FlaskConical size={13} className="text-accent-bright" /> Investor demo · sample data
+              <FlaskConical size={13} className="text-accent-bright" /> The demo casebook · sample data
             </span>
           </Reveal>
           <Reveal delay={80}>
             <h1 className="font-serif text-[2.3rem] sm:text-5xl font-semibold text-white leading-[1.06] tracking-tight max-w-3xl">
-              Walk the whole product in a few clicks.
+              A parcel. Its past. Your next move.
             </h1>
           </Reveal>
           <Reveal delay={160}>
             <p className="text-lg text-white/70 leading-relaxed max-w-2xl">
-              Every feature below is preloaded with realistic Gujarat data — no live
-              scrapes, no empty states. Start with the sample title check, then explore
-              each capability from this control center.
+              Begin with the Navrangpura case file. Trace the record, inspect its history,
+              then explore the tools around it. Each chapter uses illustrative Gujarat data.
             </p>
           </Reveal>
           <Reveal delay={240}>
@@ -223,9 +222,8 @@ export default function DemoTour() {
                   Navrangpura · Survey {SAMPLE.survey} · {SAMPLE.taluka}, {SAMPLE.district}
                 </p>
                 <p className="text-sm text-ink-soft leading-relaxed max-w-lg mt-1">
-                  Fires the real title-report pipeline against seeded data — you&apos;ll watch
-                  the live progress stages, then land on a full risk-scored report with the
-                  chain of title and a litigation check.
+                  Open the sample 7/12 report to review the recorded owner, title checks
+                  and mutation timeline. The accompanying litigation search uses demonstration results.
                 </p>
               </div>
               <Link
@@ -244,8 +242,8 @@ export default function DemoTour() {
           <Reveal>
             <div className="flex items-end justify-between gap-4 mb-5 border-b border-border pb-4">
               <div>
-                <p className="eyebrow mb-1">The full walkthrough</p>
-                <h2 className="font-serif text-2xl font-semibold text-ink">Explore every feature</h2>
+                <p className="eyebrow mb-1">Your casebook</p>
+                <h2 className="font-serif text-2xl font-semibold text-ink">Choose the next chapter</h2>
               </div>
               <span className="text-xs text-muted hidden sm:block">Each opens with seeded context</span>
             </div>
@@ -257,7 +255,7 @@ export default function DemoTour() {
                 <Link
                   href={c.href}
                   onClick={() => markSeen(c.key)}
-                  className="card card-lift p-6 flex flex-col gap-3 h-full hover:border-brand transition-colors group"
+                  className="tour-chapter card card-lift p-6 flex flex-col gap-3 h-full hover:border-brand transition-colors group"
                 >
                   <div className="flex items-center justify-between">
                     <span className="w-10 h-10 rounded-xl bg-brand-soft text-brand border border-brand-border/60 flex items-center justify-center">
@@ -271,7 +269,7 @@ export default function DemoTour() {
                       <ArrowRight size={16} className="text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-brand" />
                     )}
                   </div>
-                  <h3 className="text-base font-semibold text-ink leading-snug">{c.title}</h3>
+                  <div className="flex items-baseline gap-3"><span className="font-mono text-[10px] text-accent">{String(i + 1).padStart(2, '0')}</span><h3 className="font-serif text-xl font-semibold text-ink leading-snug">{c.title}</h3></div>
                   <p className="text-sm text-muted leading-relaxed">{c.what}</p>
                 </Link>
               </Reveal>

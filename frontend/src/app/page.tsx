@@ -275,7 +275,7 @@ export default function Home() {
         <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-[#102b29]/95 via-[#102b29]/65 to-[#102b29]/20" />
         <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-[#102b29] via-transparent to-[#102b29]/20" />
         <div className="relative max-w-[1280px] mx-auto grid lg:grid-cols-[1.1fr_0.9fr] gap-9 lg:gap-16 items-center">
-          <div className="py-3 lg:py-10">
+          <div className="brand-arrive py-3 lg:py-10">
             <p className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-[#102b29]/60 px-3 py-1.5 text-[10px] sm:text-xs uppercase tracking-[0.16em] text-[#d9e8df]">
               <MapPin size={12} /> Land intelligence · Gujarat
             </p>
@@ -300,7 +300,7 @@ export default function Home() {
             </div>
             <p className="mt-7 text-[10px] uppercase tracking-[0.16em] text-[#c3d2c8]">Ahmedabad satellite view · illustrative parcel boundary</p>
           </div>
-          <div id="title-search" className="scroll-mt-24 w-full max-w-xl mx-auto rounded-2xl shadow-2xl">
+          <div id="title-search" className="brand-arrive brand-arrive-late scroll-mt-24 w-full max-w-xl mx-auto rounded-2xl shadow-2xl">
             <SearchWidget />
           </div>
         </div>

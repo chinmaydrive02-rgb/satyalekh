@@ -9,15 +9,8 @@ import DemoBanner from '@/components/DemoBanner';
 // (Fraunces) with system fallbacks, so the UI degrades gracefully while
 // fonts stream in.
 
-// Inline SVG brand mark — shield with document rules + check, deep teal.
-const FAVICON_SVG =
-  "data:image/svg+xml," +
-  encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#0f766e"/><path d="M16 5.5l7.5 3v7c0 5.2-3.2 9-7.5 11-4.3-2-7.5-5.8-7.5-11v-7l7.5-3z" fill="#0b5d56"/><path d="M16 7.7l5.5 2.2v5.6c0 4.1-2.4 7.1-5.5 8.8-3.1-1.7-5.5-4.7-5.5-8.8V9.9L16 7.7z" fill="#fffefb"/><path d="M12.6 12h6.8M12.6 14.6h6.8" stroke="#b9ddd3" stroke-width="1.2" stroke-linecap="round"/><path d="M12.8 18.2l2.2 2.2 4.4-4.4" stroke="#0f766e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`
-  );
-
 export const metadata: Metadata = {
-  icons: { icon: [{ url: FAVICON_SVG, type: 'image/svg+xml' }] },
+  icons: { icon: [{ url: '/brand/satyalekh-mark.svg', type: 'image/svg+xml' }] },
   title: 'Satya-Lekh — India’s Land Title Clearance Checker | Gujarat 7/12 in English',
   description:
     'Search AnyROR Gujarat land records (7/12 / Satbara utara) by district, taluka, village and survey number. Automatic CAPTCHA solving, Gujarati-to-English translation, encumbrance and tenure risk analysis for buyers, lawyers and banks.',

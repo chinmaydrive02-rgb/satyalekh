@@ -68,7 +68,7 @@ export default function DemoLoginPage() {
       <div className="absolute inset-0 -z-10 pointer-events-none bg-gradient-to-r from-[#102b29] via-[#102b29]/75 to-[#102b29]/30" />
       <TopNav />
       <div className="relative min-h-screen max-w-[1200px] mx-auto grid lg:grid-cols-[1.1fr_0.9fr] items-center gap-10 px-5 sm:px-8 pt-28 pb-24">
-        <div className="text-white">
+        <div className="brand-arrive text-white">
           <p className="text-xs uppercase tracking-[0.2em] text-[#e1c990]">The Satya-Lekh experience</p>
           <h1 className="mt-6 font-serif text-5xl sm:text-7xl leading-[1.04] tracking-tight">One parcel.<br />The bigger<br /><em className="text-[#e1c990] font-normal">picture.</em></h1>
           <p className="mt-6 max-w-md text-[#dce7e0] text-base sm:text-lg leading-relaxed">Follow a Gujarat property from its record of rights to the questions that matter. Explore the product with a ready-made case file.</p>
