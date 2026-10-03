@@ -1704,9 +1704,28 @@ def liveness():
     return {"status": "ok"}
 
 
+@app.get("/health/ready")
+async def readiness_check():
+    """Bounded capability check; Render liveness remains independent."""
+    from readiness import capability_readiness
+
+    def probe():
+        try:
+            client = _get_supabase()
+        except Exception:
+            client = None
+        return capability_readiness(client)
+
+    try:
+        result = await asyncio.wait_for(asyncio.to_thread(probe), timeout=10)
+    except asyncio.TimeoutError:
+        return JSONResponse(status_code=503, content={"ready": False, "detail": "Dependency readiness check timed out"})
+    return JSONResponse(status_code=200 if result["ready"] else 503, content=result)
+
+
 @app.get("/health")
 async def health_check():
-    """Comprehensive health check — verifies Playwright, Gemini, and env vars."""
+    """Browser launch and SDK initialization; does not test Gemini generation."""
     checks = {}
     
     # Check env vars
