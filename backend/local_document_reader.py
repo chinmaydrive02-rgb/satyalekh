@@ -106,6 +106,9 @@ def read_document(contents, mime_type):
     Caller must enforce a concurrency cap and run this synchronous function off
     the API event loop. File names are generated internally, never client input.
     """
+    if mime_type == "text/html":
+        from anyror_vf7_reader import read_anyror_vf7_html
+        return read_anyror_vf7_html(contents)
     if mime_type not in MIME_EXTENSIONS:
         raise LocalDocumentError(400, "Only PDF, PNG, JPG and WebP documents are supported.")
     if not contents or len(contents) > MAX_BYTES:

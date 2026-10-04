@@ -23,6 +23,10 @@ def build_local_analysis(parsed):
         level, reason = "YELLOW", "Preliminary source reading; supporting title evidence and lawyer review are required."
     record = {**fields, "area": fields["total_area"], "source": "user_supplied_record",
               "record_type": "UPLOADED_RECORD", "mutation_entries": "Unknown"}
+    source_locations = (parsed.get("source_record") or {}).get("locations", {})
+    for name in ("district", "taluka", "village"):
+        if isinstance(source_locations.get(name), str) and source_locations[name].strip():
+            record[name] = source_locations[name]
     report = compose_title_report({**record, "tenure_type": assessment["tenure_type"],
                                    "encumbrances": assessment["encumbrances"]}, [])
     report["record"] = record
@@ -47,6 +51,10 @@ def build_local_analysis(parsed):
     elif report["risk"]["verdict"] == "CLEAR":
         report["risk"]["verdict"] = "CAUTION"
     report["source_evidence"] = parsed.get("evidence", [])
+    if parsed.get("source_record"):
+        # Retain every captured row independently of the reviewer's summary.
+        # A saved page remains an unverified informational source.
+        report["source_record"] = parsed["source_record"]
     metadata = parsed.get("metadata", {})
     if metadata.get("source_sha256"):
         report["source_document"] = {
@@ -56,4 +64,5 @@ def build_local_analysis(parsed):
         }
     return {**fields, "risk_level": level, "risk_reason": reason, "report": report,
             "evidence": parsed.get("evidence", []), "metadata": parsed.get("metadata", {}),
-            "raw_text": parsed.get("raw_text", "")}
+            "raw_text": parsed.get("raw_text", ""),
+            **({"source_record": parsed["source_record"]} if parsed.get("source_record") else {})}

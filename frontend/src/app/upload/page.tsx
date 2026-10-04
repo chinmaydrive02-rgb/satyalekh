@@ -9,11 +9,11 @@ import RecordAcquisitionGuide from '@/components/RecordAcquisitionGuide';
 import TopNav from '@/components/TopNav';
 import { Reveal } from '@/components/motion';
 import JobProgress from '@/components/JobProgress';
-import TitleReportView from '@/components/TitleReport';
+import TitleReportView, { SourceRecordView } from '@/components/TitleReport';
 import {
   API_BASE_URL, getUserEmail, setUserEmail, fetchCredits, fetchConfig,
   startTitleReport, pollJob, parseSurveySuggestions,
-  ApiError, Job, TitleReport, demoHeaders, isDemoActive,
+  ApiError, Job, TitleReport, SourceRecord, demoHeaders, isDemoActive,
 } from '@/lib/api';
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/utils/supabase/client';
@@ -42,6 +42,7 @@ interface UploadAnalysis {
   risk_level?: string;
   risk_reason?: string;
   report?: TitleReport;
+  source_record?: SourceRecord;
   evidence?: Array<{ field?: string; value?: string; snippet?: string; page?: number; method?: string }>;
   raw_text?: string;
   metadata?: { reader?: string; external_processing?: boolean; translation_performed?: boolean; pages_total?: number; pages_processed?: number; truncated?: boolean; manual_review_required?: boolean; warnings?: string[] };
@@ -61,6 +62,12 @@ function emptyReview(): ReviewForm {
   return Object.fromEntries(REVIEW_FIELDS.map(({ key }) => [key, { value: '', page: '1', source_excerpt: '' }])) as ReviewForm;
 }
 
+function isHtmlRecord(file: File): boolean {
+  return /\.html?$/i.test(file.name) || file.type.toLowerCase() === 'text/html';
+}
+function reviewLimit(key: ReviewField, excerpt = false): number {
+  return key === 'owner_name' || key === 'encumbrances' ? 2000 : excerpt ? 500 : 250;
+}
 function extractedValue(value?: string): string {
   return value?.trim() || 'Not available in the document';
 }
@@ -72,10 +79,15 @@ function DocumentUploadContent() {
 
   // Manual Upload State
   const [file, setFile] = useState<File | null>(null);
+  const [mutationFiles, setMutationFiles] = useState<File[]>([]);
+  const [mutationFileError, setMutationFileError] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [result, setResult] = useState<UploadAnalysis | null>(null);
   const [sourceUrl, setSourceUrl] = useState('');
+  const [htmlSource, setHtmlSource] = useState('');
+  const [sourcePreviewError, setSourcePreviewError] = useState('');
+  const htmlFile = Boolean(file && isHtmlRecord(file));
   const [reviewFields, setReviewFields] = useState<ReviewForm>(emptyReview);
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [reviewBusy, setReviewBusy] = useState(false);
@@ -84,15 +96,41 @@ function DocumentUploadContent() {
   const [reviewedResult, setReviewedResult] = useState<UploadAnalysis | null>(null);
   const manualRevisionRef = useRef(0);
   useEffect(() => {
-    if (!file) { setSourceUrl(''); return; }
-    const url = URL.createObjectURL(file);
-    setSourceUrl(url);
-    return () => URL.revokeObjectURL(url);
+    let cancelled = false;
+    let url: string | undefined;
+    setSourceUrl(''); setHtmlSource(''); setSourcePreviewError('');
+    if (!file) return;
+    if (isHtmlRecord(file)) {
+      file.text().then(text => {
+        if (cancelled) return;
+        setHtmlSource(text);
+        // The original HTML is NEVER loaded into a browsing context.
+        url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+        setSourceUrl(url);
+      }).catch(() => { if (!cancelled) setSourcePreviewError('Could not display the source text. Select the original file again.'); });
+    } else {
+      url = URL.createObjectURL(file); setSourceUrl(url);
+    }
+    return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
   }, [file]);
   const changeFile = (next: File | null) => {
     manualRevisionRef.current += 1;
+    setMutationFiles([]); setMutationFileError(''); setReviewConfirmed(false);
+    setSourceUrl(''); setHtmlSource(''); setSourcePreviewError('');
+    if (next && (next.size > (isHtmlRecord(next) ? 1 : 10) * 1024 * 1024 || !(/\.(?:pdf|jpe?g|png|webp|html?)$/i.test(next.name) || ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'text/html'].includes(next.type)))) {
+      setFile(null); setResult(null); setReviewedResult(null); setUploadError(next && isHtmlRecord(next) && next.size > 1024 * 1024 ? 'Saved AnyROR HTML must be 1 MB or smaller. Save the record as HTML only, or upload a PDF/image up to 10 MB.' : 'Select a PDF/image up to 10 MB or saved AnyROR HTML up to 1 MB.'); return;
+    }
     setFile(next); setResult(null); setReviewedResult(null); setMachineReportCurrent(false); setReviewError(''); setUploadError('');
     setReviewFields(emptyReview()); setReviewConfirmed(false);
+  };
+  const changeMutationFiles = (next: File[]) => {
+    if (!htmlFile || next.length > 5 || next.some(item => !isHtmlRecord(item) || item.size > 1024 * 1024 || item.size === 0)) {
+      setMutationFileError('Attach at most 5 saved VF-6 HTML files, each nonempty and up to 1 MB.');
+      return;
+    }
+    manualRevisionRef.current += 1;
+    setMutationFiles(next); setMutationFileError('');
+    setReviewConfirmed(false); setReviewedResult(null); setMachineReportCurrent(false); setReviewError('');
   };
   const changeReview = (key: ReviewField, part: keyof ReviewEntry, value: string) => {
     manualRevisionRef.current += 1;
@@ -232,12 +270,13 @@ function DocumentUploadContent() {
       }
       fields[key] = { value, source_excerpt: entry.source_excerpt.trim(), page: Number(entry.page) };
     }
-    if (!/[0-9\u0ae6-\u0aef]/.test(fields.total_area?.value || '') || !/(?:\bsq\.?\s*(?:m|met(?:er|re)s?|ft|feet)\b|\bm[²2]\b|\bsqm\b|\bhectares?\b|\bha\b|\bacres?\b|\bgunthas?\b|\bsquare\s*(?:met(?:er|re)s?|feet)\b|ચો\.?\s*(?:મી|ફૂટ)|હેક્ટર|આર(?:ે)?|ગુઠા|ગુંઠા|એકર)/i.test(fields.total_area?.value || '')) {
+    if (!/[0-9\u0ae6-\u0aef]/.test(fields.total_area?.value || '') || !/(?:\bH\.Are\.SqMt\.|\bsq\.?\s*(?:m|met(?:er|re)s?|ft|feet)\b|\bm[²2]\b|\bsqm\b|\bhectares?\b|\bha\b|\bacres?\b|\bgunthas?\b|\bsquare\s*(?:met(?:er|re)s?|feet)\b|ચો\.?\s*(?:મી|ફૂટ)|હેક્ટર|આર(?:ે)?|ગુઠા|ગુંઠા|એકર)/i.test(fields.total_area?.value || '')) {
       setReviewError('Include the area units shown on the original record, such as sq m or hectares.'); return;
     }
     const revision = manualRevisionRef.current;
     setReviewBusy(true); setReviewError(''); setReviewedResult(null);
     const data = new FormData(); data.append('file', file);
+    if (htmlFile) mutationFiles.forEach(item => data.append('mutation_files', item));
     data.append('review', JSON.stringify({ confirmed: true, fields }));
     try {
       const response = await fetch(`${API_BASE_URL}/review-record`, { method: 'POST', body: data });
@@ -450,7 +489,7 @@ function DocumentUploadContent() {
           <div className="text-center">
              <p className="eyebrow mb-1">Title Scanner</p>
              <h1 className="text-3xl font-bold text-ink mb-2">Fetch or scan a land record</h1>
-             <p className="text-muted text-sm">Fetch it live from AnyROR, or upload a document for OCR analysis.</p>
+             <p className="text-muted text-sm">Upload an official record, compare the source and build a preliminary report.</p>
           </div>
         </Reveal>
 
@@ -470,12 +509,24 @@ function DocumentUploadContent() {
           >
              <RecordAcquisitionGuide district={district || searchParams.get('district') || ''} taluka={taluka || searchParams.get('taluka') || ''} village={village || searchParams.get('village') || ''} surveyNo={surveyNo || searchParams.get('survey_no') || ''}/>
              <div className="w-full h-40 border-2 border-dashed border-border-strong rounded-xl flex flex-col items-center justify-center text-muted hover:border-brand transition-colors relative cursor-pointer group">
-                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => changeFile(e.target.files?.[0] || null)} />
+                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,text/html,.html,.htm" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => changeFile(e.target.files?.[0] || null)} />
                 <UploadCloud size={36} className="mb-3 group-hover:text-brand transition-colors" />
-                <span className="text-sm font-medium group-hover:text-ink">{file ? file.name : "Drop your 7/12 image or PDF here"}</span>
+                <span className="text-sm font-medium group-hover:text-ink">{file ? file.name : "Select your record PDF, image or saved AnyROR HTML"}</span>
              </div>
-             <p className="text-xs text-muted">JPG, PNG, WebP or PDF, up to 10 MB. Keep the original file for comparison.</p>
-             <p className="text-sm text-warning bg-warning-soft border border-warning-border rounded-lg p-3">Documents are read on our server using local text extraction and OCR by default; this upload flow does not send them to an external AI provider. Gujarati source text is retained. External AI translation remains pending approval of the processing arrangements. During this beta, use synthetic or fully anonymised records.</p>
+             <p className="text-xs text-muted">JPG, PNG, WebP or PDF: up to 10 MB. Saved AnyROR HTML: up to 1 MB. Keep the original file for comparison.</p>
+             <p className="text-sm text-muted leading-relaxed">On desktop, open the official AnyROR result, then use your browser’s <strong>Save Page As</strong> command and choose <strong>HTML only</strong>. Upload the saved .html file here. On a phone, save the result as a PDF or capture a clear image instead. Saving a page does not turn an informational view into a certified copy.</p>
+             {htmlFile && <fieldset className="rounded-lg border border-border p-4 space-y-3">
+               <legend className="text-sm font-semibold px-1">Supporting VF-6 entries · optional</legend>
+               <p className="text-sm text-muted">For each mutation reference in your VF-7 record, open <a href="https://anyror.gujarat.gov.in/" target="_blank" rel="noopener noreferrer" className="underline">official AnyROR</a>, select VF-6 Entry Details and the same district, taluka and village, then enter the referenced <strong>entry number</strong>. Save each result using Save Page As → HTML only.</p>
+               <label className="block text-sm">Add saved VF-6 files ({mutationFiles.length}/5)
+                 <input type="file" multiple accept="text/html,.html,.htm" disabled={isAnalyzing || reviewBusy || mutationFiles.length >= 5} className="block mt-2 w-full text-sm" onChange={e => { changeMutationFiles([...mutationFiles, ...Array.from(e.target.files || [])]); e.target.value = ''; }}/>
+               </label>
+               <p className="text-xs text-muted">Up to 5 HTML files, 1 MB each, with a saved VF-7 HTML primary record. Supporting files are read locally when you submit your review. They do not establish a complete ownership history.</p>
+               {mutationFiles.length > 0 && <ul className="space-y-2">{mutationFiles.map((item, index) => <li key={`${index}-${item.name}`} className="flex items-start gap-3 text-sm"><span className="flex-1 min-w-0 break-all">{item.name}</span><button type="button" disabled={isAnalyzing || reviewBusy} className="shrink-0 min-h-11 text-brand underline" aria-label={`Remove ${item.name}`} onClick={() => changeMutationFiles(mutationFiles.filter((_, i) => i !== index))}>Remove</button></li>)}</ul>}
+               {mutationFileError && <p role="alert" className="text-sm text-danger">{mutationFileError}</p>}
+               <p className="text-xs text-muted">Adding or removing a supporting file clears the reviewed report and requires confirmation again.</p>
+             </fieldset>}
+             <p className="text-sm text-warning bg-warning-soft border border-warning-border rounded-lg p-3">Documents are read on our server using local text extraction and OCR by default; saved AnyROR HTML is parsed locally without running its scripts; this upload flow does not send them to an external AI provider. Gujarati source text is retained. External AI translation remains pending approval of the processing arrangements. During this beta, use synthetic or fully anonymised records.</p>
              {uploadError && <p role="alert" className="text-sm text-danger">{uploadError}</p>}
              <button type="submit" disabled={!file || isAnalyzing} className="btn btn-primary w-full py-3">
                {isAnalyzing ? <><Loader2 className="animate-spin" size={16}/> Analyzing document…</> : "Analyze Document"}
@@ -700,15 +751,17 @@ function DocumentUploadContent() {
                  <div><span className="eyebrow">Encumbrances</span><div className="text-sm text-ink mt-0.5">{extractedValue(result.encumbrances)}</div></div>
               </div>
               <p className="text-sm text-muted leading-relaxed">{isDemoActive() ? 'Sample document analysis for the demo. This result does not verify your uploaded file.' : result.metadata?.external_processing ? 'Analysis used an approved external reader. Check every finding against the source and obtain lawyer review.' : 'Local reading; Gujarati source retained, English translation not performed; lawyer review required. OCR may misread the document.'} Authenticity and current title position have not been independently verified.</p>
+              {result.source_record && <SourceRecordView source={result.source_record}/> }
               {result.metadata && <div className="rounded-lg border border-border p-3 text-xs text-muted space-y-2"><p>Reader: {result.metadata.reader || 'unspecified'} · Pages read: {result.metadata.pages_processed ?? 'not supplied'} of {result.metadata.pages_total ?? 'not supplied'}{result.metadata.truncated ? ' · Partial document: remaining pages require review' : ''}</p>{result.metadata.warnings?.map((warning, i) => <p key={i} className="text-warning">{warning}</p>)}</div>}
-              {machineReportCurrent && !reviewedResult && result.report && <div className="border-t border-border pt-5"><p className="eyebrow mb-3">{isDemoActive() ? 'Sample preliminary analysis' : 'Machine preliminary analysis · unreviewed'}</p><TitleReportView report={result.report}/><button type="button" onClick={() => window.print()} className="btn btn-outline mt-3 print:hidden">Print / save PDF</button></div>}
+              {machineReportCurrent && !reviewedResult && result.report && !htmlFile && <div className="border-t border-border pt-5"><p className="eyebrow mb-3">{isDemoActive() ? 'Sample preliminary analysis' : 'Machine preliminary analysis · unreviewed'}</p><TitleReportView report={result.report}/><button type="button" onClick={() => window.print()} className="btn btn-outline mt-3 print:hidden">Print / save PDF</button></div>}
               {result.evidence && result.evidence.length > 0 && <details className="border border-border rounded-lg p-4"><summary className="cursor-pointer text-sm font-semibold">Source evidence ({result.evidence.length})</summary><div className="mt-3 space-y-3">{result.evidence.map((entry, index) => <div key={index} className="text-sm border-b border-border pb-3 last:border-0"><p className="font-medium">{entry.field?.replace(/_/g, ' ') || `Evidence ${index + 1}`}{entry.page ? ` · page ${entry.page}` : ''}</p>{entry.value && <p className="mt-1">{entry.value}</p>}<blockquote className="text-muted mt-1 whitespace-pre-wrap break-words">{entry.snippet || 'Source excerpt not supplied.'}</blockquote></div>)}</div></details>}
               {result.raw_text && <details className="border border-border rounded-lg p-4"><summary className="cursor-pointer text-sm font-semibold">Text read from this document</summary><pre className="mt-3 whitespace-pre-wrap break-words text-xs max-h-96 overflow-auto font-sans">{result.raw_text}</pre></details>}
               {!isDemoActive() && result.metadata?.reader === 'local' && <section className="border-t border-border pt-5 space-y-5">
                 <div className="print:hidden"><p className="eyebrow">Compare against the original</p><h2 className="text-xl font-semibold mt-1">Review the fields before producing a preliminary analysis</h2><p className="text-sm text-muted mt-2">Keep the source open while entering your reading. Machine values above stay unchanged. Leave an optional field blank if the document does not establish it; blank does not mean clear.</p></div>
-                {sourceUrl && <div className="space-y-3 print:hidden"><a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline w-fit">Open original document</a>{file?.type === 'application/pdf' || file?.name.toLowerCase().endsWith('.pdf') ? <iframe title="Original uploaded document" src={sourceUrl} className="w-full h-80 sm:h-[520px] border border-border rounded-lg"/> : <Image unoptimized width={1600} height={1600} src={sourceUrl} alt="Original uploaded record for comparison" className="w-full max-h-[520px] object-contain border border-border rounded-lg"/>}<p className="text-xs text-muted">The preview uses your selected file. If the embedded PDF does not open on your phone, use the original-document link.</p></div>}
+                {sourcePreviewError && <p role="alert" className="text-sm text-danger">{sourcePreviewError}</p>}
+                {sourceUrl && <div className="space-y-3 print:hidden">{htmlFile ? <><a href={sourceUrl} download={`${file?.name || 'source'}.txt`} className="btn btn-outline w-fit">Download source as plain text</a><p className="text-xs text-muted">Saved HTML is shown as escaped source text. Its scripts and links are not run. Review all parsed ownership and rights rows below against your original informational record.</p><details className="rounded-lg border border-border p-3"><summary className="cursor-pointer text-sm font-medium min-h-11 flex items-center">Inspect saved file text</summary><pre className="whitespace-pre-wrap break-words text-xs max-h-96 overflow-auto mt-3">{htmlSource.slice(0, 200000)}</pre>{htmlSource.length > 200000 && <p className="text-xs text-warning">Preview shows the first 200,000 characters. The plain-text download contains the full source; the server receives the original file unchanged.</p>}</details></> : <><a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline w-fit">Open original document</a>{file?.type === 'application/pdf' || file?.name.toLowerCase().endsWith('.pdf') ? <iframe title="Original uploaded document" src={sourceUrl} className="w-full h-80 sm:h-[520px] border border-border rounded-lg"/> : <Image unoptimized width={1600} height={1600} src={sourceUrl} alt="Original uploaded record for comparison" className="w-full max-h-[520px] object-contain border border-border rounded-lg"/>}<p className="text-xs text-muted">The preview uses your selected file. If the embedded PDF does not open on your phone, use the original-document link.</p></>}</div>}
                 <form onSubmit={submitReview} className="space-y-5 print:hidden">
-                  {REVIEW_FIELDS.map(({ key, label, required }) => <fieldset key={key} className="rounded-lg border border-border p-4 space-y-3"><legend className="text-sm font-semibold px-1">{label}{required ? ' · required' : ' · optional'}</legend><p className="text-xs text-muted">Machine reading: {extractedValue(result[key])}</p><label className="block text-sm">Your reading<input className="input w-full mt-1" value={reviewFields[key].value} maxLength={250} required={required} onChange={e => changeReview(key, 'value', e.target.value)} placeholder={key === 'total_area' ? 'e.g. 123 sq m — use the source units' : required ? 'Read from the original' : 'Leave blank if unknown'}/></label><div className="grid sm:grid-cols-[100px_1fr] gap-3"><label className="block text-sm">Source page<input type="number" min={1} max={3} step={1} className="input w-full mt-1" value={reviewFields[key].page} required={Boolean(reviewFields[key].value.trim())} onChange={e => changeReview(key, 'page', e.target.value)}/></label><label className="block text-sm">Exact excerpt from the source<textarea className="input w-full mt-1 min-h-20" maxLength={500} required={Boolean(reviewFields[key].value.trim())} value={reviewFields[key].source_excerpt} onChange={e => changeReview(key, 'source_excerpt', e.target.value)} placeholder="Copy the original words supporting this field; retain Gujarati where present"/></label></div></fieldset>)}
+                  {REVIEW_FIELDS.map(({ key, label, required }) => <fieldset key={key} className="rounded-lg border border-border p-4 space-y-3"><legend className="text-sm font-semibold px-1">{label}{required ? ' · required' : ' · optional'}</legend><p className="text-xs text-muted">Machine reading: {extractedValue(result[key])}</p><label className="block text-sm">Your reading<textarea className="input w-full mt-1 min-h-20" value={reviewFields[key].value} maxLength={reviewLimit(key)} required={required} onChange={e => changeReview(key, 'value', e.target.value)} placeholder={key === 'total_area' ? 'e.g. 123 sq m — use the source units' : required ? 'Read from the original' : 'Leave blank if unknown'}/></label><div className="grid sm:grid-cols-[100px_1fr] gap-3"><label className="block text-sm">Source page<input type="number" min={1} max={3} step={1} className="input w-full mt-1" value={reviewFields[key].page} required={Boolean(reviewFields[key].value.trim())} onChange={e => changeReview(key, 'page', e.target.value)}/></label><label className="block text-sm">Exact excerpt from the source<textarea className="input w-full mt-1 min-h-20" maxLength={reviewLimit(key, true)} required={Boolean(reviewFields[key].value.trim())} value={reviewFields[key].source_excerpt} onChange={e => changeReview(key, 'source_excerpt', e.target.value)} placeholder="Copy the original words supporting this field; retain Gujarati where present"/></label></div></fieldset>)}
                   <label className="flex items-start gap-3 text-sm leading-relaxed"><input type="checkbox" className="mt-1 size-4 shrink-0" checked={reviewConfirmed} onChange={e => { manualRevisionRef.current += 1; setReviewConfirmed(e.target.checked); setReviewedResult(null); setMachineReportCurrent(false); }} required/><span>I compared these entries and excerpts with the original document. This confirms my reading only; it does not establish authenticity, ownership or legal title clearance.</span></label>
                   {reviewError && <p role="alert" className="text-sm text-danger">{reviewError}</p>}
                   <button type="submit" disabled={reviewBusy || !reviewConfirmed || isAnalyzing} className="btn btn-primary w-full">{reviewBusy ? <><Loader2 size={16} className="animate-spin"/> Processing your review…</> : 'Produce preliminary analysis from my review'}</button>
