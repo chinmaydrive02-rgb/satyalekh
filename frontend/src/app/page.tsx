@@ -286,9 +286,9 @@ export default function Home() {
               From the land beneath your feet to the records behind its title. Read, translate and assess property records in one place.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <a href="#title-search" className="inline-flex items-center gap-2 rounded-lg bg-[#e1c990] px-5 py-3 text-sm font-semibold text-[#102b29] hover:bg-[#efdcaf] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
-                <FileSearch size={16} /> Check a title <ArrowRight size={15} />
-              </a>
+              <Link href="/upload" className="inline-flex items-center gap-2 rounded-lg bg-[#e1c990] px-5 py-3 text-sm font-semibold text-[#102b29] hover:bg-[#efdcaf] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
+                <FileSearch size={16} /> Review a land record <ArrowRight size={15} />
+              </Link>
               <Link href="/land-intel" className="inline-flex items-center gap-2 rounded-lg border border-white/35 bg-[#102b29]/65 px-5 py-3 text-sm font-semibold text-white hover:bg-[#102b29]">
                 <MapPin size={16} /> Explore the map
               </Link>
@@ -301,6 +301,11 @@ export default function Home() {
             <p className="mt-7 text-[10px] uppercase tracking-[0.16em] text-[#c3d2c8]">Ahmedabad satellite view · illustrative parcel boundary</p>
           </div>
           <div id="title-search" className="brand-arrive brand-arrive-late scroll-mt-24 w-full max-w-xl mx-auto rounded-2xl shadow-2xl">
+            <div className="mb-3 rounded-xl border border-white/25 bg-[#102b29]/90 p-4 text-sm leading-relaxed text-[#dce7e0]">
+              <p>Saved-record reports are available. Live AnyROR retrieval is currently unavailable.</p>
+              <p className="mt-2 text-xs">Gujarati source is retained; English translation is not currently performed.</p>
+              <Link href="/upload" className="mt-2 inline-flex min-h-11 items-center gap-2 font-semibold text-[#e1c990] underline underline-offset-4">Start with your record <ArrowRight size={14} /></Link>
+            </div>
             <SearchWidget />
           </div>
         </div>

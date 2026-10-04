@@ -794,20 +794,13 @@
   .shimmer::after { display: none !important; }
 }
 
-/* Brand rhythm: a short arrival, an inked boundary, quiet chapter movement. */
+/* Page entrances and quiet chapter movement. The brand mark stays still. */
 @keyframes brand-arrival {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 }
-@keyframes brand-ink {
-  from { stroke-dashoffset: 150; }
-  to { stroke-dashoffset: 0; }
-}
 .brand-arrive { animation: brand-arrival 700ms cubic-bezier(.22,.61,.36,1) both; }
 .brand-arrive-late { animation-delay: 120ms; }
-.brand-boundary { stroke-dasharray: 150; animation: brand-ink 1100ms ease-out both; }
-.brand-mark { transition: transform 350ms cubic-bezier(.22,.61,.36,1); }
-a:hover .brand-mark { transform: rotate(-5deg); }
 .tour-atlas::before {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background-image: repeating-linear-gradient(34deg, transparent 0 69px, rgba(225,201,144,.07) 70px 71px, transparent 72px 140px), repeating-linear-gradient(112deg, transparent 0 109px, rgba(225,201,144,.06) 110px 111px, transparent 112px 220px);
@@ -821,7 +814,6 @@ a:hover .brand-mark { transform: rotate(-5deg); }
 }
 .tour-chapter:hover::after, .tour-chapter:focus-visible::after { transform: scaleX(1); }
 @media (prefers-reduced-motion: reduce) {
-  .brand-arrive, .brand-boundary { animation: none; }
-  .brand-mark, .tour-chapter::after { transition: none; }
-  a:hover .brand-mark { transform: none; }
+  .brand-arrive { animation: none; }
+  .tour-chapter::after { transition: none; }
 }

@@ -20,7 +20,7 @@ function hasGap(entry: ChainEntry): boolean {
   return (entry.flags || []).some((f) => GAP_FLAG.test(f));
 }
 
-export default function ChainOfTitle({ entries }: { entries: ChainEntry[] }) {
+export default function ChainOfTitle({ entries, ariaLabel = 'Chain of title, oldest to newest' }: { entries: ChainEntry[]; ariaLabel?: string }) {
   if (!entries || entries.length === 0) {
     return (
       <div className="border border-dashed border-border-strong rounded-xl bg-surface-soft/50 p-8 flex flex-col items-center gap-3 text-center">
@@ -37,7 +37,7 @@ export default function ChainOfTitle({ entries }: { entries: ChainEntry[] }) {
   }
 
   return (
-    <ol className="flex flex-col" aria-label="Chain of title, oldest to newest">
+    <ol className="flex flex-col" aria-label={ariaLabel}>
       {entries.map((entry, i) => {
         const flags = entry.flags || [];
         const flagged = flags.length > 0;

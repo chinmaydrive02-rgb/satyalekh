@@ -356,6 +356,7 @@ class AnalysisResult(BaseModel):
     metadata: Optional[dict] = None
     raw_text: Optional[str] = None
     status: Optional[str] = None
+    source_record: Optional[dict] = None
 
 # SECURITY F-11: upload hardening — size cap, content-type/extension
 # allowlist and magic-byte sniffing (never trust the client's content_type).
@@ -363,13 +364,12 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 _LOCAL_READER_GATE = asyncio.Semaphore(1)
 
 
-async def _read_uploaded_locally(contents, mime_type):
-    from local_document_reader import read_document
+async def _run_local_reader(reader, *args):
     try:
         await asyncio.wait_for(_LOCAL_READER_GATE.acquire(), timeout=2)
     except asyncio.TimeoutError:
         raise HTTPException(status_code=429, detail="The local document reader is busy. Try again shortly.", headers={"Retry-After": "15"})
-    worker = asyncio.create_task(asyncio.to_thread(read_document, contents, mime_type))
+    worker = asyncio.create_task(asyncio.to_thread(reader, *args))
 
     def finished(task):
         # Cancellation of an HTTP request must not open another OCR slot while
@@ -382,11 +382,16 @@ async def _read_uploaded_locally(contents, mime_type):
     return await asyncio.shield(worker)
 
 
+async def _read_uploaded_locally(contents, mime_type):
+    from local_document_reader import read_document
+    return await _run_local_reader(read_document, contents, mime_type)
+
+
 def _require_personal_data_provider():
     if os.getenv("GEMINI_PERSONAL_DATA_APPROVED", "").lower() != "true":
         raise HTTPException(status_code=503, detail="This external analysis is unavailable with the current provider arrangement. Upload an official record for local preliminary analysis instead.")
-_ALLOWED_UPLOAD_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
-_ALLOWED_UPLOAD_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
+_ALLOWED_UPLOAD_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf", "text/html"}
+_ALLOWED_UPLOAD_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".pdf", ".html", ".htm"}
 
 
 def _sniff_upload_mime(data: bytes) -> Optional[str]:
@@ -399,6 +404,9 @@ def _sniff_upload_mime(data: bytes) -> Optional[str]:
         return "image/webp"
     if data.startswith(b"%PDF"):
         return "application/pdf"
+    prefix = data[:512].removeprefix(b"\xef\xbb\xbf").lstrip().lower()
+    if prefix.startswith(b"<!doctype html") or re.match(br"<html(?:\s|>)", prefix):
+        return "text/html"
     return None
 
 
@@ -420,21 +428,23 @@ async def analyze_record(http_request: Request, file: UploadFile = File(...),
     declared_type = (file.content_type or "").lower()
     ext = os.path.splitext(file.filename or "")[1].lower()
     if declared_type not in _ALLOWED_UPLOAD_TYPES and ext not in _ALLOWED_UPLOAD_EXTS:
-        raise HTTPException(status_code=400, detail="Only JPG, PNG, WebP or PDF files are supported.")
+        raise HTTPException(status_code=400, detail="Upload a JPG, PNG, WebP, PDF or saved AnyROR VF-7 HTML page.")
 
     contents = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(contents) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large — the maximum upload size is 10 MB.")
     sniffed_type = _sniff_upload_mime(contents)
     if sniffed_type is None:
-        raise HTTPException(status_code=400, detail="File content is not a recognised JPG, PNG, WebP or PDF document.")
+        raise HTTPException(status_code=400, detail="File content is not a recognised image, PDF or saved HTML page.")
 
-    if os.getenv("DOCUMENT_READER", "local").strip().lower() != "gemini":
+    # Saved HTML is always parsed locally, even when an external PDF/image
+    # reader is configured. No uploaded HTML is executed or fetched.
+    if sniffed_type == "text/html" or os.getenv("DOCUMENT_READER", "local").strip().lower() != "gemini":
         from local_document_reader import LocalDocumentError
         from local_report import build_local_analysis
         try:
             result = await _read_uploaded_locally(contents, sniffed_type)
-            if all(result.get(name) in (None, "", "Unknown") for name in
+            if result.get("metadata", {}).get("review_required") or all(result.get(name) in (None, "", "Unknown") for name in
                    ("owner_name", "survey_no", "total_area", "tenure_type", "encumbrances")):
                 from review_record import pending_source_review
                 return pending_source_review(result)
@@ -559,7 +569,8 @@ class AnyRORRequest(BaseModel):
     record_type: Optional[str] = "OLD_SCAN_712"
 
 @app.post("/review-record", response_model=AnalysisResult, response_model_exclude_none=True)
-async def review_record(http_request: Request, file: UploadFile = File(...), review: str = Form(...)):
+async def review_record(http_request: Request, file: UploadFile = File(...), review: str = Form(...),
+                        mutation_files: List[UploadFile] = File(default=[])):
     """Re-read the supplied original locally and attribute user-confirmed fields.
 
     Does not authenticate the reviewer, verify excerpts, persist a report or
@@ -569,19 +580,39 @@ async def review_record(http_request: Request, file: UploadFile = File(...), rev
     from local_document_reader import LocalDocumentError
     _enforce_rate_limit(http_request, "analyze-record", limit=5)
     confirmed_review = parse_review(review)
+    if len(mutation_files) > 5:
+        raise HTTPException(status_code=413, detail="Attach at most five saved VF-6 mutation pages per report.")
     declared_type = (file.content_type or "").lower()
     ext = os.path.splitext(file.filename or "")[1].lower()
     if declared_type not in _ALLOWED_UPLOAD_TYPES and ext not in _ALLOWED_UPLOAD_EXTS:
-        raise HTTPException(status_code=400, detail="Only JPG, PNG, WebP or PDF files are supported.")
+        raise HTTPException(status_code=400, detail="Upload a JPG, PNG, WebP, PDF or saved AnyROR VF-7 HTML page.")
     contents = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(contents) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large — the maximum upload size is 10 MB.")
     mime_type = _sniff_upload_mime(contents)
     if mime_type is None:
-        raise HTTPException(status_code=400, detail="File content is not a recognised JPG, PNG, WebP or PDF document.")
+        raise HTTPException(status_code=400, detail="File content is not a recognised image, PDF or saved HTML page.")
+    if mutation_files and mime_type != "text/html":
+        raise HTTPException(status_code=422, detail="Mutation pages can currently be linked only to a saved AnyROR VF-7 HTML source.")
     try:
         parsed = await _read_uploaded_locally(contents, mime_type)
-        return build_reviewed_analysis(parsed, confirmed_review)
+        analysis = build_reviewed_analysis(parsed, confirmed_review)
+        if mutation_files:
+            from anyror_vf6_reader import read_anyror_vf6_html
+            from local_record_bundle import attach_mutation_records
+            mutations = []
+            for attachment in mutation_files:
+                mutation_contents = await attachment.read(1024 * 1024 + 1)
+                if len(mutation_contents) > 1024 * 1024:
+                    raise HTTPException(status_code=413, detail="Each saved VF-6 HTML page must be 1 MB or smaller.")
+                if _sniff_upload_mime(mutation_contents) != "text/html":
+                    raise HTTPException(status_code=400, detail="Mutation attachments must be saved AnyROR VF-6 HTML result pages.")
+                mutations.append(await _run_local_reader(read_anyror_vf6_html, mutation_contents))
+            try:
+                analysis = attach_mutation_records(analysis, mutations)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from None
+        return analysis
     except LocalDocumentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
 

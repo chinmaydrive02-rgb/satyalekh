@@ -11,7 +11,7 @@ import React from 'react';
 import {
   MapPin, User, CheckCircle2, AlertTriangle, XCircle, MinusCircle, Zap, GitBranch,
 } from 'lucide-react';
-import { TitleReport as TitleReportData, CheckStatus, RiskVerdict } from '@/lib/api';
+import { TitleReport as TitleReportData, CheckStatus, RiskVerdict, SourceRecord, SupportingMutationRecord } from '@/lib/api';
 import ChainOfTitle from '@/components/ChainOfTitle';
 
 const VERDICT_STYLES: Record<RiskVerdict, { label: string; badge: string; text: string; stroke: string }> = {
@@ -101,9 +101,53 @@ function Detail({ label, value, wide = false }: { label: string; value?: string 
   );
 }
 
+/** Saved source values are rendered as text only, never interpreted as HTML. */
+export function SourceRecordView({ source }: { source: SourceRecord }) {
+  const tables = [{ title: 'Ownership rows from the source', rows: source.raw_ownership_rows }, { title: 'Rights and other interests from the source', rows: source.raw_rights_rows }, { title: 'Unclassified ownership references', rows: source.mutation_refs?.ownership_unclassified }, { title: 'Unclassified rights references', rows: source.mutation_refs?.rights_unclassified }];
+  const sourceLabels: Record<string, string> = { district: 'District', taluka: 'Taluka', village: 'Village', survey_no: 'Survey / block number', upin: 'UPIN', old_survey_no: 'Old survey number' };
+  const sourceDetails = Object.entries({ ...source.locations, ...source.identifiers });
+  return <section className="sl-source-record card p-4 sm:p-6 space-y-4"><div><h3 className="text-base font-semibold">Original record contents</h3><p className="text-sm text-muted mt-2">Informational record · source as of: {source.source_as_of || 'Not supplied'}. This date belongs to the source; it is separate from the analysis generation date. The uploaded file has not been authenticated against the government portal.</p></div>
+    {sourceDetails.length > 0 && <dl className="grid sm:grid-cols-2 gap-3">{sourceDetails.map(([key, value]) => <div key={key}><dt className="text-xs text-muted">{sourceLabels[key] || key.replace(/_/g, ' ')}</dt><dd className="text-sm whitespace-pre-wrap break-words">{value}</dd></div>)}</dl>}
+    {source.labels && <dl className="grid sm:grid-cols-2 gap-3">{Object.entries(source.labels).map(([label, value]) => <div key={label}><dt className="text-xs text-muted break-words">{label}</dt><dd className="text-sm whitespace-pre-wrap break-words">{value}</dd></div>)}</dl>}
+    {tables.map(({ title, rows }) => rows && rows.length > 0 && <div key={title}><h4 className="text-sm font-semibold mb-2">{title} ({rows.length})</h4><div className="overflow-x-auto print:overflow-visible rounded-lg border border-border" tabIndex={0} role="region" aria-label={title}><table className="w-full text-sm border-collapse"><caption className="sr-only">{title}; all parsed rows shown in source order</caption><tbody>{rows.map((row, i) => <tr key={i} className="border-b border-border last:border-0">{row.map((cell, j) => <td key={j} className="p-3 align-top whitespace-pre-wrap break-words min-w-28 print:min-w-0 print:text-xs">{cell}</td>)}</tr>)}</tbody></table></div></div>)}
+    {source.owners && source.owners.length > 0 && <div><h4 className="text-sm font-semibold">All parsed holders</h4><ul className="mt-2 space-y-2">{source.owners.map((owner, i) => <li key={i} className="text-sm whitespace-pre-wrap break-words">{owner}</li>)}</ul></div>}
+    {source.rights && source.rights.length > 0 && <div><h4 className="text-sm font-semibold">All parsed rights entries</h4><ul className="mt-2 space-y-2">{source.rights.map((right, i) => <li key={i} className="text-sm whitespace-pre-wrap break-words">{right}</li>)}</ul></div>}
+    <p className="text-xs text-muted">These are source readings, not a title opinion or an English translation. Check every holder, right and mutation reference against the original and supporting documents.</p>
+  </section>;
+}
+
+/** Preserve native source strings, including unknown fields, without HTML execution. */
+function SupportingMutationView({ supporting }: { supporting: SupportingMutationRecord }) {
+  const { source_record: source, mutation_record: mutation, metadata } = supporting;
+  const labels: Record<string, string> = {
+    entry_no: 'Entry number', entry_date: 'Entry date', decision_date: 'Decision date',
+    effective_date: 'Effective date', change_type: 'Change type', status: 'Recorded entry status',
+    office_status: 'Recorded office status', narrative: 'Entry narrative', affected_surveys: 'Affected surveys / accounts',
+    officer_remarks: 'Officer remarks', application_no: 'Application number', original_change_type: 'Original change type',
+    applicant_name: 'Applicant name', application_date: 'Application date', notice_prepared_date: 'Notice prepared date',
+    notice_given_date: 'Notice given date', last_notice_served_date: 'Last notice served date',
+  };
+  const fields = { ...mutation, ...source.raw_fields };
+  return <section className="sl-source-record card p-4 sm:p-6 space-y-4">
+    <div><h3 className="text-base font-semibold">Supporting VF-6 · entry {mutation.entry_no || source.identifiers?.entry_no || 'not supplied'}</h3>
+      <p className="text-sm text-muted mt-2">Informational source as of: {source.source_as_of || 'Not supplied'}. These source dates are separate from the report generation date.</p>
+      <p className="text-sm text-muted mt-2">The recorded status below is copied from the supplied page. It is not an authenticated or certified copy, and does not independently establish approval, legal effect or title. No buyer, seller or owner is inferred from these entries.</p>
+    </div>
+    {source.locations && <dl className="grid sm:grid-cols-3 gap-3">{Object.entries(source.locations).map(([key, value]) => <div key={key}><dt className="text-xs text-muted capitalize">{key}</dt><dd className="text-sm whitespace-pre-wrap break-words">{value || 'Not supplied'}</dd></div>)}</dl>}
+    <dl className="space-y-4">{Object.entries(fields).map(([key, value]) => <div key={key} className="border-t border-border pt-3"><dt className="text-xs text-muted break-words">{labels[key] || key.replace(/_/g, ' ')}{source.labels?.[key] ? ` · ${source.labels[key]}` : ''}</dt><dd className="text-sm whitespace-pre-wrap break-words mt-1">{value || 'Not supplied in the source'}</dd></div>)}</dl>
+    <p className="text-xs text-muted">Gujarati wording is retained without translation. Compare the full narrative and remarks with the original record and supporting instruments.</p>
+    <p className="text-xs font-mono break-all">Source SHA-256 · {metadata?.source_sha256 || 'Not supplied'}</p>
+    <p className="text-xs text-muted">This fingerprint identifies the uploaded file; it does not authenticate it.</p>
+    {metadata?.warnings?.map((warning, index) => <p key={index} className="text-xs text-muted break-words">{warning}</p>)}
+  </section>;
+}
+
 export default function TitleReport({ report }: { report: TitleReportData }) {
   const { record, risk, chain_of_title: chain, cached, generated_at, coverage } = report;
   const verdict = VERDICT_STYLES[risk.verdict] ?? VERDICT_STYLES.CAUTION;
+  const suppliedRecord = coverage?.source === 'user_supplied_record' || coverage?.source === 'user_supplied_record_bundle';
+  const suppliedBundle = coverage?.source === 'user_supplied_record_bundle';
+  const riskNotAssessed = suppliedRecord && risk.checks.every(check => check.status === 'unavailable');
 
   let generatedLabel = '';
   try {
@@ -134,6 +178,9 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
           }
           .sl-report .sl-verdict { border-width: 2px !important; font-weight: 700; }
           .sl-report section { break-inside: avoid; }
+          .sl-report section.sl-source-record { break-inside: auto; overflow: visible !important; }
+          .sl-report .sl-source-record table { table-layout: fixed; width: 100%; }
+          .sl-report .sl-source-record td { overflow-wrap: anywhere; }
           .sl-report .sl-anim { animation: none !important; }
         }
       `}</style>
@@ -144,11 +191,11 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
           <p className="mt-1 text-xs">Illustrative records only. No live government record was retrieved for this report.</p>
         </section>
       )}
-      {coverage?.source === 'user_supplied_record' && (
+      {suppliedRecord && (
         <section className="rounded-xl border border-warning-border bg-warning-soft p-4">
           <p className="text-sm font-semibold text-warning">Preliminary analysis of an uploaded record</p>
           <p className="mt-1 text-sm text-muted">
-            {coverage.user_review_confirmed
+            {coverage?.user_review_confirmed
               ? 'Based on entries confirmed by the user against the supplied document. The source excerpts and reviewer identity have not been independently verified.'
               : 'Based on unreviewed text extraction. Compare the readings with the original document before relying on them.'}
             {' '}Official source authenticity, supporting instruments and the complete title history remain unverified.
@@ -189,7 +236,9 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
 
           {/* Score dial + stamp-style verdict */}
           <div className="flex flex-wrap items-center gap-4 sm:gap-6 shrink-0">
-            <ScoreDial score={risk.score} stroke={verdict.stroke} textCls={verdict.text} />
+            {riskNotAssessed
+              ? <p className="max-w-40 text-sm text-muted font-medium">Risk score not assessed</p>
+              : <ScoreDial score={risk.score} stroke={verdict.stroke} textCls={verdict.text} />}
             <div className="flex flex-col items-center gap-1.5">
               <span
                 className={`sl-verdict sl-anim inline-block px-4 py-2 text-sm font-bold uppercase tracking-[0.14em] rounded-lg border-2 -rotate-2 ${verdict.badge}`}
@@ -197,8 +246,8 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
               >
                 {verdict.label}
               </span>
-              <span className="eyebrow text-[9px]">{coverage?.source === 'user_supplied_record' ? 'Preliminary risk screen' : 'Automated assessment'}</span>
-              <span className="text-[10px] text-muted">Higher score = more risk</span>
+              <span className="eyebrow text-[9px]">{suppliedRecord ? 'Preliminary risk screen' : 'Automated assessment'}</span>
+              {!riskNotAssessed && <span className="text-[10px] text-muted">Higher score = more risk</span>}
             </div>
           </div>
         </div>
@@ -208,18 +257,29 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
         <section className="card p-6 md:p-8" aria-labelledby="report-coverage-heading">
           <h3 id="report-coverage-heading" className="text-base font-semibold text-ink">Evidence coverage</h3>
           <p className="text-sm text-muted leading-relaxed mt-2">
-            {coverage.chain_requested
+            {coverage.mutation_records_uploaded !== undefined
+              ? `${coverage.mutation_records_uploaded} supporting mutation records supplied by the user; ${coverage.mutation_entries_identified} mutation references identified in the primary record. Uploaded records have not been authenticated against the portal.`
+              : coverage.chain_requested
               ? `${coverage.mutation_records_retrieved} of ${coverage.mutation_entries_identified} identified mutation records retrieved.`
               : 'Mutation record retrieval was not requested for this report.'}
-            {' '}{coverage.chain_complete
+            {' '}{coverage.chain_complete && coverage.source !== 'user_supplied_record_bundle'
               ? 'The requested mutation retrieval is complete. The assessment remains limited to the records available.'
               : 'The ownership history is incomplete. Review the outstanding evidence before relying on the assessment.'}
           </p>
-          {(coverage.mutation_records_failed > 0 || coverage.mutation_records_not_attempted > 0) && (
+          {coverage.source === 'user_supplied_record_bundle' ? (
+            <p className="mt-2 text-sm text-warning break-words">
+              {coverage.unresolved_mutation_references?.length ?? coverage.mutation_records_not_attempted} referenced entries not supplied.
+              {Boolean(coverage.unresolved_mutation_references?.length) && <> Entry numbers: {coverage.unresolved_mutation_references?.join(', ')}.</>}
+            </p>
+          ) : (coverage.mutation_records_failed > 0 || coverage.mutation_records_not_attempted > 0) && (
             <p className="mt-2 text-sm text-warning">
               {coverage.mutation_records_failed} could not be retrieved; {coverage.mutation_records_not_attempted} not yet attempted.
             </p>
           )}
+          {Boolean(coverage.mutation_references_requiring_review?.length) && <div className="mt-3 text-sm text-warning">
+            <p>{coverage.mutation_references_requiring_review?.length} source references need manual review before they can be matched to an entry number. Check each original character; Gujarati letter પ is distinct from digit ૫ (5).</p>
+            <ul className="mt-2 list-disc pl-5 space-y-1">{coverage.mutation_references_requiring_review?.map((reference, index) => <li key={index} className="whitespace-pre-wrap break-words">{reference}</li>)}</ul>
+          </div>}
           <p className="mt-3 text-xs text-muted leading-relaxed">A risk score describes findings in the available records. It does not establish that the title is clear.</p>
         </section>
       )}
@@ -260,7 +320,7 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
       <section className="card p-6 md:p-8">
         <div className="flex flex-wrap gap-2 items-baseline justify-between border-b-2 border-ink/10 pb-3 mb-5">
           <h3 className="text-base font-semibold text-ink">Record Details</h3>
-          <span className="font-mono text-[11px] text-faint">{report.demo ? "sample data" : coverage?.source === 'user_supplied_record' ? 'as per supplied readings' : 'as per retrieved record'}</span>
+          <span className="font-mono text-[11px] text-faint">{report.demo ? "sample data" : suppliedRecord ? 'as per supplied readings' : 'as per retrieved record'}</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5">
           <div className="flex flex-col gap-1.5 col-span-2 md:col-span-3 rounded-xl border border-border bg-surface-soft/50 px-4 py-3.5 border-l-[3px] border-l-accent/60">
@@ -294,10 +354,13 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
           <h3 className="text-base font-semibold text-ink flex items-center gap-2">
             <GitBranch size={15} className="text-brand" /> Chain of Title
           </h3>
-          <span className="font-mono text-[11px] text-faint">oldest → newest</span>
+          <span className="font-mono text-[11px] text-faint">{suppliedBundle ? 'Source entries · continuity unverified' : 'oldest → newest'}</span>
         </div>
-        <ChainOfTitle entries={chain || []} />
+        <ChainOfTitle entries={chain || []} ariaLabel={suppliedBundle ? 'Uploaded mutation source entries' : undefined} />
       </section>
+
+      {report.source_record && <SourceRecordView source={report.source_record}/>}
+      {report.supporting_records?.map((supporting, index) => <SupportingMutationView key={`${supporting.mutation_record.entry_no}-${index}`} supporting={supporting}/>)}
 
       {report.source_document && (
         <section className="card p-6 md:p-8">
@@ -327,7 +390,7 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
       {/* Footer / disclaimer */}
       <p className="text-xs text-faint leading-relaxed border-t border-border pt-4">
         Automated report <span className="font-mono tnum">{refNo}</span> generated{' '}
-        {generatedLabel && <>on {generatedLabel} </>}{report.demo ? "from demonstration data, not a live government record." : coverage?.source === 'user_supplied_record' ? "from a user-supplied document; no live government record was retrieved." : "from the retrieved AnyROR record."}
+        {generatedLabel && <>on {generatedLabel} </>}{report.demo ? "from demonstration data, not a live government record." : suppliedRecord ? "from user-supplied documents; no live government record was retrieved." : "from the retrieved AnyROR record."}
         This is not a legal title opinion — for transactions, verify the index-2, a 30-year
         search report and pending litigation with a lawyer.
       </p>

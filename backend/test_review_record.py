@@ -49,8 +49,8 @@ def test_strict_review_rejects_unsupported_or_unconfirmed_input(change):
     elif change == 'missing_owner': del value['fields']['owner_name']
     elif change == 'unknown_field': value['fields']['district'] = value['fields']['survey_no']
     elif change == 'no_units': value['fields']['total_area']['value'] = '123'
-    elif change == 'long_value': value['fields']['owner_name']['value'] = 'x' * 251
-    elif change == 'long_excerpt': value['fields']['owner_name']['source_excerpt'] = 'x' * 501
+    elif change == 'long_value': value['fields']['owner_name']['value'] = 'x' * 2001
+    elif change == 'long_excerpt': value['fields']['owner_name']['source_excerpt'] = 'x' * 2001
     elif change == 'empty_excerpt': value['fields']['owner_name']['source_excerpt'] = ' '
     elif change == 'page_zero': value['fields']['owner_name']['page'] = 0
     elif change == 'page_four': value['fields']['owner_name']['page'] = 4

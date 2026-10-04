@@ -133,7 +133,9 @@ class TestUploadHardening:
         assert main_mod._sniff_upload_mime(b"%PDF-1.7 xxxx") == "application/pdf"
         assert main_mod._sniff_upload_mime(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "image/webp"
         assert main_mod._sniff_upload_mime(b"\xff\xd8\xff\xe0") == "image/jpeg"
-        assert main_mod._sniff_upload_mime(b"<html>") is None
+        # HTML magic is only admission to the strict local saved-record parser;
+        # incomplete/control-only pages are rejected by endpoint flow tests.
+        assert main_mod._sniff_upload_mime(b"<html>") == "text/html"
 
 
 # ── Input validation bounds ─────────────────────────────────────────────────

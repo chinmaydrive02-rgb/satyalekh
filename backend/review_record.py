@@ -15,8 +15,8 @@ _EMPTY = {"", "unknown", "null", "n/a", "na", "-", "—"}
 
 class SourceReviewField(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    value: str = Field(min_length=1, max_length=250)
-    source_excerpt: str = Field(min_length=1, max_length=500)
+    value: str = Field(min_length=1, max_length=2000)
+    source_excerpt: str = Field(min_length=1, max_length=2000)
     page: int = Field(ge=1, le=3)
 
     @model_validator(mode="after")
@@ -37,9 +37,12 @@ class SourceReview(BaseModel):
             raise ValueError("Unsupported review field")
         if not {"owner_name", "survey_no", "total_area"}.issubset(self.fields):
             raise ValueError("Owner, survey number and area are required")
+        for name, field in self.fields.items():
+            if name not in {"owner_name", "encumbrances"} and (len(field.value) > 250 or len(field.source_excerpt) > 500):
+                raise ValueError("Scalar fields exceed the review limit")
         area = self.fields["total_area"].value
         if not re.search(r"[0-9\u0ae6-\u0aef]", area) or not re.search(
-            r"(?i)(?:\bsq\.?\s*(?:m|met(?:er|re)s?|ft|feet)\b|\bm[²2]\b|\bsqm\b|\bhectares?\b|\bha\b|\bacres?\b|\bgunthas?\b|\bsquare\s*(?:met(?:er|re)s?|feet)\b|ચો\.?\s*(?:મી|ફૂટ)|હેક્ટર|આર(?:ે)?|ગુઠા|ગુંઠા|એકર)", area
+            r"(?i)(?:\bH\.Are\.SqMt\.|\bsq\.?\s*(?:m|met(?:er|re)s?|ft|feet)\b|\bm[²2]\b|\bsqm\b|\bhectares?\b|\bha\b|\bacres?\b|\bgunthas?\b|\bsquare\s*(?:met(?:er|re)s?|feet)\b|ચો\.?\s*(?:મી|ફૂટ)|હેક્ટર|આર(?:ે)?|ગુઠા|ગુંઠા|એકર)", area
         ):
             raise ValueError("Area requires a number and explicit units")
         return self
@@ -71,10 +74,11 @@ def pending_source_review(parsed):
     # Page markers alone do not constitute readable source content.
     if not re.sub(r"\[Page \d+\]|\s", "", raw_text):
         raise HTTPException(status_code=422, detail="No readable text was found. Upload a clearer document for manual source review.")
-    return {**{field: "Unknown" for field in FIELD_NAMES}, "risk_level": "YELLOW",
+    return {**{field: parsed.get(field) or "Unknown" for field in FIELD_NAMES}, "risk_level": "YELLOW",
             "risk_reason": "Local text is available but fields need confirmation against the original source.",
             "status": "review_required", "raw_text": raw_text,
             "evidence": parsed.get("evidence", []),
+            **({"source_record": parsed["source_record"]} if parsed.get("source_record") else {}),
             "metadata": {**parsed.get("metadata", {}), "manual_review_required": True,
                          "review_required": True, "official_source_verified": False}}
 

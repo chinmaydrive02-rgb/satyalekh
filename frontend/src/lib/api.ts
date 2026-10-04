@@ -202,13 +202,56 @@ export interface ReportCoverage {
   chain_requested: boolean;
   mutation_entries_identified: number;
   mutation_records_retrieved: number;
+  mutation_records_uploaded?: number;
+  unresolved_mutation_references?: string[];
+  mutation_references_requiring_review?: string[];
   mutation_records_failed: number;
   mutation_records_not_attempted: number;
   chain_complete: boolean;
 }
 
+export interface SourceRecord {
+  record_type?: string;
+  raw_fields?: Record<string, string>;
+  source_as_of?: string;
+  informational?: boolean;
+  labels?: Record<string, string>;
+  raw_ownership_rows?: string[][];
+  raw_rights_rows?: string[][];
+  owners?: string[];
+  rights?: string[];
+  identifiers?: Record<string, string>;
+  locations?: Record<string, string>;
+  mutation_refs?: { ownership_unclassified?: string[][]; rights_unclassified?: string[][] };
+}
+
+export interface SupportingMutationRecord {
+  mutation_record: {
+    entry_no: string;
+    entry_date?: string;
+    decision_date?: string;
+    effective_date?: string;
+    change_type?: string;
+    status?: string;
+    office_status?: string;
+    narrative?: string;
+    affected_surveys?: string;
+    officer_remarks?: string;
+    [key: string]: string | undefined;
+  };
+  source_record: SourceRecord;
+  metadata?: {
+    source_sha256?: string;
+    source_bytes?: number;
+    external_processing?: boolean;
+    warnings?: string[];
+  };
+}
+
 export interface TitleReport {
   demo?: boolean;
+  source_record?: SourceRecord;
+  supporting_records?: SupportingMutationRecord[];
   source_document?: { sha256: string; bytes?: number; mime_type?: string; pages_total?: number; pages_processed?: number; official_source_verified?: boolean };
   coverage?: ReportCoverage;
   source_evidence?: Array<{ field?: string; value?: string; page?: number; snippet?: string; method?: string; confidence?: string }>;
