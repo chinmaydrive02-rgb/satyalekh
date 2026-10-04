@@ -209,6 +209,7 @@ export interface ReportCoverage {
 
 export interface TitleReport {
   demo?: boolean;
+  source_document?: { sha256: string; bytes?: number; mime_type?: string; pages_total?: number; pages_processed?: number; official_source_verified?: boolean };
   coverage?: ReportCoverage;
   source_evidence?: Array<{ field?: string; value?: string; page?: number; snippet?: string; method?: string; confidence?: string }>;
   record: LandRecord;

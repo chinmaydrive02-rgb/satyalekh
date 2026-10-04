@@ -1,4 +1,5 @@
 from pathlib import Path
+import hashlib
 from unittest.mock import Mock
 import subprocess
 
@@ -47,7 +48,10 @@ def test_native_pdf_reads_only_page_cap_without_ocr(monkeypatch):
     assert result['metadata']['pages_processed'] == 3
     assert result['metadata']['external_processing'] is False
     assert result['metadata']['translation_performed'] is False
-    assert [args[0] for args in calls] == ['pdfinfo', 'pdftotext']
+    assert result['metadata']['source_sha256'] == hashlib.sha256(b'%PDF synthetic').hexdigest()
+    assert result['metadata']['source_bytes'] == len(b'%PDF synthetic')
+    assert reader.read_document(b'%PDF different bytes', 'application/pdf')['metadata']['source_sha256'] != result['metadata']['source_sha256']
+    assert [args[0] for args in calls[:2]] == ['pdfinfo', 'pdftotext']
     assert calls[1][calls[1].index('-l') + 1] == '3'
     assert not Path(calls[0][1]).exists()  # temporary document cleaned
 

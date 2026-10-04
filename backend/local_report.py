@@ -47,6 +47,13 @@ def build_local_analysis(parsed):
     elif report["risk"]["verdict"] == "CLEAR":
         report["risk"]["verdict"] = "CAUTION"
     report["source_evidence"] = parsed.get("evidence", [])
+    metadata = parsed.get("metadata", {})
+    if metadata.get("source_sha256"):
+        report["source_document"] = {
+            "sha256": metadata["source_sha256"], "bytes": metadata.get("source_bytes"),
+            "mime_type": metadata.get("source_mime_type"), "pages_total": metadata.get("pages_total"),
+            "pages_processed": metadata.get("pages_processed"), "official_source_verified": False,
+        }
     return {**fields, "risk_level": level, "risk_reason": reason, "report": report,
             "evidence": parsed.get("evidence", []), "metadata": parsed.get("metadata", {}),
             "raw_text": parsed.get("raw_text", "")}

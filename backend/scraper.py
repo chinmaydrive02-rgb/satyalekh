@@ -448,19 +448,68 @@ async def _translate_to_gujarati(english_name: str) -> str:
         return ""
 
 
+def _portal_response_unavailable(response, url: str = "") -> bool:
+    """HTTP failures and the portal's application-error redirect are not records."""
+    return response is None or response.status >= 400 or "customerror" in str(url).casefold()
+
+
+class PortalControlsUnavailable(RuntimeError):
+    """A valid selected location's dependent controls did not become ready."""
+
+
 async def _wait_for_dropdown_options(page, css_selector: str, min_options: int = 2, timeout_ms: int = 20000):
-    """Wait until a dropdown has at least min_options options (reliable post-ASP.NET-postback wait)."""
+    """Report actual readiness; a timeout must never advance the cascade."""
     try:
-        escaped = css_selector.replace("'", "\\'")
         await page.wait_for_function(
-            f"document.querySelectorAll('{escaped} option').length >= {min_options}",
-            timeout=timeout_ms
-        )
-        print(f"    ✓ {css_selector} populated with options")
+            "args => document.querySelectorAll(args.selector + ' option').length >= args.minimum",
+            arg={"selector": css_selector, "minimum": min_options}, timeout=timeout_ms)
+        return "customerror" not in str(getattr(page, "url", "")).casefold()
     except Exception:
-        # Timeout — give a final grace period
-        print(f"    ⚠ Timeout waiting for {css_selector}, adding grace wait...")
-        await page.wait_for_timeout(3000)
+        return False
+
+
+async def _select_and_wait_for_child(page, el, selector, value, next_selector):
+    """Observe child changes before dispatching selection, including partial postbacks.
+
+    A pre-existing populated dropdown is not proof that this parent's postback
+    completed. A full document replacement clears the marker; partial updates
+    are observed on the child or replacement child node.
+    """
+    marker = "__satyalekhCascadeWait"
+    await page.evaluate("""args => {
+        const old = window[args.marker]; if (old && old.observer) old.observer.disconnect();
+        const parent = document.querySelector(args.parent);
+        const child = document.querySelector(args.child);
+        const state = {changed: false, alreadySelected: !!parent && parent.value === args.value};
+        state.observer = new MutationObserver(mutations => {
+            for (const mutation of mutations) {
+                const current = document.querySelector(args.child);
+                if (current !== child || (child && (mutation.target === child || child.contains(mutation.target)))) {
+                    state.changed = true;
+                }
+            }
+        });
+        state.observer.observe(document.documentElement, {childList:true, subtree:true, characterData:true});
+        window[args.marker] = state;
+    }""", {"marker": marker, "parent": selector, "child": next_selector, "value": value})
+    try:
+        await el.select_option(value=value)
+        await page.wait_for_function("""args => {
+            const parent = document.querySelector(args.parent), child = document.querySelector(args.child);
+            const state = window[args.marker];
+            const manager = window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager.getInstance();
+            const updating = manager && manager.get_isInAsyncPostBack();
+            return !updating && parent && parent.value === args.value && child &&
+                child.options.length >= 2 && (!state || state.changed || state.alreadySelected);
+        }""", arg={"marker": marker, "parent": selector, "child": next_selector, "value": value}, timeout=20000)
+        return "customerror" not in str(getattr(page, "url", "")).casefold()
+    except Exception:
+        return False
+    finally:
+        try:
+            await page.evaluate("""marker => {const state=window[marker]; if(state && state.observer) state.observer.disconnect(); delete window[marker];}""", marker)
+        except Exception:
+            pass
 
 
 async def _select_cascading_option(page, selector: str, target: str, field_name: str,
@@ -493,11 +542,13 @@ async def _select_cascading_option(page, selector: str, target: str, field_name:
 
     best = _find_best_option(options_texts, target)
     if best:
+        if next_selector:
+            if not await _select_and_wait_for_child(page, el, selector, best, next_selector):
+                raise PortalControlsUnavailable("The government portal could not load the selected location's controls.")
+            return True
         await el.select_option(value=best)
         print(f"    ✓ {field_name}: matched value={best}")
-        if next_selector:
-            await _wait_for_dropdown_options(page, next_selector)
-        else:
+        if not next_selector:
             # Final step in cascade — wait for networkidle + grace period
             try:
                 await page.wait_for_load_state("networkidle", timeout=15000)
@@ -512,11 +563,13 @@ async def _select_cascading_option(page, selector: str, target: str, field_name:
     if gujarati_name:
         best_match = _find_best_option(options_texts, gujarati_name)
         if best_match:
+            if next_selector:
+                if not await _select_and_wait_for_child(page, el, selector, best_match, next_selector):
+                    raise PortalControlsUnavailable("The government portal could not load the selected location's controls.")
+                return True
             await el.select_option(value=best_match)
             print(f"    ✓ {field_name}: exact translated match value={best_match}")
-            if next_selector:
-                await _wait_for_dropdown_options(page, next_selector)
-            else:
+            if not next_selector:
                 try:
                     await page.wait_for_load_state("networkidle", timeout=15000)
                 except Exception:
@@ -613,9 +666,8 @@ async def _scrape_anyror_data(
                 print("  [1/8] Navigating to AnyROR...")
                 _report("connecting", "Contacting AnyROR portal…", 5)
                 nav_ok = False
-                # AnyROR responds slowly (sometimes >60s) to data-center IPs, so use
-                # the most lenient wait ("commit" = first response byte) with a long
-                # timeout, then rely on the dropdown-population wait for readiness.
+                # Commit waits for the response; actual control readiness is
+                # checked separately. A timeout does not establish its cause.
                 for nav_attempt in range(1, 3):
                     try:
                         response = await page.goto(
@@ -623,14 +675,12 @@ async def _scrape_anyror_data(
                             wait_until="commit",
                             timeout=100000
                         )
-                        if response is not None and response.status in (403, 429):
+                        if _portal_response_unavailable(response, getattr(page, "url", "")):
                             return await _cleanup_and_return({
-                                "error": "AnyROR is refusing or limiting requests from this server. "
+                                "error": "AnyROR returned an unavailable or error response. "
                                          "Please wait before retrying, or upload an official record.",
                                 "code": "PORTAL_UNAVAILABLE",
                             })
-                        if response is not None and response.status >= 500:
-                            raise RuntimeError("AnyROR is temporarily unavailable")
                         nav_ok = True
                         break
                     except Exception as e:
@@ -640,14 +690,13 @@ async def _scrape_anyror_data(
 
                 if not nav_ok:
                     return await _cleanup_and_return(
-                        {"error": "The government AnyROR portal is not responding to our servers right now "
-                                  "(it sometimes throttles or blocks cloud traffic, especially during Indian "
-                                  "business hours). Please try again in a few minutes — off-peak hours "
-                                  "(early morning / late night IST) work best."}
+                        {"error": "The government AnyROR portal did not respond within the connection deadline. "
+                                  "Please try later or upload an official record.", "code": "PORTAL_UNAVAILABLE"}
                     )
 
                 # Wait for the district dropdown to be populated (page fully loaded)
-                await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=60000)
+                if not await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=60000):
+                    return await _cleanup_and_return({"code": "PORTAL_UNAVAILABLE", "error": "The government portal's district controls did not become ready. Try later or upload an official record."})
 
                 # ── Step 2: Select Record Type ────────────────────────────────────
                 record_val = RECORD_TYPE_MAP.get(record_type, "11")
@@ -871,12 +920,14 @@ async def _scrape_anyror_data(
     # Wrap the entire scrape in a 300-second timeout guard
     try:
         return await asyncio.wait_for(_run_scrape(), timeout=300.0)
+    except PortalControlsUnavailable:
+        return {"code": "PORTAL_UNAVAILABLE", "error": "The government portal could not load controls for the selected location. Please try later or upload an official record."}
     except asyncio.TimeoutError:
         print("  ✗ Scraper timed out after 300 seconds")
-        return {"error": "AnyROR scrape timed out. The government portal may be slow — try again."}
+        return {"code": "PORTAL_UNAVAILABLE", "error": "AnyROR scrape timed out. The government portal may be slow — try again."}
     except Exception as e:
         print(f"  ✗ Fatal Scraper Error: {e}")
-        return {"error": "The government record could not be retrieved. Please try again later or upload an official record."}
+        return {"code": "PORTAL_UNAVAILABLE", "error": "The government record could not be retrieved. Please try again later or upload an official record."}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -935,9 +986,10 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
                     "https://anyror.gujarat.gov.in/LandRecordRural.aspx",
                     wait_until="commit", timeout=20000
                 )
-                if response is None or response.status >= 400:
+                if _portal_response_unavailable(response, getattr(page, "url", "")):
                     return {"code": "PORTAL_UNAVAILABLE"}
-                await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=10000)
+                if not await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=10000):
+                    return {"code": "PORTAL_UNAVAILABLE"}
 
                 # Select district
                 ok = await _select_cascading_option(

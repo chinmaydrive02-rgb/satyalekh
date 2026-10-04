@@ -1,5 +1,6 @@
 """Bounded, local-only extraction. OCR evidence is preliminary, never title clearance."""
 import os
+import hashlib
 from pathlib import Path
 import re
 import subprocess
@@ -168,5 +169,6 @@ def read_document(contents, mime_type):
         warnings.append("No supported field labels were identified; manual extraction is required.")
     return {**fields, "raw_text": "\n\n".join(f"[Page {p['page']}]\n{p['text']}" for p in pages),
             "evidence": evidence, "metadata": {"reader": "local", "external_processing": False,
+            "source_sha256": hashlib.sha256(contents).hexdigest(), "source_bytes": len(contents), "source_mime_type": mime_type,
             "translation_performed": False, "pages_total": total_pages, "pages_processed": count,
             "truncated": total_pages > count, "manual_review_required": True, "warnings": warnings}}
