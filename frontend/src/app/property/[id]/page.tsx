@@ -8,6 +8,7 @@ import {
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TopNav from '@/components/TopNav';
+import RecordAcquisitionGuide from '@/components/RecordAcquisitionGuide';
 import JobProgress from '@/components/JobProgress';
 import TitleReportView from '@/components/TitleReport';
 import {
@@ -442,6 +443,7 @@ function PropertyContent({ propertyId }: { propertyId: string }) {
             </div>
           )}
 
+          <RecordAcquisitionGuide district={urlDistrict} taluka={urlTaluka} village={urlVillage} surveyNo={surveyNum} uploadLink/>
           <button
             onClick={retry}
             className="btn btn-primary w-fit"

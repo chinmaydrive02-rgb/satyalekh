@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { UploadCloud, Loader2, Cpu, ShieldCheck, BookmarkPlus, CheckCircle2, ChevronDown, AlertCircle, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
+import RecordAcquisitionGuide from '@/components/RecordAcquisitionGuide';
 import TopNav from '@/components/TopNav';
 import { Reveal } from '@/components/motion';
 import JobProgress from '@/components/JobProgress';
@@ -63,7 +65,8 @@ function extractedValue(value?: string): string {
   return value?.trim() || 'Not available in the document';
 }
 
-export default function DocumentUpload() {
+function DocumentUploadContent() {
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('manual');
 
@@ -465,12 +468,13 @@ export default function DocumentUpload() {
             className="sl-anim card p-6 sm:p-8 flex flex-col gap-6"
             style={{ animation: 'sl-fade-up 0.4s cubic-bezier(0.22,0.61,0.36,1) both' }}
           >
+             <RecordAcquisitionGuide district={district || searchParams.get('district') || ''} taluka={taluka || searchParams.get('taluka') || ''} village={village || searchParams.get('village') || ''} surveyNo={surveyNo || searchParams.get('survey_no') || ''}/>
              <div className="w-full h-40 border-2 border-dashed border-border-strong rounded-xl flex flex-col items-center justify-center text-muted hover:border-brand transition-colors relative cursor-pointer group">
                 <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => changeFile(e.target.files?.[0] || null)} />
                 <UploadCloud size={36} className="mb-3 group-hover:text-brand transition-colors" />
                 <span className="text-sm font-medium group-hover:text-ink">{file ? file.name : "Drop your 7/12 image or PDF here"}</span>
              </div>
-             <p className="text-xs text-muted">JPG, PNG, WebP or PDF, up to 10 MB. <a href="https://anyror.gujarat.gov.in/" target="_blank" rel="noopener noreferrer" className="text-brand underline">Get an official record from AnyROR</a>.</p>
+             <p className="text-xs text-muted">JPG, PNG, WebP or PDF, up to 10 MB. Keep the original file for comparison.</p>
              <p className="text-sm text-warning bg-warning-soft border border-warning-border rounded-lg p-3">Documents are read on our server using local text extraction and OCR by default; this upload flow does not send them to an external AI provider. Gujarati source text is retained. External AI translation remains pending approval of the processing arrangements. During this beta, use synthetic or fully anonymised records.</p>
              {uploadError && <p role="alert" className="text-sm text-danger">{uploadError}</p>}
              <button type="submit" disabled={!file || isAnalyzing} className="btn btn-primary w-full py-3">
@@ -626,6 +630,7 @@ export default function DocumentUpload() {
                 </div>
               </div>
             )}
+            <RecordAcquisitionGuide district={district} taluka={taluka} village={village} surveyNo={surveyNo} uploadLink/>
             <button
               onClick={() => launchJob()}
               className="btn btn-primary w-fit"
@@ -719,4 +724,8 @@ export default function DocumentUpload() {
       </div>
     </div>
   );
+}
+
+export default function DocumentUpload() {
+  return <Suspense fallback={<main className="min-h-screen bg-bg pt-28 px-4"><TopNav/><p role="status" className="text-muted text-center">Loading document workspace…</p></main>}><DocumentUploadContent/></Suspense>;
 }

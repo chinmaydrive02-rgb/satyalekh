@@ -21,6 +21,22 @@ def test_mortgage_keeps_red_flag_and_source_evidence():
     assert result["owner_name"] == "Unknown"
 
 
+def test_report_retains_original_file_fingerprint_without_authenticity_claim():
+    import hashlib
+    from review_record import build_reviewed_analysis, parse_review
+    import json
+    original_hash = hashlib.sha256(b'%PDF original test bytes').hexdigest()
+    parsed = {'owner_name': 'Test', 'metadata': {'source_sha256': original_hash,
+        'source_bytes': 24, 'source_mime_type': 'application/pdf', 'pages_total': 1, 'pages_processed': 1}}
+    review = parse_review(json.dumps({'confirmed': True, 'fields': {
+        name: {'value': value, 'page': 1, 'source_excerpt': value}
+        for name, value in [('owner_name', 'Reviewed Owner'), ('survey_no', '12'), ('total_area', '123 sqm')]}}))
+    result = build_reviewed_analysis(parsed, review)
+    assert result['report']['source_document']['sha256'] == original_hash
+    assert result['report']['source_document']['official_source_verified'] is False
+    assert result['metadata']['source_sha256'] == original_hash
+
+
 def test_native_gujarati_is_not_assumed_unrestricted_or_encumbered():
     result = build_local_analysis({'owner_name': 'Synthetic', 'tenure_type': 'નવી શરત',
                                   'encumbrances': 'બોજો નથી'})

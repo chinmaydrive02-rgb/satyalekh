@@ -299,6 +299,15 @@ export default function TitleReport({ report }: { report: TitleReportData }) {
         <ChainOfTitle entries={chain || []} />
       </section>
 
+      {report.source_document && (
+        <section className="card p-6 md:p-8">
+          <h3 className="text-base font-semibold text-ink">Original document reference</h3>
+          <p className="mt-2 text-xs text-muted">This fingerprint identifies the exact uploaded file used for the reading. It does not verify the document’s signature or authenticity.</p>
+          <p className="mt-3 text-xs font-mono break-all">SHA-256 · {report.source_document.sha256}</p>
+          <p className="mt-2 text-xs text-muted">{report.source_document.pages_processed ?? 'Unknown'} of {report.source_document.pages_total ?? 'unknown'} pages processed. Keep the original file with this report.</p>
+        </section>
+      )}
+
       {report.source_evidence && report.source_evidence.length > 0 && (
         <section className="card p-6 md:p-8">
           <h3 className="text-base font-semibold text-ink">Source readings and references</h3>
