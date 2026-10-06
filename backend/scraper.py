@@ -2,6 +2,7 @@ import os
 import asyncio
 import json
 import re
+import time
 from playwright.async_api import async_playwright
 from google import genai
 from google.genai import types
@@ -947,9 +948,26 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
     Returns a list of dicts: {"english": str, "gujarati": str}
     Results are cached in memory to avoid repeated scrapes.
     """
+    from portal_diagnostics import record_portal_observation, network_error_code
+    started = time.monotonic()
+    stage, stage_timeout = "gate", 45000
+    http_status, route, failure, network_error = None, None, None, None
+    attempted = False
+
+    def observe(outcome, **extra):
+        try:
+            record_portal_observation(
+                stage=stage, outcome=outcome, elapsed_ms=int((time.monotonic() - started) * 1000),
+                timeout_ms=stage_timeout, http_status=http_status, route=route,
+                failure_kind=failure, network_error=network_error, **extra)
+        except Exception:
+            # Even a broken observer must not mask the lookup result.
+            pass
+
     cache_key = f"{district.lower()}_{taluka.lower()}"
     if _village_cache.get(cache_key):
-        print(f"  [cache] Returning cached villages for {district}/{taluka}")
+        stage, stage_timeout = "cache_read", 0
+        observe("cached", cache_source="memory", option_count=len(_village_cache[cache_key]))
         return _village_cache[cache_key]
 
     # Tier 2: Supabase persistent cache (survives Render restarts/cold starts)
@@ -960,14 +978,17 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
             if res.data and res.data[0].get("villages"):
                 villages = res.data[0]["villages"]
                 _village_cache[cache_key] = villages
-                print(f"  [supabase-cache] Returning {len(villages)} villages for {district}/{taluka}")
+                stage, stage_timeout = "cache_read", 0
+                observe("cached", cache_source="persistent", option_count=len(villages))
                 return villages
-        except Exception as e:
-            print(f"  village_cache read failed (non-fatal): {e}")
+        except Exception:
+            print("  village_cache read failed (non-fatal)")
 
-    print(f"\n  Fetching villages: {district} > {taluka}")
+    print("  Fetching village options from portal")
 
     async def _run():
+        nonlocal stage, stage_timeout, http_status, route, failure
+        stage, stage_timeout = "browser_launch", 40000
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=True,
@@ -976,41 +997,54 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
                       "--single-process", "--no-zygote"]
             )
             context = None
+            page = None
             try:
+                stage, stage_timeout = "browser_context", 40000
                 context = await browser.new_context(
                     viewport={"width": 1280, "height": 900},
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 )
                 page = await context.new_page()
+                stage, stage_timeout = "navigation", 20000
                 response = await page.goto(
                     "https://anyror.gujarat.gov.in/LandRecordRural.aspx",
                     wait_until="commit", timeout=20000
                 )
+                http_status = getattr(response, "status", None)
+                page_url = str(getattr(page, "url", "")).casefold()
+                route = "custom_error" if "customerror" in page_url else ("rural" if "landrecordrural.aspx" in page_url else "other")
                 if _portal_response_unavailable(response, getattr(page, "url", "")):
+                    failure = "redirect" if route == "custom_error" else ("http_status" if http_status is not None and http_status >= 400 else "navigation")
                     return {"code": "PORTAL_UNAVAILABLE"}
+                stage, stage_timeout = "district_ready", 10000
                 if not await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=10000):
+                    failure = "redirect" if "customerror" in str(getattr(page, "url", "")).casefold() else "control"
+                    if failure == "redirect": route = "custom_error"
                     return {"code": "PORTAL_UNAVAILABLE"}
 
                 # Select district
+                stage, stage_timeout = "district_to_taluka", 20000
                 ok = await _select_cascading_option(
                     page, ELEMENTS["district"], district, "District",
                     next_selector=ELEMENTS["taluka"]
                 )
                 if not ok:
-                    print(f"  ✗ District '{district}' not found")
+                    failure = "control"
                     return {"code": "PORTAL_UNAVAILABLE"}
 
                 # Select taluka
+                stage, stage_timeout = "taluka_to_village", 20000
                 taluka_clean = taluka.replace("_", " ")
                 ok = await _select_cascading_option(
                     page, ELEMENTS["taluka"], taluka_clean, "Taluka",
                     next_selector=ELEMENTS["village"]
                 )
                 if not ok:
-                    print(f"  ✗ Taluka '{taluka}' not found")
+                    failure = "control"
                     return {"code": "PORTAL_UNAVAILABLE"}
 
                 # Collect village options
+                stage, stage_timeout = "village_options", 40000
                 village_el = page.locator(ELEMENTS["village"])
                 options = await village_el.locator("option").all()
                 gujarati_names = []
@@ -1020,10 +1054,18 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
                     if val and val not in ("0", "") and text:
                         gujarati_names.append(text)
 
-                print(f"  ✓ Found {len(gujarati_names)} villages")
+                if not gujarati_names:
+                    failure = "control"
                 return {"villages": gujarati_names} if gujarati_names else {"code": "PORTAL_UNAVAILABLE"}
 
             finally:
+                # Reading the current route is local; no extra portal request.
+                try:
+                    final_url = str(getattr(page, "url", "")).casefold()
+                    if "customerror" in final_url:
+                        route, failure = "custom_error", "redirect"
+                except Exception:
+                    pass
                 try:
                     if context is not None:
                         await context.close()
@@ -1031,10 +1073,24 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
                     await browser.close()
 
     async def bounded_fetch():
+        nonlocal attempted, failure, network_error, stage_timeout
+        attempted = True
         try:
             return await asyncio.wait_for(_run(), timeout=40.0)
         except Exception as e:
-            print(f"  ✗ Village fetch unavailable: {type(e).__name__}: {e}")
+            from playwright.async_api import TimeoutError as BrowserTimeoutError
+            if isinstance(e, (asyncio.TimeoutError, BrowserTimeoutError)):
+                failure = "deadline"
+                if isinstance(e, asyncio.TimeoutError): stage_timeout = 40000
+            elif route == "custom_error":
+                failure = "redirect"
+            elif stage in {"browser_launch", "browser_context"}:
+                failure = "browser"
+            elif stage == "navigation":
+                failure = "navigation"
+            else:
+                failure = "control"
+            network_error = network_error_code(e)
             return {"code": "PORTAL_UNAVAILABLE"}
 
     # Share the scraper's gate: repeated village requests must also honour
@@ -1043,10 +1099,21 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
     try:
         result = await asyncio.wait_for(portal_gate.run(bounded_fetch), timeout=45.0)
     except asyncio.TimeoutError:
+        failure, stage_timeout = "deadline", 45000
+        observe("unavailable", cache_source="live")
         raise VillageLookupUnavailable("The record portal is busy. Please try later or upload an official record.")
     if result.get("code") == "PORTAL_UNAVAILABLE":
+        if not attempted:
+            stage, stage_timeout, failure = "gate", 0, "cooldown"
+        try:
+            remaining = max(0, int(portal_gate.blocked_until - portal_gate.clock() + 0.999))
+        except Exception:
+            remaining = None
+        observe("unavailable", cache_source="live", cooldown_remaining_s=remaining)
         raise VillageLookupUnavailable("Village names could not be retrieved from AnyROR. Please try later or upload an official record.")
     gujarati_names = result["villages"]
+    stage, stage_timeout = "complete", 40000
+    observe("ready", cache_source="live", option_count=len(gujarati_names))
 
     # Translation is optional: retain the actual Gujarati labels if it is slow.
     try:
@@ -1065,8 +1132,8 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
                 on_conflict="cache_key",
             ).execute()
             print(f"  ✓ Persisted {len(villages)} villages to Supabase cache")
-        except Exception as e:
-            print(f"  village_cache write failed (non-fatal): {e}")
+        except Exception:
+            print("  village_cache write failed (non-fatal)")
     return villages
 
 

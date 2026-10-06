@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -357,6 +357,8 @@ class AnalysisResult(BaseModel):
     raw_text: Optional[str] = None
     status: Optional[str] = None
     source_record: Optional[dict] = None
+    saved_report_id: Optional[str] = None
+    saved_at: Optional[str] = None
 
 # SECURITY F-11: upload hardening — size cap, content-type/extension
 # allowlist and magic-byte sniffing (never trust the client's content_type).
@@ -570,15 +572,18 @@ class AnyRORRequest(BaseModel):
 
 @app.post("/review-record", response_model=AnalysisResult, response_model_exclude_none=True)
 async def review_record(http_request: Request, file: UploadFile = File(...), review: str = Form(...),
-                        mutation_files: List[UploadFile] = File(default=[])):
+                        mutation_files: List[UploadFile] = File(default=[]),
+                        save_to_account: bool = Form(False),
+                        authorization: Optional[str] = Header(default=None)):
     """Re-read the supplied original locally and attribute user-confirmed fields.
 
-    Does not authenticate the reviewer, verify excerpts, persist a report or
-    invoke an external provider. Every result remains preliminary.
+    Preview remains anonymous. Explicit saving verifies the account and stores
+    only the server-rebuilt reading; it never verifies legal title or excerpts.
     """
     from review_record import parse_review, build_reviewed_analysis
     from local_document_reader import LocalDocumentError
     _enforce_rate_limit(http_request, "analyze-record", limit=5)
+    identity = await asyncio.to_thread(_account_identity, authorization) if save_to_account else None
     confirmed_review = parse_review(review)
     if len(mutation_files) > 5:
         raise HTTPException(status_code=413, detail="Attach at most five saved VF-6 mutation pages per report.")
@@ -612,9 +617,32 @@ async def review_record(http_request: Request, file: UploadFile = File(...), rev
                 analysis = attach_mutation_records(analysis, mutations)
             except ValueError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from None
+        if identity is not None:
+            from reviewed_report_store import save_reviewed_report
+            saved = await asyncio.to_thread(save_reviewed_report, _get_supabase(), identity, analysis)
+            analysis.update(saved_report_id=saved["id"], saved_at=saved["created_at"])
         return analysis
     except LocalDocumentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
+
+
+@app.get("/reports")
+def list_reviewed_reports(http_request: Request, limit: int = Query(30, ge=1, le=50),
+                          offset: int = Query(0, ge=0, le=10000),
+                          authorization: Optional[str] = Header(default=None)):
+    from reviewed_report_store import get_reviewed_reports
+    _enforce_rate_limit(http_request, "saved-reports", limit=30)
+    identity = _account_identity(authorization)
+    return {"reports": get_reviewed_reports(_get_supabase(), identity, limit, offset)}
+
+
+@app.get("/reports/{report_id}")
+def read_reviewed_report(report_id: str, http_request: Request,
+                         authorization: Optional[str] = Header(default=None)):
+    from reviewed_report_store import get_reviewed_report
+    _enforce_rate_limit(http_request, "saved-reports", limit=30)
+    identity = _account_identity(authorization)
+    return get_reviewed_report(_get_supabase(), identity, report_id)
 
 
 @app.post("/fetch-anyror")
@@ -1859,6 +1887,13 @@ def read_root():
 def liveness():
     """Cheap probe: no browser launch, portal traffic, or AI charges."""
     return {"status": "ok"}
+
+
+@app.get("/health/portal")
+def portal_observation():
+    """Passive, sanitized observation; never initiates a government request."""
+    from portal_diagnostics import get_portal_observation
+    return get_portal_observation()
 
 
 @app.get("/health/ready")
