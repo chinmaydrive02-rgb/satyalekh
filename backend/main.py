@@ -1896,6 +1896,14 @@ def portal_observation():
     return get_portal_observation()
 
 
+@app.post("/diagnostics/anyror-connection")
+async def anyror_connection_check(http_request: Request):
+    """Fixed public-page connectivity only; no parcel, CAPTCHA or AI call."""
+    _enforce_rate_limit(http_request, "anyror-connection", limit=1, window=300)
+    from anyror_connection import check_connection
+    return await check_connection()
+
+
 @app.get("/health/ready")
 async def readiness_check():
     """Bounded capability check; Render liveness remains independent."""
