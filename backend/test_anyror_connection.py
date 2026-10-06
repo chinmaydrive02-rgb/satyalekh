@@ -97,7 +97,7 @@ def test_concurrent_calls_and_cooldown_do_not_repeat_probe(monkeypatch):
         await asyncio.sleep(0)
         return {"outcome": "ready"}
     monkeypatch.setattr(connection, "_probe", probe)
-    monkeypatch.setattr(connection, "_lock", asyncio.Lock())
+    monkeypatch.setattr(connection, "_lock", None)
     monkeypatch.setattr(connection, "_latest", None)
     async def exercise(): return await asyncio.gather(connection.check_connection(), connection.check_connection())
     one, two = asyncio.run(exercise())

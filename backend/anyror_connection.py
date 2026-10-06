@@ -13,7 +13,7 @@ import time
 HOST = "anyror.gujarat.gov.in"
 PATH = "/LandRecordRural.aspx"
 COOLDOWN = 300
-_lock = asyncio.Lock()
+_lock = None
 _latest = None
 _last_at = 0.0
 
@@ -93,7 +93,10 @@ async def _probe(loop=None):
 
 
 async def check_connection():
-    global _latest, _last_at
+    global _latest, _last_at, _lock
+    if _lock is None:
+        # Construct on the serving loop (important for Python3.9 compatibility).
+        _lock = asyncio.Lock()
     async with _lock:
         if _latest is not None and time.monotonic() - _last_at < COOLDOWN:
             return {**_latest, "cached": True}
