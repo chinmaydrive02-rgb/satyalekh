@@ -58,6 +58,16 @@ def test_real_upload_keeps_names_and_does_not_claim_title_clearance(monkeypatch)
     assert response.status_code == 200
     assert response.json()['encumbrances'] == 'Mortgage to HDFC Bank'
     assert response.json()['risk_level'] == 'RED'
+    result = response.json()
+    assert result['metadata']['reader'] == 'gemini'
+    assert result['metadata']['external_processing'] is True
+    assert result['metadata']['translation_requested'] is True
+    assert result['report']['record']['owner_name'] == record['owner_name']
+    assert result['report']['coverage']['chain_complete'] is False
+    assert result['report']['coverage']['official_source_verified'] is False
+    assert result['report']['risk']['verdict'] != 'CLEAR'
+    assert result['report']['source_document']['sha256'] == __import__('hashlib').sha256(UPLOAD['file'][1]).hexdigest()
+    assert result['evidence'] == []  # No invented source page citations.
     assert state['closed'] == ['async', 'sync']
     assert 'blank encumbrance section means unknown' in state['prompts'][0]
 

@@ -303,7 +303,7 @@ export default function Home() {
           <div id="title-search" className="brand-arrive brand-arrive-late scroll-mt-24 w-full max-w-xl mx-auto rounded-2xl shadow-2xl">
             <div className="mb-3 rounded-xl border border-white/25 bg-[#102b29]/90 p-4 text-sm leading-relaxed text-[#dce7e0]">
               <p>Saved-record reports are available. Live AnyROR retrieval is currently unavailable.</p>
-              <p className="mt-2 text-xs">Gujarati source is retained; English translation is not currently performed.</p>
+              <p className="mt-2 text-xs">Gujarati-to-English AI analysis is available for PDF and image uploads; use synthetic or fully anonymised records during this beta. Saved HTML source reviews retain Gujarati wording.</p>
               <Link href="/upload" className="mt-2 inline-flex min-h-11 items-center gap-2 font-semibold text-[#e1c990] underline underline-offset-4">Start with your record <ArrowRight size={14} /></Link>
             </div>
             <SearchWidget />

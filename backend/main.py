@@ -532,7 +532,20 @@ async def analyze_record(http_request: Request, file: UploadFile = File(...),
             else:
                 risk_reason = "No restrictions or encumbrances identified in the supplied record; title verification still required"
 
-        return {**extracted, "risk_level": risk_level, "risk_reason": risk_reason}
+        # Keep the original Gemini fields/risk summary while returning the same
+        # preliminary report and source fingerprint as the newer local flow.
+        # The model's five fields do not establish page-specific evidence.
+        import hashlib
+        from local_report import build_local_analysis
+        analysis = build_local_analysis({**extracted, "evidence": [], "metadata": {
+            "reader": "gemini", "external_processing": True,
+            "translation_requested": True, "manual_review_required": True,
+            "official_source_verified": False,
+            "source_sha256": hashlib.sha256(contents).hexdigest(),
+            "source_bytes": len(contents), "source_mime_type": sniffed_type,
+            "warnings": ["AI-generated English readings require comparison with the original. Names, identifiers, units and legal wording may be mistranslated; no source page references were supplied by this reader."],
+        }})
+        return {**analysis, "risk_level": risk_level, "risk_reason": risk_reason}
 
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="The document reader timed out. Please try again.")
@@ -1894,6 +1907,14 @@ def portal_observation():
     """Passive, sanitized observation; never initiates a government request."""
     from portal_diagnostics import get_portal_observation
     return get_portal_observation()
+
+
+@app.post("/diagnostics/anyror-connection")
+async def anyror_connection_check(http_request: Request):
+    """Fixed public-page connectivity only; no parcel, CAPTCHA or AI call."""
+    _enforce_rate_limit(http_request, "anyror-connection", limit=1, window=300)
+    from anyror_connection import check_connection
+    return await check_connection()
 
 
 @app.get("/health/ready")
