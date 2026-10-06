@@ -1,4 +1,5 @@
 import { authorizationHeaders, requireUser } from '@/lib/auth';
+import { createClient } from '@/utils/supabase/client';
 // Central API configuration
 // Uses NEXT_PUBLIC_API_URL from .env.local (defaults to localhost:8000 for dev)
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://satyalekh-api-sg.onrender.com";
@@ -254,12 +255,50 @@ export interface TitleReport {
   supporting_records?: SupportingMutationRecord[];
   source_document?: { sha256: string; bytes?: number; mime_type?: string; pages_total?: number; pages_processed?: number; official_source_verified?: boolean };
   coverage?: ReportCoverage;
+  source_review_metadata?: { reader?: string; pages_processed?: number; pages_total?: number; warnings?: string[]; review_changes?: Array<{field: string; machine_value: string; reviewed_value: string}> };
   source_evidence?: Array<{ field?: string; value?: string; page?: number; snippet?: string; method?: string; confidence?: string }>;
   record: LandRecord;
   chain_of_title: ChainEntry[];
   risk: TitleRisk;
   generated_at: string;
   cached: boolean;
+}
+
+export interface SavedReportSummary {
+  id: string;
+  created_at: string;
+  district?: string;
+  taluka?: string;
+  village?: string;
+  survey_no?: string;
+  record_type?: string;
+}
+
+export interface SavedReport {
+  id: string;
+  created_at: string;
+  report: TitleReport;
+}
+
+async function readSavedReports<T>(path: string, accountId: string, signal: AbortSignal): Promise<T> {
+  const user = await requireUser();
+  const headers = await authorizationHeaders();
+  const { data: { session } } = await createClient().auth.getSession();
+  if (signal.aborted || user.id !== accountId || session?.user.id !== accountId) {
+    throw new Error('Your account changed. Please open your saved reports again.');
+  }
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers, signal, cache: 'no-store' });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ApiError(response.status, typeof data.detail === 'string' ? data.detail : 'Could not load your saved reports. Please try again.');
+  return data as T;
+}
+
+export function fetchSavedReports(accountId: string, signal: AbortSignal, offset = 0) {
+  return readSavedReports<{ reports: SavedReportSummary[] }>(`/reports?limit=30&offset=${offset}`, accountId, signal);
+}
+
+export function fetchSavedReport(id: string, accountId: string, signal: AbortSignal) {
+  return readSavedReports<SavedReport>(`/reports/${encodeURIComponent(id)}`, accountId, signal);
 }
 
 export interface Job {

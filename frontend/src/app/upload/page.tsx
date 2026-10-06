@@ -15,7 +15,7 @@ import {
   startTitleReport, pollJob, parseSurveySuggestions,
   ApiError, Job, TitleReport, SourceRecord, demoHeaders, isDemoActive,
 } from '@/lib/api';
-import { requireUser } from '@/lib/auth';
+import { authorizationHeaders, requireUser } from '@/lib/auth';
 import { createClient } from '@/utils/supabase/client';
 
 // Exact AnyROR Record Types from https://anyror.gujarat.gov.in/LandRecordRural.aspx
@@ -95,6 +95,29 @@ function DocumentUploadContent() {
   const [machineReportCurrent, setMachineReportCurrent] = useState(false);
   const [reviewedResult, setReviewedResult] = useState<UploadAnalysis | null>(null);
   const manualRevisionRef = useRef(0);
+  const [accountSaveBusy, setAccountSaveBusy] = useState(false);
+  const [accountSaveError, setAccountSaveError] = useState('');
+  const [savedReport, setSavedReport] = useState<{ id: string; savedAt: string } | null>(null);
+  const accountSaveAbortRef = useRef<AbortController | null>(null);
+  const accountIdentityRef = useRef<string | null | undefined>(undefined);
+  const accountRevisionRef = useRef(0);
+  const reviewedPayloadRef = useRef<{ file: File; mutations: File[]; review: string; revision: number } | null>(null);
+  const clearAccountSave = () => {
+    accountSaveAbortRef.current?.abort();
+    setAccountSaveBusy(false); setAccountSaveError(''); setSavedReport(null);
+  };
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      const identity = session?.user.id ?? null;
+      if (accountIdentityRef.current !== identity) {
+        accountIdentityRef.current = identity;
+        accountRevisionRef.current += 1;
+        accountSaveAbortRef.current?.abort();
+        setAccountSaveBusy(false); setAccountSaveError(''); setSavedReport(null);
+      }
+    });
+    return () => { data.subscription.unsubscribe(); accountSaveAbortRef.current?.abort(); };
+  }, [supabase.auth]);
   useEffect(() => {
     let cancelled = false;
     let url: string | undefined;
@@ -114,6 +137,7 @@ function DocumentUploadContent() {
     return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
   }, [file]);
   const changeFile = (next: File | null) => {
+    clearAccountSave();
     manualRevisionRef.current += 1;
     setMutationFiles([]); setMutationFileError(''); setReviewConfirmed(false);
     setSourceUrl(''); setHtmlSource(''); setSourcePreviewError('');
@@ -128,11 +152,13 @@ function DocumentUploadContent() {
       setMutationFileError('Attach at most 5 saved VF-6 HTML files, each nonempty and up to 1 MB.');
       return;
     }
+    clearAccountSave();
     manualRevisionRef.current += 1;
     setMutationFiles(next); setMutationFileError('');
     setReviewConfirmed(false); setReviewedResult(null); setMachineReportCurrent(false); setReviewError('');
   };
   const changeReview = (key: ReviewField, part: keyof ReviewEntry, value: string) => {
+    clearAccountSave();
     manualRevisionRef.current += 1;
     setReviewFields(prev => ({ ...prev, [key]: { ...prev[key], [part]: value } }));
     setReviewedResult(null); setMachineReportCurrent(false); setReviewError(''); setReviewConfirmed(false);
@@ -236,6 +262,7 @@ function DocumentUploadContent() {
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || isAnalyzing) return;
+    clearAccountSave();
     setUploadError('');
     setIsAnalyzing(true);
     setResult(null); setReviewedResult(null); setMachineReportCurrent(false); setReviewError(''); setReviewConfirmed(false); setReviewFields(emptyReview());
@@ -260,6 +287,7 @@ function DocumentUploadContent() {
   const submitReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !result || reviewBusy || !reviewConfirmed) return;
+    clearAccountSave();
     const fields: Partial<Record<ReviewField, { value: string; source_excerpt: string; page: number }>> = {};
     for (const { key, label, required } of REVIEW_FIELDS) {
       const entry = reviewFields[key];
@@ -277,17 +305,51 @@ function DocumentUploadContent() {
     setReviewBusy(true); setReviewError(''); setReviewedResult(null);
     const data = new FormData(); data.append('file', file);
     if (htmlFile) mutationFiles.forEach(item => data.append('mutation_files', item));
-    data.append('review', JSON.stringify({ confirmed: true, fields }));
+    const review = JSON.stringify({ confirmed: true, fields });
+    data.append('review', review);
     try {
       const response = await fetch(`${API_BASE_URL}/review-record`, { method: 'POST', body: data });
       const reviewed = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof reviewed.detail === 'string' ? reviewed.detail : 'The review could not be processed. Check your entries and try again.');
       if (manualRevisionRef.current !== revision) return;
       if (!reviewed.report) throw new Error('A preliminary report could not be produced. Compare the source and try again.');
+      reviewedPayloadRef.current = { file, mutations: htmlFile ? [...mutationFiles] : [], review, revision };
       setReviewedResult(reviewed);
     } catch (e) {
       if (manualRevisionRef.current === revision) setReviewError(e instanceof Error ? e.message : 'The review could not be processed.');
     } finally { setReviewBusy(false); }
+  };
+
+  const saveReviewedReport = async () => {
+    const payload = reviewedPayloadRef.current;
+    if (!reviewedResult?.report || !reviewConfirmed || !payload || payload.revision !== manualRevisionRef.current || accountSaveBusy || savedReport || isDemoActive()) return;
+    const controller = new AbortController();
+    accountSaveAbortRef.current?.abort(); accountSaveAbortRef.current = controller;
+    const accountRevision = accountRevisionRef.current;
+    const current = () => !controller.signal.aborted && payload.revision === manualRevisionRef.current && accountRevision === accountRevisionRef.current;
+    setAccountSaveBusy(true); setAccountSaveError('');
+    try {
+      // Do not navigate away from an anonymous preview when sign-in is needed.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user.email_confirmed_at) throw new Error('Sign in with a confirmed email to save this report. Your preview is still available.');
+      const { data: { user }, error: identityError } = await supabase.auth.getUser();
+      if (identityError || !user?.email_confirmed_at) throw new Error('Your sign-in could not be verified. Sign in again, then return to this preview.');
+      const headers = await authorizationHeaders();
+      const { data: { session: latest } } = await supabase.auth.getSession();
+      if (!current() || user.id !== session.user.id || latest?.user.id !== user.id) return;
+      const data = new FormData();
+      data.append('file', payload.file);
+      payload.mutations.forEach(item => data.append('mutation_files', item));
+      data.append('review', payload.review); data.append('save_to_account', 'true');
+      const response = await fetch(`${API_BASE_URL}/review-record`, { method: 'POST', body: data, headers, signal: controller.signal });
+      const saved = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof saved.detail === 'string' ? saved.detail : 'Could not save your report. Your preview is still available.');
+      if (!current()) return;
+      if (typeof saved.saved_report_id !== 'string' || typeof saved.saved_at !== 'string') throw new Error('The server did not confirm a saved report. Your preview is still available.');
+      setSavedReport({ id: saved.saved_report_id, savedAt: saved.saved_at });
+    } catch (error) {
+      if (current()) setAccountSaveError(error instanceof Error ? error.message : 'Could not save your report. Your preview is still available.');
+    } finally { if (current()) setAccountSaveBusy(false); }
   };
 
   /** Starts the background scrape job (same jobs API as the property page). */
@@ -762,12 +824,12 @@ function DocumentUploadContent() {
                 {sourceUrl && <div className="space-y-3 print:hidden">{htmlFile ? <><a href={sourceUrl} download={`${file?.name || 'source'}.txt`} className="btn btn-outline w-fit">Download source as plain text</a><p className="text-xs text-muted">Saved HTML is shown as escaped source text. Its scripts and links are not run. Review all parsed ownership and rights rows below against your original informational record.</p><details className="rounded-lg border border-border p-3"><summary className="cursor-pointer text-sm font-medium min-h-11 flex items-center">Inspect saved file text</summary><pre className="whitespace-pre-wrap break-words text-xs max-h-96 overflow-auto mt-3">{htmlSource.slice(0, 200000)}</pre>{htmlSource.length > 200000 && <p className="text-xs text-warning">Preview shows the first 200,000 characters. The plain-text download contains the full source; the server receives the original file unchanged.</p>}</details></> : <><a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline w-fit">Open original document</a>{file?.type === 'application/pdf' || file?.name.toLowerCase().endsWith('.pdf') ? <iframe title="Original uploaded document" src={sourceUrl} className="w-full h-80 sm:h-[520px] border border-border rounded-lg"/> : <Image unoptimized width={1600} height={1600} src={sourceUrl} alt="Original uploaded record for comparison" className="w-full max-h-[520px] object-contain border border-border rounded-lg"/>}<p className="text-xs text-muted">The preview uses your selected file. If the embedded PDF does not open on your phone, use the original-document link.</p></>}</div>}
                 <form onSubmit={submitReview} className="space-y-5 print:hidden">
                   {REVIEW_FIELDS.map(({ key, label, required }) => <fieldset key={key} className="rounded-lg border border-border p-4 space-y-3"><legend className="text-sm font-semibold px-1">{label}{required ? ' · required' : ' · optional'}</legend><p className="text-xs text-muted">Machine reading: {extractedValue(result[key])}</p><label className="block text-sm">Your reading<textarea className="input w-full mt-1 min-h-20" value={reviewFields[key].value} maxLength={reviewLimit(key)} required={required} onChange={e => changeReview(key, 'value', e.target.value)} placeholder={key === 'total_area' ? 'e.g. 123 sq m — use the source units' : required ? 'Read from the original' : 'Leave blank if unknown'}/></label><div className="grid sm:grid-cols-[100px_1fr] gap-3"><label className="block text-sm">Source page<input type="number" min={1} max={3} step={1} className="input w-full mt-1" value={reviewFields[key].page} required={Boolean(reviewFields[key].value.trim())} onChange={e => changeReview(key, 'page', e.target.value)}/></label><label className="block text-sm">Exact excerpt from the source<textarea className="input w-full mt-1 min-h-20" maxLength={reviewLimit(key, true)} required={Boolean(reviewFields[key].value.trim())} value={reviewFields[key].source_excerpt} onChange={e => changeReview(key, 'source_excerpt', e.target.value)} placeholder="Copy the original words supporting this field; retain Gujarati where present"/></label></div></fieldset>)}
-                  <label className="flex items-start gap-3 text-sm leading-relaxed"><input type="checkbox" className="mt-1 size-4 shrink-0" checked={reviewConfirmed} onChange={e => { manualRevisionRef.current += 1; setReviewConfirmed(e.target.checked); setReviewedResult(null); setMachineReportCurrent(false); }} required/><span>I compared these entries and excerpts with the original document. This confirms my reading only; it does not establish authenticity, ownership or legal title clearance.</span></label>
+                  <label className="flex items-start gap-3 text-sm leading-relaxed"><input type="checkbox" className="mt-1 size-4 shrink-0" checked={reviewConfirmed} onChange={e => { clearAccountSave(); manualRevisionRef.current += 1; setReviewConfirmed(e.target.checked); setReviewedResult(null); setMachineReportCurrent(false); }} required/><span>I compared these entries and excerpts with the original document. This confirms my reading only; it does not establish authenticity, ownership or legal title clearance.</span></label>
                   {reviewError && <p role="alert" className="text-sm text-danger">{reviewError}</p>}
                   <button type="submit" disabled={reviewBusy || !reviewConfirmed || isAnalyzing} className="btn btn-primary w-full">{reviewBusy ? <><Loader2 size={16} className="animate-spin"/> Processing your review…</> : 'Produce preliminary analysis from my review'}</button>
                   <p className="text-xs text-muted">The server re-reads the original locally. Your entered readings are identified as user supplied; no external AI provider is used.</p>
                 </form>
-                {reviewedResult?.report && <div className="space-y-3 border-t border-border pt-5"><p className="eyebrow">Preliminary analysis · user reviewed fields</p><p className="text-sm text-muted">Based on your reading and the uploaded record. Independent source checks and lawyer review are still required.</p><TitleReportView report={reviewedResult.report}/><button type="button" onClick={() => window.print()} className="btn btn-outline print:hidden">Print / save PDF</button></div>}
+                {reviewedResult?.report && <div className="space-y-3 border-t border-border pt-5"><p className="eyebrow">Preliminary analysis · user reviewed fields</p><p className="text-sm text-muted">Based on your reading and the uploaded record. Independent source checks and lawyer review are still required.</p><TitleReportView report={reviewedResult.report}/><div className="flex flex-wrap gap-3 print:hidden"><button type="button" onClick={() => window.print()} className="btn btn-outline">Print / save PDF</button>{!isDemoActive() && <button type="button" onClick={saveReviewedReport} disabled={accountSaveBusy || Boolean(savedReport) || reviewBusy || isAnalyzing || !reviewConfirmed} className="btn btn-primary">{accountSaveBusy ? <><Loader2 size={16} className="animate-spin"/> Saving report…</> : savedReport ? 'Report saved' : 'Save report to my account'}</button>}</div><p className="text-xs text-muted print:hidden">Saving rebuilds this reviewed report from your original files and stores it in your signed-in account. It does not fetch a new government record.</p>{accountSaveError && <div className="print:hidden"><p role="alert" className="text-sm text-danger">{accountSaveError}</p><Link href="/account" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm text-brand underline">Sign in in a new tab, then return here</Link></div>}{savedReport && <p role="status" className="text-sm print:hidden">Saved to your account. <Link href={`/reports/${encodeURIComponent(savedReport.id)}`} className="text-brand underline">Open saved report</Link> · <Link href="/reports" className="text-brand underline">All reports</Link></p>}</div>}
               </section>}
               <div className="flex flex-col md:flex-row gap-3 mt-2 pt-4 border-t border-border">
                   <Link href="/dashboard" className="btn btn-outline flex-1 text-center">View Portfolio</Link>
