@@ -91,6 +91,28 @@ def test_partial_extraction_preserves_readable_evidence(monkeypatch):
     assert response.json()['risk_level'] == 'YELLOW'
 
 
+@pytest.mark.parametrize('field,value', [
+    ('total_area', '123 ચોરસ મીટર'),
+    ('tenure_type', 'જૂની શરત'),
+    ('encumbrances', 'પરીક્ષણ બેંકનો ગીરો'),
+])
+def test_untranslated_gujarati_is_not_published_as_english_report(monkeypatch, field, value):
+    state = install_reader(monkeypatch, json.dumps({**VALID, field:value}))
+    response = TestClient(main.app).post('/analyze-record', files=UPLOAD)
+    assert response.status_code == 502
+    assert 'English translation' in response.json()['detail']
+    assert 'report' not in response.json()
+    assert len(state['prompts']) == 1
+    assert state['closed'] == ['async', 'sync']
+
+
+def test_gujarati_survey_subdivision_identifier_is_preserved(monkeypatch):
+    install_reader(monkeypatch, json.dumps({**VALID, 'survey_no':'5/પ'}))
+    response = TestClient(main.app).post('/analyze-record', files=UPLOAD)
+    assert response.status_code == 200
+    assert response.json()['survey_no'] == '5/પ'
+
+
 def test_explicit_absence_of_encumbrances_retained_with_limited_conclusion(monkeypatch):
     install_reader(monkeypatch, json.dumps(VALID))
     response = TestClient(main.app).post('/analyze-record', files=UPLOAD)

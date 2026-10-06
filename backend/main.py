@@ -468,8 +468,17 @@ async def analyze_record(http_request: Request, file: UploadFile = File(...),
             "Use null for missing, blank or unreadable fields; never invent data. "
             "Report encumbrances as None only when the document explicitly states "
             "there are none. A blank encumbrance section means unknown. "
-            "Preserve identifiers, names, units and the case of translated names. "
-            "Translate the content to English and return ONLY valid JSON in the "
+            "Write the extracted values in English, not Gujarati. Transliterate "
+            "Gujarati personal and bank names into Latin script without changing "
+            "their meaning or adding names. Preserve survey identifiers exactly, "
+            "including subdivision letters. Convert Gujarati digits in quantities "
+            "to ASCII digits and translate unit labels without converting the area. "
+            "Translate tenure conditions and encumbrances fully into English, "
+            "retaining every restriction, qualification and named party. For example, "
+            "જૂની શરત means Old tenure, ચોરસ મીટર means square metres, and ગીરો "
+            "means mortgage. Do not merely copy Gujarati text into these fields. "
+            "Before responding, check that total_area, tenure_type and encumbrances "
+            "are English readings. Return ONLY valid JSON in the "
             "following format:\n"
             "{\n"
             "  \"owner_name\": \"...\",\n"
@@ -493,6 +502,7 @@ async def analyze_record(http_request: Request, file: UploadFile = File(...),
                     async_client.models.generate_content(
                         model='gemini-2.5-flash',
                         contents=[prompt, document],
+                        config=types.GenerateContentConfig(response_mime_type="application/json"),
                     ),
                     timeout=90.0,
                 )
@@ -522,6 +532,9 @@ async def analyze_record(http_request: Request, file: UploadFile = File(...),
                      ("owner_name", "survey_no", "total_area", "tenure_type", "encumbrances")}
         if all(value == "Unknown" for value in extracted.values()):
             raise HTTPException(status_code=422, detail="No readable land-record information was found. Please upload a clearer official record.")
+        if any(re.search(r"[\u0a80-\u0aff]", extracted[name]) for name in
+               ("total_area", "tenure_type", "encumbrances")):
+            raise HTTPException(status_code=502, detail="The document reader could not complete the English translation. Please try again or use source review.")
 
         # Risk Logic (shared with the title-report pipeline)
         from title_report import basic_risk_level
