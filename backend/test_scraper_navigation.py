@@ -143,6 +143,7 @@ def test_matched_location_child_timeout_triggers_cooldown_not_missing_location(m
         return False
     monkeypatch.setattr(scraper, 'async_playwright', Playwright)
     monkeypatch.setattr(scraper, '_select_and_wait_for_child', child_timeout)
+    monkeypatch.setattr(scraper, '_initialize_record_form', AsyncMock(return_value=True))
     async def scenario():
         gate = PortalGate(interval=0, cooldown=300)
         result = await gate.run(lambda: scraper._scrape_anyror_data('Ahmedabad', 'Sanand', 'Test', '1'))

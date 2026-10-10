@@ -120,10 +120,10 @@ def test_control_failure_preserves_successful_navigation_status(portal, monkeypa
     with pytest.raises(scraper.VillageLookupUnavailable):
         asyncio.run(scraper.fetch_villages("PRIVATE", "PRIVATE"))
     result = diagnostics.get_portal_observation()
-    assert result["stage"] == "district_ready"
+    assert result["stage"] == "record_type_ready"
     assert result["failure_kind"] == "control"
     assert result["http_status"] == 200
-    assert result["timeout_ms"] == 10000
+    assert result["timeout_ms"] == 30000
 
 
 def test_live_success_and_memory_cache_are_distinct(portal):

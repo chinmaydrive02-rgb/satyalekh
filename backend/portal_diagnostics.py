@@ -8,7 +8,7 @@ _latest = None
 _latest_at = None
 _ENUMS = {
     "stage": {"cache_read", "gate", "browser_launch", "browser_context", "navigation",
-              "district_ready", "district_to_taluka", "taluka_to_village", "village_options", "complete"},
+              "district_ready", "record_type_ready", "district_to_taluka", "taluka_to_village", "village_options", "complete"},
     "outcome": {"cached", "ready", "unavailable"},
     "route": {"rural", "custom_error", "other"},
     "cache_source": {"memory", "persistent", "live"},
