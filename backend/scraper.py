@@ -469,7 +469,7 @@ async def _wait_for_dropdown_options(page, css_selector: str, min_options: int =
         return False
 
 
-async def _select_and_wait_for_child(page, el, selector, value, next_selector):
+async def _select_and_wait_for_child(page, el, selector, value, next_selector, accept_postback=False):
     """Observe child changes before dispatching selection, including partial postbacks.
 
     A pre-existing populated dropdown is not proof that this parent's postback
@@ -479,9 +479,16 @@ async def _select_and_wait_for_child(page, el, selector, value, next_selector):
     marker = "__satyalekhCascadeWait"
     await page.evaluate("""args => {
         const old = window[args.marker]; if (old && old.observer) old.observer.disconnect();
+        if (old && old.manager && old.onEnd) old.manager.remove_endRequest(old.onEnd);
         const parent = document.querySelector(args.parent);
         const child = document.querySelector(args.child);
-        const state = {changed: false, alreadySelected: !!parent && parent.value === args.value};
+        const state = {changed: false, postbackCompleted: false, alreadySelected: !!parent && parent.value === args.value};
+        const manager = window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager.getInstance();
+        if (args.acceptPostback && manager) {
+            state.manager = manager;
+            state.onEnd = () => { state.postbackCompleted = true; };
+            manager.add_endRequest(state.onEnd);
+        }
         state.observer = new MutationObserver(mutations => {
             for (const mutation of mutations) {
                 const current = document.querySelector(args.child);
@@ -492,7 +499,7 @@ async def _select_and_wait_for_child(page, el, selector, value, next_selector):
         });
         state.observer.observe(document.documentElement, {childList:true, subtree:true, characterData:true});
         window[args.marker] = state;
-    }""", {"marker": marker, "parent": selector, "child": next_selector, "value": value})
+    }""", {"marker": marker, "parent": selector, "child": next_selector, "value": value, "acceptPostback": accept_postback})
     try:
         await el.select_option(value=value)
         await page.wait_for_function("""args => {
@@ -500,17 +507,34 @@ async def _select_and_wait_for_child(page, el, selector, value, next_selector):
             const state = window[args.marker];
             const manager = window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager.getInstance();
             const updating = manager && manager.get_isInAsyncPostBack();
-            return !updating && parent && parent.value === args.value && child &&
-                child.options.length >= 2 && (!state || state.changed || state.alreadySelected);
-        }""", arg={"marker": marker, "parent": selector, "child": next_selector, "value": value}, timeout=20000)
+            return !updating && parent && parent.value === args.value && child && !child.disabled &&
+                child.options.length >= 2 && (!state || state.changed || state.alreadySelected ||
+                    (args.acceptPostback && state.postbackCompleted));
+        }""", arg={"marker": marker, "parent": selector, "child": next_selector, "value": value, "acceptPostback": accept_postback}, timeout=20000)
         return "customerror" not in str(getattr(page, "url", "")).casefold()
     except Exception:
         return False
     finally:
         try:
-            await page.evaluate("""marker => {const state=window[marker]; if(state && state.observer) state.observer.disconnect(); delete window[marker];}""", marker)
+            await page.evaluate("""marker => {const state=window[marker]; if(state && state.observer) state.observer.disconnect(); if(state && state.manager && state.onEnd) state.manager.remove_endRequest(state.onEnd); delete window[marker];}""", marker)
         except Exception:
             pass
+
+
+async def _initialize_record_form(page, record_type="VF7"):
+    """Select type before location and await its real ASP.NET postback.
+
+    District options can already exist and remain unchanged after a partial
+    update. A completed postback also counts in this one initialization step.
+    """
+    if not await _wait_for_dropdown_options(page, ELEMENTS["record_type"], timeout_ms=10000):
+        return False
+    value = RECORD_TYPE_MAP.get(record_type)
+    if value is None:
+        return False
+    return await _select_and_wait_for_child(
+        page, page.locator(ELEMENTS["record_type"]), ELEMENTS["record_type"],
+        value, ELEMENTS["district"], accept_postback=True)
 
 
 async def _select_cascading_option(page, selector: str, target: str, field_name: str,
@@ -647,8 +671,7 @@ async def _scrape_anyror_data(
             )
             try:
                 context = await browser.new_context(
-                    viewport={"width": 1280, "height": 900},
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+                    viewport={"width": 1280, "height": 900}
                 )
                 page = await context.new_page()
 
@@ -666,46 +689,24 @@ async def _scrape_anyror_data(
                 # ── Step 1: Navigate ──────────────────────────────────────────────
                 print("  [1/8] Navigating to AnyROR...")
                 _report("connecting", "Contacting AnyROR portal…", 5)
-                nav_ok = False
-                # Commit waits for the response; actual control readiness is
-                # checked separately. A timeout does not establish its cause.
-                for nav_attempt in range(1, 3):
-                    try:
-                        response = await page.goto(
-                            "https://anyror.gujarat.gov.in/LandRecordRural.aspx",
-                            wait_until="commit",
-                            timeout=100000
-                        )
-                        if _portal_response_unavailable(response, getattr(page, "url", "")):
-                            return await _cleanup_and_return({
-                                "error": "AnyROR returned an unavailable or error response. "
-                                         "Please wait before retrying, or upload an official record.",
-                                "code": "PORTAL_UNAVAILABLE",
-                            })
-                        nav_ok = True
-                        break
-                    except Exception as e:
-                        print(f"    Navigation attempt {nav_attempt} failed: {e}")
-                        if nav_attempt < 2:
-                            await asyncio.sleep(3)
+                try:
+                    response = await page.goto(
+                        "https://anyror.gujarat.gov.in/LandRecordRural.aspx",
+                        wait_until="commit", timeout=20000)
+                except Exception:
+                    return await _cleanup_and_return({
+                        "code": "PORTAL_UNAVAILABLE",
+                        "error": "The government portal did not respond within the connection deadline. Try later or upload an official record."})
+                if _portal_response_unavailable(response, getattr(page, "url", "")):
+                    return await _cleanup_and_return({
+                        "code": "PORTAL_UNAVAILABLE",
+                        "error": "AnyROR returned an unavailable or error response. Try later or upload an official record."})
 
-                if not nav_ok:
-                    return await _cleanup_and_return(
-                        {"error": "The government AnyROR portal did not respond within the connection deadline. "
-                                  "Please try later or upload an official record.", "code": "PORTAL_UNAVAILABLE"}
-                    )
-
-                # Wait for the district dropdown to be populated (page fully loaded)
-                if not await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=60000):
-                    return await _cleanup_and_return({"code": "PORTAL_UNAVAILABLE", "error": "The government portal's district controls did not become ready. Try later or upload an official record."})
-
-                # ── Step 2: Select Record Type ────────────────────────────────────
-                record_val = RECORD_TYPE_MAP.get(record_type, "11")
-                print(f"  [2/8] Selecting record type: {record_type} (value={record_val})")
-                await page.select_option(ELEMENTS["record_type"], value=record_val)
-                # Record type selection usually doesn't change the district dropdown,
-                # but give the page a moment to respond
-                await page.wait_for_timeout(1500)
+                # Type must precede location, including the village-only flow.
+                if not await _initialize_record_form(page, record_type):
+                    return await _cleanup_and_return({
+                        "code": "PORTAL_UNAVAILABLE",
+                        "error": "The government portal's record controls did not become ready. Try later or upload an official record."})
 
                 # ── Step 3: Select District (Gujarati labels) ─────────────────────
                 print(f"  [3/8] Selecting district: {district}")
@@ -752,8 +753,10 @@ async def _scrape_anyror_data(
                         print(f"    ✓ Owner name entered")
                     else:
                         entry_el = page.locator(ELEMENTS["entry_input"])
-                        if await entry_el.count() > 0:
+                        if await entry_el.count() > 0 and await entry_el.is_visible():
                             await entry_el.fill(survey_number)
+                        else:
+                            return await _cleanup_and_return({"code": "PORTAL_UNAVAILABLE", "error": "The required owner search control is unavailable. No lookup was submitted."})
 
                 elif field_type == "text":
                     entry_el = page.locator(ELEMENTS["entry_input"])
@@ -761,7 +764,7 @@ async def _scrape_anyror_data(
                         await entry_el.fill(survey_number)
                         print(f"    ✓ Entry/khata number entered")
                     else:
-                        print(f"    ✗ Text input not found")
+                        return await _cleanup_and_return({"code": "PORTAL_UNAVAILABLE", "error": "The required entry or account control is unavailable. No lookup was submitted."})
 
                 else:
                     # Dropdown for survey number — use the same fuzzy matching as other fields
@@ -795,6 +798,8 @@ async def _scrape_anyror_data(
                         entry_el = page.locator(ELEMENTS["entry_input"])
                         if await entry_el.count() > 0 and await entry_el.is_visible():
                             await entry_el.fill(survey_number)
+                        else:
+                            return await _cleanup_and_return({"code": "PORTAL_UNAVAILABLE", "error": "The required survey control is unavailable. No lookup was submitted."})
 
                 await page.wait_for_timeout(500)
 
@@ -1001,8 +1006,7 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
             try:
                 stage, stage_timeout = "browser_context", 40000
                 context = await browser.new_context(
-                    viewport={"width": 1280, "height": 900},
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    viewport={"width": 1280, "height": 900}
                 )
                 page = await context.new_page()
                 stage, stage_timeout = "navigation", 20000
@@ -1016,8 +1020,8 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
                 if _portal_response_unavailable(response, getattr(page, "url", "")):
                     failure = "redirect" if route == "custom_error" else ("http_status" if http_status is not None and http_status >= 400 else "navigation")
                     return {"code": "PORTAL_UNAVAILABLE"}
-                stage, stage_timeout = "district_ready", 10000
-                if not await _wait_for_dropdown_options(page, ELEMENTS["district"], min_options=5, timeout_ms=10000):
+                stage, stage_timeout = "record_type_ready", 30000
+                if not await _initialize_record_form(page, "VF7"):
                     failure = "redirect" if "customerror" in str(getattr(page, "url", "")).casefold() else "control"
                     if failure == "redirect": route = "custom_error"
                     return {"code": "PORTAL_UNAVAILABLE"}

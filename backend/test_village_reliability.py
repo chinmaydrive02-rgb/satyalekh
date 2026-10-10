@@ -30,6 +30,11 @@ def portal(monkeypatch):
             return '1'
 
     class Page:
+        async def evaluate(self, *args): pass
+        async def wait_for_function(self, *args, **kwargs): pass
+        async def select_option(self, **kwargs):
+            assert kwargs['value'] == scraper.RECORD_TYPE_MAP['VF7']
+            state['type_selected'] = True
         async def goto(self, *args, **kwargs):
             assert kwargs['timeout'] == 20000
             if state['error']:
@@ -67,11 +72,14 @@ def portal(monkeypatch):
 
     async def ready(*args, **kwargs):
         return True
+    async def cascade(*args, **kwargs):
+        assert state.get('type_selected'), 'Record type must precede all location selections'
+        return True
     async def translated(*args, **kwargs):
         return [{'english': 'Sanand', 'gujarati': 'સાણંદ'}]
     monkeypatch.setattr(scraper, 'async_playwright', Playwright)
     monkeypatch.setattr(scraper, '_wait_for_dropdown_options', ready)
-    monkeypatch.setattr(scraper, '_select_cascading_option', ready)
+    monkeypatch.setattr(scraper, '_select_cascading_option', cascade)
     monkeypatch.setattr(scraper, '_batch_translate_villages', translated)
     return state
 
