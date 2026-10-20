@@ -991,6 +991,35 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
 
     print("  Fetching village options from portal")
 
+    async def _run_http():
+        nonlocal stage, stage_timeout, route, failure
+        from anyror_http import AnyRORHTTPSession, AnyRORFormError
+        route = "rural"
+        async with AnyRORHTTPSession() as session:
+            stage, stage_timeout = "navigation", 20000
+            await session.open()
+            stage, stage_timeout = "record_type_ready", 20000
+            await session.select(ELEMENTS["record_type"][1:], RECORD_TYPE_MAP["VF7"])
+            for field, target, step in (
+                ("district", district, "district_to_taluka"),
+                ("taluka", taluka.replace("_", " "), "taluka_to_village"),
+            ):
+                stage, stage_timeout = step, 20000
+                control = ELEMENTS[field][1:]
+                options = [(o["value"], o["label"]) for o in session.options(control)
+                           if not o["disabled"] and o["value"] not in ("", "0")]
+                selected = _find_best_option(options, target)
+                if selected is None:
+                    raise AnyRORFormError("Exact location missing or ambiguous")
+                await session.select(control, selected)
+            stage, stage_timeout = "village_options", 40000
+            names = [o["label"] for o in session.options(ELEMENTS["village"][1:])
+                     if not o["disabled"] and o["value"] not in ("", "0") and o["label"]]
+            if not names:
+                failure = "control"
+                return {"code": "PORTAL_UNAVAILABLE"}
+            return {"villages": names}
+
     async def _run():
         nonlocal stage, stage_timeout, http_status, route, failure
         stage, stage_timeout = "browser_launch", 40000
@@ -1080,7 +1109,10 @@ async def fetch_villages(district: str, taluka: str) -> list[dict]:
         nonlocal attempted, failure, network_error, stage_timeout
         attempted = True
         try:
-            return await asyncio.wait_for(_run(), timeout=40.0)
+            # Explicit rollback option, never an automatic second attempt after
+            # an upstream refusal. Both transports share the same portal gate.
+            operation = _run if os.getenv("ANYROR_VILLAGE_TRANSPORT", "http") == "browser" else _run_http
+            return await asyncio.wait_for(operation(), timeout=40.0)
         except Exception as e:
             from playwright.async_api import TimeoutError as BrowserTimeoutError
             if isinstance(e, (asyncio.TimeoutError, BrowserTimeoutError)):
