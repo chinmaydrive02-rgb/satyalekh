@@ -12,6 +12,7 @@ import scrape_control
 
 @pytest.fixture
 def portal(monkeypatch):
+    monkeypatch.setenv("ANYROR_VILLAGE_TRANSPORT", "browser")
     state = {'launches': 0, 'closed': [], 'status': 200, 'error': None, 'context_error': False}
     monkeypatch.setattr(scraper, '_village_cache', {})
     monkeypatch.setattr(scraper, '_get_supabase_or_none', lambda: None)
