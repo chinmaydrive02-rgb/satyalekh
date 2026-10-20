@@ -1,13 +1,17 @@
 """Bounded, cookie-preserving full ASP.NET postbacks to the public rural form.
 
-This transport does not submit CAPTCHA answers or retrieve record results. It
-has no live-network fallback, retries, arbitrary URLs, or TLS bypass.
+Challenge completion accepts a user-supplied answer once in the same session.
+There are no live-network fallbacks, retries, arbitrary URLs, or TLS bypasses.
 """
 import asyncio
+import base64
+import binascii
+import re
+import time
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Dict, List, Optional
-from urllib.parse import urlencode, urljoin
+from urllib.parse import urlencode, urljoin, urlsplit
 
 import httpx
 
@@ -15,6 +19,14 @@ URL = "https://anyror.gujarat.gov.in/LandRecordRural.aspx"
 MAX_BODY = 1024 * 1024
 REQUEST_SECONDS = 20
 RECORD_CONTROL = "ContentPlaceHolder1_drpLandRecord"
+VF7_RESULT = "https://anyror.gujarat.gov.in/Information_pages/Info712Details.aspx"
+CHALLENGE_SECONDS = 180
+
+
+def _challenge_bytes(data):
+    if len(data) > 128 * 1024 or not (data.startswith(b"\x89PNG\r\n\x1a\n") or data.startswith(b"\xff\xd8\xff") or data.startswith((b"GIF87a", b"GIF89a"))):
+        raise AnyRORFormError("Invalid challenge image")
+    return data
 
 
 class AnyRORFormError(ValueError):
@@ -38,6 +50,8 @@ class _Form(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.controls = []
         self.selects: Dict[str, _Select] = {}
+        self.images = {}
+        self.inputs = {}
         self.action = None
         self.forms = 0
         self.inside = False
@@ -69,6 +83,14 @@ class _Form(HTMLParser):
             self.disabled_fieldsets.append("disabled" in a)
         disabled = "disabled" in a or any(self.disabled_fieldsets)
         name = a.get("name")
+        if tag == "img" and a.get("id"):
+            if a["id"] in self.images:
+                raise AnyRORFormError("Duplicate image identifier")
+            self.images[a["id"]] = a.get("src", "")
+        if tag == "input" and a.get("id"):
+            if a["id"] in self.inputs:
+                raise AnyRORFormError("Duplicate input identifier")
+            self.inputs[a["id"]] = {**a, "disabled": disabled}
         if tag == "select" and name:
             self.current = _Select(name, a.get("id", name), disabled, "multiple" in a)
             if self.current.identifier in self.selects:
@@ -146,7 +168,7 @@ class _Form(HTMLParser):
             for option in options:
                 if not option["disabled"]:
                     pairs.append((item.name, option["value"]))
-        return pairs + [("__EVENTTARGET", chosen.name), ("__EVENTARGUMENT", "")]
+        return pairs + [("__EVENTTARGET", chosen.name if chosen else ""), ("__EVENTARGUMENT", "")]
 
 
 class AnyRORHTTPSession:
@@ -169,42 +191,56 @@ class AnyRORHTTPSession:
         )
         self._form = None
         self._lock = asyncio.Lock()
+        self._challenge_at = None
+        self.last_source_url = None
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, *args):
         self._form = None
+        self._challenge_at = None
         if self._owned:
             await self._client.aclose()
 
-    async def _request(self, method, payload=None):
+    async def _read(self, method, url=URL, payload=None, image=False):
         async def read():
             kwargs = {"follow_redirects": False, "timeout": 10}
             if payload is not None:
                 kwargs.update(content=urlencode(payload).encode("utf-8"), headers={
                     "Content-Type": "application/x-www-form-urlencoded",
                     "Referer": URL, "Origin": "https://anyror.gujarat.gov.in"})
-            async with self._client.stream(method, URL, **kwargs) as response:
+            async with self._client.stream(method, url, **kwargs) as response:
                 if response.status_code != 200:
                     raise AnyRORFormError("Official form returned an unsuccessful status")
                 content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-                if content_type not in {"text/html", "application/xhtml+xml"}:
-                    raise AnyRORFormError("Expected an HTML form")
+                allowed = {"image/png", "image/jpeg", "image/gif"} if image else {"text/html", "application/xhtml+xml"}
+                if content_type not in allowed:
+                    raise AnyRORFormError("Unexpected official response type")
                 body = bytearray()
                 async for chunk in response.aiter_bytes():
-                    if len(body) + len(chunk) > MAX_BODY:
+                    if len(body) + len(chunk) > (128 * 1024 if image else MAX_BODY):
                         raise AnyRORFormError("Official form exceeds size limit")
                     body.extend(chunk)
-                return _Form(body.decode("utf-8", errors="strict"))
+                data = bytes(body)
+                return _challenge_bytes(data) if image else data
         try:
             return await asyncio.wait_for(read(), REQUEST_SECONDS)
         except (httpx.HTTPError, asyncio.TimeoutError, UnicodeError):
             raise AnyRORFormError("Official form request failed", stage="request") from None
 
+    async def _request(self, method, payload=None):
+        raw = await self._read(method, payload=payload)
+        try:
+            return _Form(raw.decode("utf-8", errors="strict"))
+        except UnicodeError:
+            raise AnyRORFormError("Unreadable official form") from None
+
     async def open(self):
         async with self._lock:
             self._form = None
+            self._challenge_at = None
+            self.last_source_url = None
             self._form = await self._request("GET")
         return self
 
@@ -223,6 +259,7 @@ class AnyRORHTTPSession:
             ):
                 raise AnyRORFormError("Exact enabled option not found")
             payload = self._form.payload(selected, value)
+            self._challenge_at = None
             self._form = None  # Never retry with consumed or uncertain ViewState.
             fresh = await self._request("POST", payload)
             chosen = fresh.selector(control)
@@ -230,3 +267,82 @@ class AnyRORHTTPSession:
                 raise AnyRORFormError("Official form did not retain the requested selection")
             self._form = fresh
         return self
+
+    async def challenge_image(self):
+        """Fetch the displayed challenge; caller asks the user for its answer."""
+        async with self._lock:
+            self._challenge_at = None
+            if self._form is None:
+                raise AnyRORFormError("Open a fresh form first")
+            src = self._form.images.get("ContentPlaceHolder1_i_captcha_1", "")
+            if src.startswith("data:"):
+                # The live portal embeds its PNG in the form response. Decode
+                # only bounded raster bytes; never render HTML or execute data.
+                match = re.fullmatch(r"data:image/(png|jpeg|gif);base64,([A-Za-z0-9+/=]+)", src)
+                if match is None or len(match[2]) > 180000:
+                    raise AnyRORFormError("Unexpected embedded challenge")
+                try:
+                    data = _challenge_bytes(base64.b64decode(match[2], validate=True))
+                except (ValueError, binascii.Error):
+                    raise AnyRORFormError("Invalid embedded challenge") from None
+                self._challenge_at = time.monotonic()
+                return data
+            target = urljoin(URL, src)
+            parts = urlsplit(target)
+            if not src or parts.scheme != "https" or parts.netloc != "anyror.gujarat.gov.in" or parts.fragment or "\\" in target:
+                raise AnyRORFormError("Unexpected challenge source")
+            data = await self._read("GET", target, image=True)
+            self._challenge_at = time.monotonic()
+            return data
+
+    async def submit_vf7_challenge(self, answer):
+        """Submit once; return only a structurally valid VF7 source page.
+
+        Does not solve challenges, retry rejected answers or execute scripts.
+        The caller must also validate the returned parcel against its request.
+        """
+        async with self._lock:
+            if self._form is None or self._challenge_at is None:
+                raise AnyRORFormError("Fetch a fresh challenge first")
+            if time.monotonic() - self._challenge_at > CHALLENGE_SECONDS:
+                self._form, self._challenge_at = None, None
+                raise AnyRORFormError("Challenge expired; start a fresh lookup")
+            if not isinstance(answer, str) or not re.fullmatch(r"[A-Za-z0-9]{3,12}", answer):
+                raise AnyRORFormError("Enter the displayed challenge characters")
+            form = self._form
+            if not any(o["value"] == "1" and o["selected"] for o in form.selector(RECORD_CONTROL).options):
+                raise AnyRORFormError("Only VF7 result retrieval is supported")
+            field = form.inputs.get("ContentPlaceHolder1_txt_captcha_1", {})
+            button = form.inputs.get("ContentPlaceHolder1_btnGo", {})
+            if not field.get("name") or field.get("disabled") or not button.get("name") or button.get("disabled") or button.get("type", "").lower() != "submit":
+                raise AnyRORFormError("Challenge controls unavailable")
+            payload = [(key, answer if key == field["name"] else value)
+                       for key, value in form.payload(None, "")]
+            if sum(key == field["name"] for key, _ in payload) != 1:
+                raise AnyRORFormError("Ambiguous challenge input")
+            payload.append((button["name"], button.get("value", "")))
+            # A failed or uncertain submission must never reuse consumed state.
+            self._form, self._challenge_at = None, None
+            raw = await self._read("POST", payload=payload)
+            source_url = URL
+            try:
+                text = raw.decode("utf-8-sig", errors="strict")
+            except UnicodeError:
+                raise AnyRORFormError("Unreadable portal response") from None
+            # Follow only the known VF7 route if the response actually opens it.
+            # This does not evaluate JavaScript or follow arbitrary redirects.
+            opened = re.findall(r"window\.open\(\s*(['\"])([^'\"]+)\1", text)
+            targets = [urljoin(URL, target) for _, target in opened]
+            if targets:
+                if len(targets) != 1 or targets[0] != VF7_RESULT:
+                    raise AnyRORFormError("Unexpected result route")
+                raw = await self._read("GET", VF7_RESULT)
+                source_url = VF7_RESULT
+            from anyror_vf7_reader import read_anyror_vf7_html
+            from local_document_reader import LocalDocumentError
+            try:
+                read_anyror_vf7_html(raw)
+            except LocalDocumentError:
+                raise AnyRORFormError("No complete VF7 returned; the challenge may have failed or the session expired") from None
+            self.last_source_url = source_url
+            return raw
