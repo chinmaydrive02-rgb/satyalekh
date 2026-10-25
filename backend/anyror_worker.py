@@ -133,6 +133,17 @@ async def run_job(broker, job, session_factory=AnyRORHTTPSession, pause=asyncio.
             await heartbeat
 
 
+async def poll_with_backoff(broker, pause=asyncio.sleep):
+    """Reconnect polling without registering again or replaying portal work."""
+    for attempt in range(6):
+        try:
+            return await broker.poll()
+        except BrokerError:
+            if attempt == 5:
+                raise
+            await pause(min(2 ** (attempt + 1), 30))
+
+
 async def serve(api_url):
     broker = Broker(api_url)
     try:
@@ -141,7 +152,7 @@ async def serve(api_url):
         pairing_deadline = time.monotonic() + 600
         connected = False
         while time.monotonic() < deadline:
-            state = await broker.poll()
+            state = await poll_with_backoff(broker)
             connected = connected or bool(state.get("connected"))
             if not connected and time.monotonic() > pairing_deadline:
                 raise BrokerError("The pairing code expired. Restart the connector for a fresh code")

@@ -97,3 +97,13 @@ def test_heartbeat_only_renews_lease_and_stops_for_ended_job(monkeypatch):
             return {"status": "completed"}
     asyncio.run(worker.keep_lease_alive(API(), JOB))
     assert events == ["heartbeat"]
+
+
+def test_poll_reconnect_keeps_device_and_never_replays_portal():
+    api = type("API", (), {})()
+    api.poll = AsyncMock(side_effect=[worker.BrokerError("temporarily unavailable"), {"connected": True}])
+    pause = AsyncMock()
+    result = asyncio.run(worker.poll_with_backoff(api, pause))
+    assert result == {"connected": True}
+    assert api.poll.await_count == 2
+    pause.assert_awaited_once_with(2)
