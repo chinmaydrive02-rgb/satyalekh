@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, Download, Laptop, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import TopNav from '@/components/TopNav';
@@ -12,6 +12,8 @@ const inputClass = 'w-full rounded-xl border border-border bg-surface px-3 py-3 
 const statusLabels = { queued: 'Waiting for your connected computer', running: 'Opening the official record', awaiting_captcha: 'Your answer is needed', completed: 'Record retrieved', failed: 'Retrieval could not finish' };
 
 export default function RetrievePage() {
+  const identityRef = useRef<string | null | undefined>(undefined);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [workers, setWorkers] = useState<RetrievalWorker[]>([]);
   const [workerId, setWorkerId] = useState('');
@@ -33,28 +35,64 @@ export default function RetrievePage() {
 
   useEffect(() => {
     const client = createClient();
-    client.auth.getUser().then(({ data }) => setSignedIn(Boolean(data.user?.email_confirmed_at))).catch(() => setSignedIn(false));
+    let active = true;
+    const updateIdentity = (id: string | null) => {
+      if (!active || identityRef.current === id) return;
+      const previous = identityRef.current;
+      identityRef.current = id;
+      setSignedIn(Boolean(id)); setOwnerId(id);
+      setWorkers([]); setJob(null); setWorkerId(''); setAnswer(''); setSubmittedChallenge('');
+      setError(''); setNotice(''); setPollError(''); setBusy(false);
+      // A refresh for the same account retains the request. Switching accounts
+      // removes the old reference before any new account can resume it.
+      if (previous !== undefined && previous !== id) {
+        const url = new URL(window.location.href); url.searchParams.delete('job');
+        window.history.replaceState(window.history.state, '', url);
+      }
+    };
     const { data } = client.auth.onAuthStateChange((_event, session) => {
-      setSignedIn(Boolean(session?.user.email_confirmed_at)); setWorkers([]); setJob(null); setWorkerId('');
+      updateIdentity(session?.user.email_confirmed_at ? session.user.id : null);
     });
-    return () => data.subscription.unsubscribe();
+    client.auth.getUser().then(({ data }) => {
+      // Do not let an older verification response overwrite a newer auth event.
+      if (identityRef.current === undefined) updateIdentity(data.user?.email_confirmed_at ? data.user.id : null);
+    }).catch(() => { if (identityRef.current === undefined) updateIdentity(null); });
+    return () => { active = false; data.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
-    if (!signedIn) return;
+    if (!ownerId) return;
+    const reference = new URL(window.location.href).searchParams.get('job');
+    if (!reference) return;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reference)) {
+      setError('The retrieval reference is invalid. Start a new request.'); return;
+    }
+    const controller = new AbortController();
+    setBusy(true);
+    acquisitionRequest<RetrievalJob>(`/jobs/${reference}`, undefined, controller.signal).then(current => {
+      if (controller.signal.aborted || identityRef.current !== ownerId) return;
+      setJob(current);
+    }).catch(cause => {
+      if (!controller.signal.aborted && identityRef.current === ownerId) setError(cause instanceof Error ? cause.message : 'Could not resume this retrieval.');
+    }).finally(() => { if (!controller.signal.aborted && identityRef.current === ownerId) setBusy(false); });
+    return () => controller.abort();
+  }, [ownerId]);
+
+  useEffect(() => {
+    if (!ownerId) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
       try {
         const data = await acquisitionRequest<{ workers: RetrievalWorker[] }>('/workers', undefined, controller.signal);
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || identityRef.current !== ownerId) return;
         setWorkers(data.workers);
-      } catch (cause) { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load connected computers.'); }
+      } catch (cause) { if (!controller.signal.aborted && identityRef.current === ownerId) setError(cause instanceof Error ? cause.message : 'Could not load connected computers.'); }
       if (!controller.signal.aborted) timer = setTimeout(refresh, 10000);
     };
     void refresh();
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [signedIn]);
+  }, [ownerId]);
 
   const activeWorker = workers.find(worker => worker.id === workerId && worker.online);
   const jobActive = Boolean(job && !['completed', 'failed'].includes(job.status));
@@ -62,21 +100,21 @@ export default function RetrievePage() {
   useEffect(() => { setAnswer(''); setSubmittedChallenge(''); }, [challenge?.challenge_id]);
 
   useEffect(() => {
-    if (!job?.id || !jobActive) return;
+    if (!ownerId || !job?.id || !jobActive) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
         const current = await acquisitionRequest<RetrievalJob>(`/jobs/${job.id}`, undefined, controller.signal);
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || identityRef.current !== ownerId) return;
         setJob(current); setPollError('');
         if (['completed', 'failed'].includes(current.status)) return;
-      } catch { if (!controller.signal.aborted) setPollError('Connection interrupted. Reconnecting to your retrieval…'); }
+      } catch { if (!controller.signal.aborted && identityRef.current === ownerId) setPollError('Connection interrupted. Reconnecting to your retrieval…'); }
       if (!controller.signal.aborted) timer = setTimeout(poll, 2000);
     };
     timer = setTimeout(poll, 1000);
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [job?.id, jobActive]);
+  }, [job?.id, jobActive, ownerId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -97,42 +135,52 @@ export default function RetrievePage() {
   }, [district, taluka]);
 
   async function connect(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault(); const identity = identityRef.current; setBusy(true); setError('');
     try {
       await acquisitionRequest('/workers/connect', { pairing_code: code.trim().toUpperCase() });
       const data = await acquisitionRequest<{ workers: RetrievalWorker[] }>('/workers');
+      if (identityRef.current !== identity) return;
       setWorkers(data.workers); setCode(''); setNotice('Computer connected. Select it below to retrieve a record.');
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not connect the computer.'); }
-    finally { setBusy(false); }
+    } catch (cause) { if (identityRef.current === identity) setError(cause instanceof Error ? cause.message : 'Could not connect the computer.'); }
+    finally { if (identityRef.current === identity) setBusy(false); }
   }
   async function retrieve(event: React.FormEvent) {
     event.preventDefault(); if (!activeWorker || jobActive) return;
+    const identity = identityRef.current;
     setBusy(true); setError(''); setNotice('');
     try {
       const created = await acquisitionRequest<RetrievalJob>('/jobs', { worker_id: workerId, district: district.trim(), taluka: taluka.trim(), village: village.trim(), survey_no: survey.trim(), record_type: 'VF7' });
+      if (identityRef.current !== identity) return;
+      const url = new URL(window.location.href); url.searchParams.set('job', created.id);
+      window.history.replaceState(window.history.state, '', url);
       setJob(created);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not start retrieval.'); }
-    finally { setBusy(false); }
+    } catch (cause) { if (identityRef.current === identity) setError(cause instanceof Error ? cause.message : 'Could not start retrieval.'); }
+    finally { if (identityRef.current === identity) setBusy(false); }
   }
   async function submitAnswer(event: React.FormEvent) {
     event.preventDefault(); if (!job || !challenge || submittedChallenge === challenge.challenge_id) return;
     setBusy(true); setError('');
+    const identity = identityRef.current;
     const challengeId = challenge.challenge_id;
     try {
       await acquisitionRequest(`/jobs/${job.id}/answer`, { challenge_id: challengeId, answer: answer.trim() });
+      if (identityRef.current !== identity) return;
       setSubmittedChallenge(challengeId); setAnswer('');
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not submit your answer.'); }
-    finally { setBusy(false); }
+    } catch (cause) { if (identityRef.current === identity) setError(cause instanceof Error ? cause.message : 'Could not submit your answer.'); }
+    finally { if (identityRef.current === identity) setBusy(false); }
   }
   async function downloadSource() {
     if (!job) return;
+    const identity = identityRef.current;
     setBusy(true); setError('');
     try {
-      const file = await acquiredSource(job.id); const url = URL.createObjectURL(file);
+      const file = await acquiredSource(job.id);
+      if (identityRef.current !== identity) return;
+      const url = URL.createObjectURL(file);
       const link = document.createElement('a'); link.href = url; link.download = file.name; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not download source.'); }
-    finally { setBusy(false); }
+    } catch (cause) { if (identityRef.current === identity) setError(cause instanceof Error ? cause.message : 'Could not download source.'); }
+    finally { if (identityRef.current === identity) setBusy(false); }
   }
   const source = job?.result?.source_record;
   return <div className="min-h-screen bg-bg text-ink pt-28 pb-16 px-4 sm:px-6"><TopNav />
@@ -142,7 +190,7 @@ export default function RetrievePage() {
       {notice && <p role="status" className="card p-4 text-sm">{notice}</p>}
       {signedIn === null ? <p role="status" className="flex gap-2"><Loader2 className="animate-spin" size={18} /> Checking your account…</p> : !signedIn ? <section className="card p-6 space-y-3"><h2 className="text-xl font-semibold">Your private retrieval workspace</h2><p className="text-sm text-muted">Sign in with a confirmed email to connect a computer and keep each request linked to your account.</p><Link href="/account" className="btn btn-primary inline-flex gap-2">Sign in <ArrowRight size={16} /></Link></section> : <>
       <section className="card p-5 sm:p-7 space-y-5"><div className="flex gap-3"><Laptop className="text-brand shrink-0" /><div><h2 className="text-lg font-semibold">Connected computer</h2><p className="text-sm text-muted mt-1">Keep the Satyalekh connector running on a computer that can open AnyROR. No inbound port or paid hosting is needed.</p></div></div>
-        {workers.length ? <div className="space-y-2">{workers.map(worker => <div key={worker.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border p-3"><label className="flex-1 flex gap-3 items-center text-sm"><input type="radio" name="worker" checked={workerId === worker.id} disabled={!worker.online || jobActive} onChange={() => setWorkerId(worker.id)} /><span>{worker.name || `Retrieval computer · ${worker.id.slice(-6)}`}<span className={`block text-xs mt-1 ${worker.online ? 'text-brand' : 'text-muted'}`}>{worker.online ? 'Online' : 'Offline · start its connector'}</span></span></label><button disabled={busy || jobActive} className="text-xs text-muted underline disabled:opacity-50" onClick={async () => { setBusy(true); try { await acquisitionRequest(`/workers/${worker.id}/disconnect`, {}); setWorkers(previous => previous.filter(item => item.id !== worker.id)); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not disconnect.'); } finally { setBusy(false); } }}>Disconnect</button></div>)}</div> : <p className="rounded-xl bg-surface-soft p-4 text-sm">No computer connected yet. Start the local connector, then enter the pairing code it displays. Retrieval becomes available while that connector is online. <Link href="/retrieve/connector" className="block text-brand underline mt-2">Set up the free connector</Link></p>}
+        {workers.length ? <div className="space-y-2">{workers.map(worker => <div key={worker.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border p-3"><label className="flex-1 flex gap-3 items-center text-sm"><input type="radio" name="worker" checked={workerId === worker.id} disabled={!worker.online || jobActive} onChange={() => setWorkerId(worker.id)} /><span>{worker.name || `Retrieval computer · ${worker.id.slice(-6)}`}<span className={`block text-xs mt-1 ${worker.online ? 'text-brand' : 'text-muted'}`}>{worker.online ? 'Online' : 'Offline · start its connector'}</span></span></label><button disabled={busy || jobActive} className="text-xs text-muted underline disabled:opacity-50" onClick={async () => { const identity = identityRef.current; setBusy(true); try { await acquisitionRequest(`/workers/${worker.id}/disconnect`, {}); if (identityRef.current === identity) setWorkers(previous => previous.filter(item => item.id !== worker.id)); } catch (cause) { if (identityRef.current === identity) setError(cause instanceof Error ? cause.message : 'Could not disconnect.'); } finally { if (identityRef.current === identity) setBusy(false); } }}>Disconnect</button></div>)}</div> : <p className="rounded-xl bg-surface-soft p-4 text-sm">No computer connected yet. Start the local connector, then enter the pairing code it displays. Retrieval becomes available while that connector is online. <Link href="/retrieve/connector" className="block text-brand underline mt-2">Set up the free connector</Link></p>}
         <form onSubmit={connect} className="flex flex-col sm:flex-row gap-2"><label className="flex-1"><span className="sr-only">Pairing code from your connector</span><input className={inputClass} required maxLength={12} autoComplete="off" placeholder="Pairing code from your connector" value={code} onChange={e => setCode(e.target.value)} /></label><button className="btn btn-outline" disabled={busy || !code.trim()}>Connect this computer</button></form>
         <Link href="/retrieve/connector" className="inline-block text-sm text-brand underline">Connector download and setup instructions</Link><p className="text-xs text-muted flex items-start gap-2"><ShieldCheck size={15} className="shrink-0" />Pairing permits new public parcel requests for your account. It does not grant access to private files, browser history or browser cookies.</p>
       </section>
