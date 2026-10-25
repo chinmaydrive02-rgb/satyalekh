@@ -1,5 +1,6 @@
 """Exact VF7 selection and source identity checks for an interactive local session."""
 import re
+from copy import deepcopy
 
 from anyror_http import AnyRORFormError, RECORD_CONTROL
 from anyror_vf7_reader import read_anyror_vf7_html
@@ -10,7 +11,7 @@ def _location(value):
 
 
 async def prepare_vf7(session, district, taluka, village, survey):
-    from scraper import _find_best_option, _find_exact_survey_option
+    from anyror_matching import _find_best_option, _find_exact_survey_option
     await session.open()
     await session.select(RECORD_CONTROL, "1")
     expected = {}
@@ -32,7 +33,7 @@ async def prepare_vf7(session, district, taluka, village, survey):
 
 def verify_vf7_source(source, expected):
     """A structurally valid record for a different parcel is still a failure."""
-    from scraper import _normalize_survey
+    from anyror_matching import _normalize_survey
     parsed = read_anyror_vf7_html(source)
     actual = parsed["source_record"]["locations"]
     for field in ("District", "Taluka", "Village"):
@@ -46,3 +47,27 @@ def verify_vf7_source(source, expected):
     if _normalize_survey(parsed["survey_no"]) != _normalize_survey(expected["SurveyNo"]):
         raise AnyRORFormError("Returned survey differs from the requested parcel", stage="identity")
     return parsed
+
+
+def build_acquired_draft(parsed, acquisition):
+    """Compose a source-backed draft without asserting user/legal review."""
+    from local_report import build_local_analysis
+    from local_record_bundle import _references
+    draft = build_local_analysis(deepcopy(parsed))
+    draft["status"] = "unreviewed_preliminary"
+    draft["acquisition"] = dict(acquisition)
+    draft["metadata"].update(user_review_confirmed=False, manual_review_required=True,
+                             review_required=True, external_processing=False)
+    report = draft["report"]
+    report["record"].update(source="anyror_http_user_challenge", record_type="VF7")
+    references, ambiguous = _references(parsed["source_record"])
+    report["mutation_references"] = {"recognized": references, "unresolved": references[:],
+                                      "unrecognized": ambiguous,
+                                      "raw": deepcopy(parsed["source_record"]["mutation_refs"])}
+    report["coverage"].update(source="anyror_http_user_challenge", user_review_confirmed=False,
+                              chain_complete=False, mutation_entries_identified=len(references),
+                              mutation_records_not_attempted=len(references),
+                              unresolved_mutation_references=references[:],
+                              mutation_references_requiring_review=ambiguous)
+    report["source_document"].update(acquisition)
+    return draft

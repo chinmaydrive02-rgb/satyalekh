@@ -69,6 +69,7 @@ export default function TopNav() {
   ];
 
   const moreLinks = [
+    { href: '/retrieve', label: 'Retrieve from AnyROR', icon: <Search size={15}/> },
     { href: '/account', label: 'My account', icon: <Users size={15}/> },
     { href: '/coverage', label: 'Coverage', icon: <Globe2 size={15}/> },
     { href: '/investors', label: 'Investors', icon: <Briefcase size={15}/> },

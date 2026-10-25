@@ -1,3 +1,35 @@
+# AnyROR delivery status — 25 October 2026
+
+This checkpoint supersedes the historical October21 plan below.
+
+## Real retrieval proved
+
+A genuine VF7 for Gandhinagar / Kalol / અઢાણા - 039 / survey3 was retrieved locally using a human-entered CAPTCHA. Six ownership rows and three rights rows survive reading and draft generation. Source as-of is6April2024 02:06:42, distinct from retrieval date. Original33242-byte source SHA256: d56150759e0a88ae576c0bb1e484f160fb207719a6552db156644b864ea23877. Private artifacts: /Users/chinmaymistry/Documents/SatyalekhAcquisition/vf7-session-20261025-06/. Deployed analyze-record independently accepted all rows and the same hash without externalAI. Missing mutation refs:2683,3144,3773,3933,3943,4004,4068. Draft remains unreviewed/preliminary, not chain-complete.
+
+Actual transport fix: observed POST302 to allowlisted Info712Details.aspx followed by same-session GET with rural-form Referer. Generic redirects remain rejected. Only rural-submit HTML is searched for result-window script. Never reuse CAPTCHA answers.
+
+## Website delivery release
+
+Implemented /retrieve: owner pairs an outbound connector, requests exactVF7 parcel, answers the official CAPTCHA on Satyalekh, receives original rows/draft, continues existing upload/review/save. /retrieve/connector includes downloadable httpx-only connector. Existing features preserved.
+
+Actual Supabase migration backend/acquisition_schema.sql applied successfully25October2026 through SQLeditor. New private RLS tables; no anon/authenticated access; service-role atomic RPC handles pairing, leases, one-use answers, expiry/revocation. Tokens hashed; worker credentials only in connector memory. Dedicated heartbeat does not consume answers. Completed sources/results remain private in jobs; no zero-retention claim.
+
+Validation:494 backend tests passed including realPostgreSQL/PGlite security assertions; additional focused heartbeat test passes. Frontend Webpack production build and TypeScript pass. Local Turbopack failed due missing nativeSWC, not app compilation. Connector imports in a clean environment with onlyhttpx.
+
+Release/deploy and genuine website-job acceptance pending at this checkpoint. Hosted Render still cannot reach AnyROR. Connected computer must stay awake with connector running. Pairing10minutes, worker8hours, job15minutes, local CAPTCHA wait up to10minutes; upstream may expire sooner. VF7 only; VF6/VF8A acquisition and full ownership-chain proof remain outstanding.
+
+## Next acceptance
+
+1. Release tested additive change; verify both deployed commits and actualRPC.
+2. Start backend/anyror_worker.py; pair on signed-in /retrieve. User authorizes connection and enters current CAPTCHA on website. Never extract browser tokens.
+3. Request sample above; verify source/hash/rows/as-of, then user reviews/saves/reopens/exports. Do not auto-attest legal review.
+4. Add explicitVF6/VF8A acquisition, validate seven linked entries. References alone are not transfer evidence.
+5. Cloud-only24/7 still needs proven available portal connectivity; no paid service provisioned.
+
+---
+
+## Historical checkpoint (superseded)
+
 # AnyROR delivery status
 
 Updated 21 October 2026. Read this before the historical plans in `ANYROR_AUTOMATION_PLAN.md`.

@@ -26,6 +26,7 @@ def run_case(submission=None, result=None, extra=EXTRA, image=None, change=None)
             return image or httpx.Response(200, content=PNG, headers={"content-type": "image/png"})
         if str(request.url) == VF7_RESULT:
             assert "ASP.NET_SessionId=test" in request.headers["cookie"]
+            assert request.headers["referer"] == URL
             return result or response(fixture().decode())
         if request.method == "GET":
             return response(form(record="1", extra=extra), **{"set-cookie": "ASP.NET_SessionId=test; Secure; Path=/"})
@@ -87,10 +88,27 @@ def test_external_or_insecure_challenge_is_never_requested(src):
     assert len(requests) == 1
 
 
-def test_redirect_to_result_is_not_followed_automatically():
+def test_observed_submission_redirect_follows_only_the_exact_vf7_result():
     run, requests = run_case(submission=httpx.Response(302, headers={"location": VF7_RESULT}))
-    with pytest.raises(AnyRORFormError): asyncio.run(run())
+    assert asyncio.run(run()) == fixture()
+    assert len(requests) == 4
+    assert str(requests[-1].url) == VF7_RESULT
+    assert requests[-1].method == "GET"
+
+
+@pytest.mark.parametrize("location", ["https://example.com", VF7_RESULT + "?token=private", URL, "/CustomError.htm", "/Information_pages/Info8ADetails.aspx"])
+def test_submission_redirect_never_leaves_the_fixed_result_route(location):
+    run, requests = run_case(submission=httpx.Response(302, headers={"location": location}))
+    with pytest.raises(AnyRORFormError) as caught: asyncio.run(run())
+    assert caught.value.http_status == 302
     assert len(requests) == 3
+
+
+def test_result_redirect_is_not_followed_a_second_time():
+    run, requests = run_case(submission=httpx.Response(302, headers={"location": VF7_RESULT}),
+                             result=httpx.Response(302, headers={"location": URL}))
+    with pytest.raises(AnyRORFormError): asyncio.run(run())
+    assert len(requests) == 4
 
 
 def test_result_must_pass_existing_strict_vf7_reader():

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useId } from 'react';
+import Link from 'next/link';
 import { Search, ChevronDown, Loader2, Gift, FlaskConical } from 'lucide-react';
 import { API_BASE_URL, getUserEmail, fetchCredits, fetchConfig, fetchSurveyOptions, AppConfig, isDemoActive, demoHeaders } from '@/lib/api';
 
@@ -207,6 +208,8 @@ export default function SearchWidget({ onPlotSelect }: { onPlotSelect?: (plot: a
         <h2 className="font-serif text-2xl font-semibold text-ink">Check a land title</h2>
         <p className="text-sm text-muted">Official 7/12 record, in English, with risk analysis.</p>
       </div>
+
+      {!demoActive && <Link href="/retrieve" className="rounded-xl border border-brand-border bg-brand-soft p-4 text-sm flex flex-col gap-1 hover:border-brand transition-colors"><span className="font-semibold text-brand">Retrieve from AnyROR →</span><span className="text-muted text-xs leading-relaxed">VF-7 through your connected computer. Answer the portal CAPTCHA here, then review the returned record. The hosted lookup below may be unavailable.</span></Link>}
 
       {/* ── DEMO MODE ── one-click sample parcels (fixtures in backend/demo.py) */}
       {demoActive && (
