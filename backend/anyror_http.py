@@ -20,7 +20,7 @@ MAX_BODY = 1024 * 1024
 REQUEST_SECONDS = 20
 RECORD_CONTROL = "ContentPlaceHolder1_drpLandRecord"
 VF7_RESULT = "https://anyror.gujarat.gov.in/Information_pages/Info712Details.aspx"
-CHALLENGE_SECONDS = 180
+CHALLENGE_SECONDS = 600
 
 
 def _challenge_bytes(data):
@@ -31,9 +31,11 @@ def _challenge_bytes(data):
 
 class AnyRORFormError(ValueError):
     """The official form could not be safely read or advanced."""
-    def __init__(self, message, stage="form"):
+    def __init__(self, message, stage="form", http_status=None, route=None):
         super().__init__(message)
         self.stage = stage
+        self.http_status = http_status
+        self.route = route
 
 
 @dataclass
@@ -193,6 +195,9 @@ class AnyRORHTTPSession:
         self._lock = asyncio.Lock()
         self._challenge_at = None
         self.last_source_url = None
+        self._last_read_url = None
+        self.last_result_response = None  # Unverified bytes; never a record claim.
+        self.response_trace = []  # Status/route categories only; no cookies or HTML.
 
     async def __aenter__(self):
         return self
@@ -203,16 +208,32 @@ class AnyRORHTTPSession:
         if self._owned:
             await self._client.aclose()
 
-    async def _read(self, method, url=URL, payload=None, image=False):
+    async def _read(self, method, url=URL, payload=None, image=False, allow_vf7_redirect=False):
         async def read():
             kwargs = {"follow_redirects": False, "timeout": 10}
+            if url == VF7_RESULT:
+                kwargs["headers"] = {"Referer": URL}
             if payload is not None:
                 kwargs.update(content=urlencode(payload).encode("utf-8"), headers={
                     "Content-Type": "application/x-www-form-urlencoded",
                     "Referer": URL, "Origin": "https://anyror.gujarat.gov.in"})
             async with self._client.stream(method, url, **kwargs) as response:
+                self.response_trace.append({"method": method, "page": "vf7_result" if url == VF7_RESULT else "rural" if url == URL else "challenge",
+                                            "status": response.status_code})
+                self.response_trace = self.response_trace[-20:]
                 if response.status_code != 200:
-                    raise AnyRORFormError("Official form returned an unsuccessful status")
+                    location = urljoin(url, response.headers.get("location", "")) if response.headers.get("location") else None
+                    if allow_vf7_redirect and method == "POST" and url == URL and response.status_code == 302 and location == VF7_RESULT:
+                        # Observed portal behavior: submit -> official VF7 GET.
+                        # Client-wide redirect following stays disabled. The
+                        # destination GET cannot itself follow another redirect.
+                        return await self._read("GET", VF7_RESULT)
+                    route = ("vf7_result" if location == VF7_RESULT else
+                             "rural" if location == URL else
+                             "custom_error" if location and urlsplit(location).netloc == "anyror.gujarat.gov.in" and urlsplit(location).path.lower() == "/customerror.htm" else
+                             "other" if location else None)
+                    raise AnyRORFormError("Official form returned an unsuccessful status",
+                                          stage="http_status", http_status=response.status_code, route=route)
                 content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
                 allowed = {"image/png", "image/jpeg", "image/gif"} if image else {"text/html", "application/xhtml+xml"}
                 if content_type not in allowed:
@@ -223,6 +244,7 @@ class AnyRORHTTPSession:
                         raise AnyRORFormError("Official form exceeds size limit")
                     body.extend(chunk)
                 data = bytes(body)
+                self._last_read_url = url
                 return _challenge_bytes(data) if image else data
         try:
             return await asyncio.wait_for(read(), REQUEST_SECONDS)
@@ -241,6 +263,8 @@ class AnyRORHTTPSession:
             self._form = None
             self._challenge_at = None
             self.last_source_url = None
+            self.last_result_response = None
+            self.response_trace = []
             self._form = await self._request("GET")
         return self
 
@@ -323,21 +347,22 @@ class AnyRORHTTPSession:
             payload.append((button["name"], button.get("value", "")))
             # A failed or uncertain submission must never reuse consumed state.
             self._form, self._challenge_at = None, None
-            raw = await self._read("POST", payload=payload)
-            source_url = URL
+            raw = await self._read("POST", payload=payload, allow_vf7_redirect=True)
+            source_url = self._last_read_url
             try:
                 text = raw.decode("utf-8-sig", errors="strict")
             except UnicodeError:
                 raise AnyRORFormError("Unreadable portal response") from None
             # Follow only the known VF7 route if the response actually opens it.
             # This does not evaluate JavaScript or follow arbitrary redirects.
-            opened = re.findall(r"window\.open\(\s*(['\"])([^'\"]+)\1", text)
+            opened = re.findall(r"window\.open\(\s*(['\"])([^'\"]+)\1", text) if source_url == URL else []
             targets = [urljoin(URL, target) for _, target in opened]
             if targets:
                 if len(targets) != 1 or targets[0] != VF7_RESULT:
                     raise AnyRORFormError("Unexpected result route")
                 raw = await self._read("GET", VF7_RESULT)
                 source_url = VF7_RESULT
+            self.last_result_response = raw
             from anyror_vf7_reader import read_anyror_vf7_html
             from local_document_reader import LocalDocumentError
             try:

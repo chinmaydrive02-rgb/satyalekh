@@ -1977,3 +1977,8 @@ async def health_check():
     
     all_ok = all(v in ("OK", "SET") for v in checks.values())
     return {"healthy": all_ok, "checks": checks}
+
+
+# Owner-scoped website retrieval, fulfilled by paired outbound connectors.
+from acquisition_routes import create_acquisition_router
+app.include_router(create_acquisition_router(_get_supabase, _account_identity, _enforce_rate_limit))

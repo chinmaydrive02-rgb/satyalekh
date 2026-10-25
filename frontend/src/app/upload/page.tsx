@@ -16,6 +16,7 @@ import {
   ApiError, Job, TitleReport, SourceRecord, demoHeaders, isDemoActive,
 } from '@/lib/api';
 import { authorizationHeaders, requireUser } from '@/lib/auth';
+import { acquiredSource, acquisitionRequest, type RetrievalJob } from '@/lib/acquisition';
 import { createClient } from '@/utils/supabase/client';
 
 // Exact AnyROR Record Types from https://anyror.gujarat.gov.in/LandRecordRural.aspx
@@ -33,7 +34,7 @@ const RECORD_TYPES = [
 ];
 
 interface UploadAnalysis {
-  status?: 'review_required' | 'reviewed_preliminary';
+  status?: 'review_required' | 'reviewed_preliminary' | 'unreviewed_preliminary';
   owner_name?: string;
   survey_no?: string;
   total_area?: string;
@@ -147,6 +148,26 @@ function DocumentUploadContent() {
     setFile(next); setResult(null); setReviewedResult(null); setMachineReportCurrent(false); setReviewError(''); setUploadError('');
     setReviewFields(emptyReview()); setReviewConfirmed(false);
   };
+  const acquiredJobId = searchParams.get('acquisition_job');
+  useEffect(() => {
+    if (!acquiredJobId) return;
+    const controller = new AbortController();
+    setIsAnalyzing(true); setUploadError('');
+    Promise.all([
+      acquisitionRequest<RetrievalJob>(`/jobs/${encodeURIComponent(acquiredJobId)}`, undefined, controller.signal),
+      acquiredSource(acquiredJobId, controller.signal),
+    ]).then(([job, sourceFile]) => {
+      if (controller.signal.aborted) return;
+      if (job.status !== 'completed' || !job.result) throw new Error('This retrieval has not completed. Return to retrieval to check its progress.');
+      manualRevisionRef.current += 1;
+      setFile(sourceFile); setActiveTab('manual'); setMutationFiles([]);
+      setResult(job.result as UploadAnalysis); setReviewedResult(null); setMachineReportCurrent(true);
+      setReviewFields(emptyReview()); setReviewConfirmed(false); setReviewError('');
+    }).catch(cause => {
+      if (!controller.signal.aborted) setUploadError(cause instanceof Error ? cause.message : 'Could not load the retrieved record.');
+    }).finally(() => { if (!controller.signal.aborted) setIsAnalyzing(false); });
+    return () => controller.abort();
+  }, [acquiredJobId]);
   const changeMutationFiles = (next: File[]) => {
     if (!htmlFile || next.length > 5 || next.some(item => !isHtmlRecord(item) || item.size > 1024 * 1024 || item.size === 0)) {
       setMutationFileError('Attach at most 5 saved VF-6 HTML files, each nonempty and up to 1 MB.');
@@ -554,6 +575,8 @@ function DocumentUploadContent() {
              <p className="text-muted text-sm">Upload an official record, compare the source and build a preliminary report.</p>
           </div>
         </Reveal>
+
+        <Link href="/retrieve" className="card p-4 flex items-center justify-between gap-3 text-sm text-brand font-medium">Retrieve from AnyROR · VF-7 with your connected computer <span aria-hidden="true">→</span></Link>
 
         {/* Tab Controls */}
         <Reveal delay={80}>
